@@ -14,7 +14,7 @@ import { NOTE_COLORS } from '@/app/colors'
 import { useContextMenu, type MenuEntry } from '@/app/ContextMenu'
 import { Icon } from '@/app/Icon'
 import { isPlacingTool, useApp, type PlacingTool } from '@/app/store'
-import { arrowPoints, boxOf, isArrow, isShape, lookupIn } from '@/board/arrows'
+import { arrowPoints, boxOf, crossesBox, isArrow, isShape, lookupIn, nearestPin, pinPoint, pinsOf, type Pin } from '@/board/arrows'
 import { boundsOf, itemsOf, moveItems, overlaps, rectFrom, resizeRect, updateItems, type Handle } from '@/board/items'
 import { NO_SELECTION, selectTab, useBoard } from '@/board/store'
 import { isTyping } from '@/lib/dom'
@@ -38,7 +38,7 @@ import {
 import { ArrowView } from './ArrowView'
 import { ItemToolbar } from './ItemToolbar'
 import { ItemView } from './ItemView'
-import { Overlay } from './Overlay'
+import { DOT_OFFSET, dotOnScreen, Overlay, type ActiveDot } from './Overlay'
 import { snapMove, snapResize, type Guide } from './snap'
 import { gridSpacing, panBy, stepZoom, toBoard, toScreen, zoomAt, type Point } from './view'
 
@@ -71,13 +71,14 @@ const DRAG_START = 3
 type Drag =
   | { kind: 'pan'; last: Point }
   | { kind: 'place'; type: PlacingTool; start: Point; now: Point }
-  | { kind: 'arrow'; from: ArrowEnd; start: Point; now: Point; over: string | null }
+  | { kind: 'arrow'; from: ArrowEnd; start: Point; now: Point; to: ArrowEnd }
   | { kind: 'arrowEnd'; base: BoardDoc; arrow: ArrowItem; end: 'from' | 'to' }
   | { kind: 'select'; start: Point; keep: string[] }
   | { kind: 'move'; start: Point; startScreen: Point; base: BoardDoc; ids: string[]; moving: boolean }
   | { kind: 'resize'; start: Point; base: BoardDoc; item: Shape; handle: Handle }
 
 const NO_ITEMS: Item[] = []
+const NO_SHAPES: Shape[] = []
 const NO_GUIDES: Guide[] = []
 
 /** The shape (not arrow) under a window point, skipping `except`. The canvas holds the pointer during a press, so look. */
@@ -94,6 +95,14 @@ function shapeUnder(x: number, y: number, except: string | null = null): Shape |
 
 /** An arrow end at a board point: attached to `shape` if there is one, otherwise loose there. */
 const endAt = (p: Point, shape: Shape | null): ArrowEnd => ({ item: shape?.id ?? null, x: p.x, y: p.y })
+
+/** An arrow end pinned to one of an item's dots. */
+const endOnDot = (shape: Shape, pin: Pin): ArrowEnd => ({ item: shape.id, ...pinPoint(shape, pin), pin })
+
+/** How close (in screen pixels) the pointer must be to a dot for an arrow to snap to it. */
+const DOT_SNAP = 14
+/** How far outside an item (in screen pixels) the pointer can go and still show its dots. */
+const DOT_REACH = DOT_OFFSET + 12
 
 export function Canvas() {
   const ref = useRef<HTMLDivElement>(null)
@@ -112,6 +121,9 @@ export function Canvas() {
   const [guides, setGuides] = useState<Guide[]>(NO_GUIDES)
   const [target, setTarget] = useState<Shape | null>(null)
   const [drawing, setDrawing] = useState<Point[] | null>(null)
+  const [activeDot, setActiveDot] = useState<ActiveDot | null>(null)
+  /** The item under (or just around) the pointer, which shows its dots. */
+  const [hovered, setHovered] = useState<string | null>(null)
   const menu = useContextMenu()
   const sizeRef = useRef(size)
   sizeRef.current = size
@@ -218,6 +230,67 @@ export function Canvas() {
     setGuides(NO_GUIDES)
     setTarget(null)
     setDrawing(null)
+    setActiveDot(null)
+  }
+
+  /** The dot nearest the pointer (within DOT_SNAP), on any item but `except`. */
+  const dotNear = (e: { clientX: number; clientY: number }, except: string | null): { shape: Shape; pin: Pin } | null => {
+    const r = ref.current!.getBoundingClientRect()
+    const at = { x: e.clientX - r.left, y: e.clientY - r.top }
+    const { doc, tabId } = useBoard.getState()
+    const view = currentView()
+    let best: { shape: Shape; pin: Pin } | null = null
+    let bestDistance = DOT_SNAP
+    for (const shape of itemsOf(doc, tabId).filter(isShape)) {
+      if (shape.id === except) continue
+      for (const pin of pinsOf(shape)) {
+        // Near the dot itself, or the spot on the edge it stands for.
+        const dot = dotOnScreen(view, sizeRef.current, shape, pin)
+        const edge = toScreen(view, sizeRef.current, pinPoint(shape, pin))
+        const distance = Math.min(Math.hypot(dot.x - at.x, dot.y - at.y), Math.hypot(edge.x - at.x, edge.y - at.y))
+        if (distance <= bestDistance) {
+          best = { shape, pin }
+          bestDistance = distance
+        }
+      }
+    }
+    return best
+  }
+
+  /**
+   * Where an arrow end being dragged would join: a dot if one's close, otherwise the item under
+   * the pointer (choosing its side as things move), otherwise loose. Shows which.
+   */
+  const endUnderPointer = (e: { clientX: number; clientY: number }, p: Point, except: string | null): ArrowEnd => {
+    const dot = dotNear(e, except)
+    if (dot) {
+      setTarget(dot.shape)
+      setActiveDot({ item: dot.shape.id, pin: dot.pin })
+      return endOnDot(dot.shape, dot.pin)
+    }
+    const over = shapeUnder(e.clientX, e.clientY, except)
+    setTarget(over)
+    setActiveDot(null)
+    return endAt(p, over)
+  }
+
+  /** Keeps track of which item the pointer is over (or just around), to show its dots. */
+  const trackHover = (e: React.PointerEvent): void => {
+    if ((tool !== 'select' && tool !== 'arrow') || spaceDown) return void setHovered(null)
+    const p = boardPoint(e)
+    const reach = DOT_REACH / currentView().zoom
+    const { doc, tabId } = useBoard.getState()
+    const shapes = itemsOf(doc, tabId).filter(isShape)
+    // The top-most item the pointer is over, or close enough to reach its dots.
+    let found: string | null = null
+    for (let k = shapes.length - 1; k >= 0; k--) {
+      const s = shapes[k]
+      if (p.x >= s.x - reach && p.x <= s.x + s.w + reach && p.y >= s.y - reach && p.y <= s.y + s.h + reach) {
+        found = s.id
+        break
+      }
+    }
+    if (found !== hovered) setHovered(found)
   }
 
   /** Escape during a drag puts things back as they were. */
@@ -249,9 +322,21 @@ export function Canvas() {
       setDrag({ kind: 'place', type: tool, start, now: start })
       return
     }
+    // A dot around an item: drag from it to draw an arrow, with any tool that shows dots.
+    const dotItem = target.closest<HTMLElement>('[data-dot]')
+    if (dotItem) {
+      const shape = itemsOf(board.doc, board.tabId).find((i) => i.id === dotItem.dataset.dotItem)
+      const [x, y] = dotItem.dataset.dot!.split(',').map(Number)
+      if (shape && isShape(shape)) {
+        const from = endOnDot(shape, { x, y })
+        setDrag({ kind: 'arrow', from, start, now: start, to: endAt(start, null) })
+        return
+      }
+    }
     if (tool === 'arrow') {
       // Start on an item to attach the arrow to it, or on empty space for a loose end.
-      setDrag({ kind: 'arrow', from: endAt(start, shapeUnder(e.clientX, e.clientY)), start, now: start, over: null })
+      const from = endAt(start, shapeUnder(e.clientX, e.clientY))
+      setDrag({ kind: 'arrow', from, start, now: start, to: endAt(start, null) })
       return
     }
 
@@ -292,7 +377,7 @@ export function Canvas() {
 
   const onPointerMove = (e: React.PointerEvent): void => {
     const d = dragRef.current
-    if (!d) return
+    if (!d) return trackHover(e)
     if (d.kind === 'pan') {
       const dx = e.clientX - d.last.x
       const dy = e.clientY - d.last.y
@@ -309,16 +394,19 @@ export function Canvas() {
       const r = rectFrom(d.start.x, d.start.y, p.x, p.y)
       setGhost(r.w * zoom > DRAG_START || r.h * zoom > DRAG_START ? r : null)
     } else if (d.kind === 'arrow') {
-      const over = shapeUnder(e.clientX, e.clientY, d.from.item)
-      setDrag({ ...d, now: p, over: over?.id ?? null })
-      setTarget(over)
       const lookup = lookupIn(itemsOf(board.doc, board.tabId))
-      setDrawing(arrowPoints({ from: d.from, to: endAt(p, over), route: 'straight' }, lookup))
+      let from = d.from
+      // Swinging round behind the item it starts from: move the start to the dot facing the pointer,
+      // so the arrow doesn't cut back across its own item.
+      const home = from.item ? lookup(from.item) : undefined
+      if (home && from.pin && crossesBox(pinPoint(home, from.pin), p, home)) from = endOnDot(home, nearestPin(home, p))
+      const to = endUnderPointer(e, p, from.item)
+      setDrag({ ...d, from, now: p, to })
+      setDrawing(arrowPoints({ from, to, route: 'straight' }, lookup))
     } else if (d.kind === 'arrowEnd') {
       const other = d.arrow[d.end === 'from' ? 'to' : 'from'].item
-      const over = shapeUnder(e.clientX, e.clientY, other)
-      setTarget(over)
-      board.preview(updateItems(d.base, board.tabId, [d.arrow.id], (a) => ({ ...a, [d.end]: endAt(p, over) })))
+      const end = endUnderPointer(e, p, other)
+      board.preview(updateItems(d.base, board.tabId, [d.arrow.id], (a) => ({ ...a, [d.end]: end })))
     } else if (d.kind === 'select') {
       const r = rectFrom(d.start.x, d.start.y, p.x, p.y)
       setMarquee(r)
@@ -377,11 +465,10 @@ export function Canvas() {
       addItem(d.type, dragged ? (d.type === 'text' ? { ...r, h: 30 } : r) : d.start)
       useApp.getState().setTool('select')
     } else if (d.kind === 'arrow') {
-      const over = d.over ? (itemsOf(useBoard.getState().doc, useBoard.getState().tabId).find((i) => i.id === d.over) as Shape | undefined) : undefined
       const zoom = currentView().zoom
       const dragged = Math.hypot(d.now.x - d.start.x, d.now.y - d.start.y) * zoom > DRAG_START * 4
       // An arrow needs somewhere to go: another item, or a proper drag.
-      if (over || dragged) addArrow(d.from, endAt(d.now, over ?? null))
+      if (d.to.item || dragged) addArrow(d.from, d.to)
       useApp.getState().setTool('select')
     } else if (d.kind === 'move' || d.kind === 'resize' || d.kind === 'arrowEnd') {
       useBoard.getState().endGesture()
@@ -395,7 +482,7 @@ export function Canvas() {
     // Look at what's really under the pointer.
     const target = document.elementFromPoint(e.clientX, e.clientY)
     // Handles (for resizing, or an arrow's ends) aren't empty space: no new note there.
-    if (!target || target.closest('.item-editor, .zoom-controls, .item-toolbar, [data-handle], [data-end]')) return
+    if (!target || target.closest('.item-editor, .zoom-controls, .item-toolbar, [data-handle], [data-end], [data-dot]')) return
     const hit = target.closest<HTMLElement>('[data-item-id]')?.dataset.itemId
     // Double-click an item to type in it, or empty space for a new sticky note.
     if (hit) startEditing(hit)
@@ -450,6 +537,15 @@ export function Canvas() {
   const busy = drag !== null && drag.kind !== 'pan' && !(drag.kind === 'move' && !drag.moving)
   const cursor = drag?.kind === 'pan' ? 'panning' : tool === 'hand' || spaceDown ? 'can-pan' : isPlacingTool(tool) || tool === 'arrow' ? 'placing' : ''
   const lookup = lookupIn(items)
+  // Dots show on every item while an arrow is being drawn or moved; otherwise on the item under
+  // the pointer and the one selected (not while typing in it, or during other drags).
+  const drawingArrow = drag?.kind === 'arrow' || drag?.kind === 'arrowEnd'
+  const dotsShow = (tool === 'select' || tool === 'arrow') && !spaceDown && (drawingArrow || !busy)
+  const dotted = !dotsShow
+    ? NO_SHAPES
+    : drawingArrow
+      ? items.filter(isShape)
+      : items.filter((i): i is Shape => isShape(i) && i.id !== editingId && (i.id === hovered || (selectedIds.length === 1 && selectedIds[0] === i.id)))
 
   return (
     <div
@@ -461,6 +557,7 @@ export function Canvas() {
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
+      onPointerLeave={() => !dragRef.current && setHovered(null)}
       onDoubleClick={onDoubleClick}
       onContextMenu={onContextMenu}
       onAuxClick={(e) => e.preventDefault()}
@@ -492,6 +589,8 @@ export function Canvas() {
         guides={guides}
         target={target}
         drawing={drawing}
+        dotted={dotted}
+        activeDot={activeDot}
       />
 
       {selectedItems.length > 0 && !busy && <ItemToolbar view={view} size={size} items={selectedItems} lookup={lookup} editing={editingId !== null} />}

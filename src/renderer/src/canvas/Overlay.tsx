@@ -3,7 +3,7 @@
 // new-item outlines, and the arrow being drawn.
 
 import type { Item, Rect, Shape, View } from '@shared/types'
-import { arrowPoints, isArrow, type Lookup, type Point } from '@/board/arrows'
+import { arrowPoints, isArrow, pinPoint, pinsOf, type Lookup, type Pin, type Point } from '@/board/arrows'
 import { boundsOf, type Handle } from '@/board/items'
 import type { Guide } from './snap'
 import { toScreen, type Size } from './view'
@@ -13,6 +13,23 @@ const ALL_HANDLES: Handle[] = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w']
 const TEXT_HANDLES: Handle[] = ['nw', 'ne', 'e', 'se', 'sw', 'w']
 
 export const handlesFor = (item: Shape): Handle[] => (item.type === 'text' ? TEXT_HANDLES : ALL_HANDLES)
+
+/** How far outside an item's edge its dots sit, in screen pixels (clear of the resize handles). */
+export const DOT_OFFSET = 14
+
+/** Where a dot is drawn on screen: just outside the edge, straight out from it (diagonally at corners). */
+export function dotOnScreen(view: View, size: Size, item: Shape, pin: Pin): Point {
+  const p = toScreen(view, size, pinPoint(item, pin))
+  const out = { x: pin.x === 0 ? -1 : pin.x === 1 ? 1 : 0, y: pin.y === 0 ? -1 : pin.y === 1 ? 1 : 0 }
+  const length = Math.hypot(out.x, out.y) || 1
+  return { x: p.x + (out.x / length) * DOT_OFFSET, y: p.y + (out.y / length) * DOT_OFFSET }
+}
+
+/** A dot an arrow is about to be joined to. */
+export interface ActiveDot {
+  item: string
+  pin: Pin
+}
 
 interface Props {
   view: View
@@ -27,9 +44,13 @@ interface Props {
   target: Shape | null
   /** The arrow being drawn, from start to end. */
   drawing: Point[] | null
+  /** Items showing their dots (for drawing arrows from, or joining them to). */
+  dotted: Shape[]
+  /** The dot an arrow would join if let go now. */
+  activeDot: ActiveDot | null
 }
 
-export function Overlay({ view, size, selected, lookup, editingId, marquee, ghost, guides, target, drawing }: Props) {
+export function Overlay({ view, size, selected, lookup, editingId, marquee, ghost, guides, target, drawing, dotted, activeDot }: Props) {
   const screen = (r: Rect): { left: number; top: number; width: number; height: number } => {
     const p = toScreen(view, size, r)
     return { left: p.x, top: p.y, width: r.w * view.zoom, height: r.h * view.zoom }
@@ -71,6 +92,21 @@ export function Overlay({ view, size, selected, lookup, editingId, marquee, ghos
             return <div key={end} className={`end-handle ${single[end].item ? 'attached' : ''}`} data-end={end} style={{ left: p.x, top: p.y }} />
           })
         })()}
+      {dotted.map((item) =>
+        pinsOf(item).map((pin) => {
+          const p = dotOnScreen(view, size, item, pin)
+          const active = activeDot?.item === item.id && activeDot.pin.x === pin.x && activeDot.pin.y === pin.y
+          return (
+            <div
+              key={`${item.id}:${pin.x},${pin.y}`}
+              className={`dot ${active ? 'active' : ''}`}
+              data-dot={`${pin.x},${pin.y}`}
+              data-dot-item={item.id}
+              style={{ left: p.x, top: p.y }}
+            />
+          )
+        })
+      )}
       {marquee && <div className="marquee" style={screen(marquee)} />}
       {ghost && <div className="ghost" style={screen(ghost)} />}
       {guides.map((g, k) => {

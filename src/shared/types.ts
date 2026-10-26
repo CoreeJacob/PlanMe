@@ -54,6 +54,12 @@ export interface ArrowEnd {
   /** Where a loose end is. For an attached end, roughly where it was last (a fallback if the item goes). */
   x: number
   y: number
+  /**
+   * For an end dropped on one of the item's dots: where that dot is around its edge, as fractions
+   * of its width and height (0,0 is the top-left corner, 1,0.5 the middle of the right side). It
+   * stays on that dot when things move. Without it, the end moves to whichever side faces the other end.
+   */
+  pin?: { x: number; y: number }
 }
 
 /** An arrow from one item (or point) to another. It has no box of its own: its ends decide where it goes. */

@@ -33,6 +33,7 @@ Changes are saved a moment after you make them, and straight away when the windo
 | V / H | Select / Hand tool |
 | N / T / B | Sticky note / Text / Box tool (click to place, or drag to size) |
 | A | Arrow tool: drag from one item to another (or to empty space) |
+| Drag a dot | The dots round an item (shown when the pointer is near): draw an arrow from there. Drop on a dot to pin the arrow to it, or on an item's middle to let it pick the facing side |
 | Double-click an arrow | Label it |
 | Double-click | Empty space: a new sticky note. An item: type in it |
 | Return, Escape | Start typing in the selected item, finish typing |

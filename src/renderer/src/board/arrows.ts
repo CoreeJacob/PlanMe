@@ -5,7 +5,7 @@
 import type { ArrowEnd, ArrowItem, Item, Rect, Shape } from '@shared/types'
 
 export type Point = { x: number; y: number }
-type Side = 'top' | 'right' | 'bottom' | 'left'
+export type Side = 'top' | 'right' | 'bottom' | 'left'
 
 const OUT: Record<Side, Point> = { top: { x: 0, y: -1 }, right: { x: 1, y: 0 }, bottom: { x: 0, y: 1 }, left: { x: -1, y: 0 } }
 /** How far an elbow arrow goes straight out from a side before turning. */
@@ -46,19 +46,123 @@ export function lookupIn(items: readonly Item[]): Lookup {
 const shapeOf = (end: ArrowEnd, lookup: Lookup): Shape | undefined => (end.item ? lookup(end.item) : undefined)
 const loosePoint = (end: ArrowEnd): Point => ({ x: end.x, y: end.y })
 
+// ---------- dots ----------
+
+/** A dot around an item's edge, as fractions of its width and height (see ArrowEnd.pin). */
+export type Pin = { x: number; y: number }
+
+/** Roughly how far apart the dots along a long side are. */
+const DOT_SPACING = 100
+
+/** Fractions along a side of this length: always the middle, more on long sides (never the ends). */
+function along(length: number): number[] {
+  const parts = 2 * Math.max(1, Math.round(length / (2 * DOT_SPACING)))
+  return Array.from({ length: parts - 1 }, (_, k) => (k + 1) / parts)
+}
+
+/** The dots an arrow can be dropped on: the corners, the middle of each side, and more along long sides. */
+export function pinsOf(r: Rect): Pin[] {
+  const across = along(r.w)
+  const down = along(r.h)
+  return [
+    { x: 0, y: 0 },
+    ...across.map((x) => ({ x, y: 0 })),
+    { x: 1, y: 0 },
+    ...down.map((y) => ({ x: 1, y })),
+    { x: 1, y: 1 },
+    ...across.map((x) => ({ x: 1 - x, y: 1 })),
+    { x: 0, y: 1 },
+    ...down.map((y) => ({ x: 0, y: 1 - y }))
+  ]
+}
+
+export const pinPoint = (r: Rect, pin: Pin): Point => ({ x: r.x + pin.x * r.w, y: r.y + pin.y * r.h })
+
+/** Which way is "out" from a dot. A corner has two; it uses the one facing `aim` more. */
+export function pinSide(pin: Pin, r: Rect, aim: Point): Side {
+  const sides: Side[] = []
+  if (pin.x === 0) sides.push('left')
+  if (pin.x === 1) sides.push('right')
+  if (pin.y === 0) sides.push('top')
+  if (pin.y === 1) sides.push('bottom')
+  if (!sides.length) return sideFacing(r, aim)
+  const p = pinPoint(r, pin)
+  const facing = (s: Side): number => (aim.x - p.x) * OUT[s].x + (aim.y - p.y) * OUT[s].y
+  return sides.reduce((best, s) => (facing(s) > facing(best) ? s : best))
+}
+
+/** The dot on `r` nearest a point. */
+export function nearestPin(r: Rect, p: Point): Pin {
+  let best = pinsOf(r)[0]
+  let bestDistance = Infinity
+  for (const pin of pinsOf(r)) {
+    const q = pinPoint(r, pin)
+    const d = Math.hypot(q.x - p.x, q.y - p.y)
+    if (d < bestDistance) {
+      best = pin
+      bestDistance = d
+    }
+  }
+  return best
+}
+
+/** True if the line from `a` to `b` passes through the inside of `r` (not just along or touching its edge). */
+export function crossesBox(a: Point, b: Point, r: Rect): boolean {
+  const inset = 1
+  const left = r.x + inset
+  const right = r.x + r.w - inset
+  const top = r.y + inset
+  const bottom = r.y + r.h - inset
+  if (right <= left || bottom <= top) return false
+  // Clip the line to the box (Liang–Barsky): if any of it is left, it goes through.
+  let t0 = 0
+  let t1 = 1
+  const dx = b.x - a.x
+  const dy = b.y - a.y
+  for (const [p, q] of [
+    [-dx, a.x - left],
+    [dx, right - a.x],
+    [-dy, a.y - top],
+    [dy, bottom - a.y]
+  ]) {
+    if (p === 0) {
+      if (q < 0) return false
+    } else {
+      const t = q / p
+      if (p < 0) t0 = Math.max(t0, t)
+      else t1 = Math.min(t1, t)
+      if (t0 > t1) return false
+    }
+  }
+  return t1 - t0 > 1e-9
+}
+
+// ---------- routes ----------
+
+/** Where an end is and which way is "out" from it, given the point it faces. */
+function endOf(end: ArrowEnd, shape: Shape | undefined, aim: Point): { p: Point; side: Side } {
+  if (shape && end.pin) return { p: pinPoint(shape, end.pin), side: pinSide(end.pin, shape, aim) }
+  if (shape) {
+    const side = sideFacing(shape, aim)
+    return { p: sideMiddle(shape, side), side }
+  }
+  return { p: loosePoint(end), side: sideFacing({ ...loosePoint(end), w: 0, h: 0 }, aim) }
+}
+
+/** The point an end faces from the other end's side: a dot, an item's middle, or a loose point. */
+function aimAt(end: ArrowEnd, shape: Shape | undefined): Point {
+  if (shape && end.pin) return pinPoint(shape, end.pin)
+  return shape ? centre(shape) : loosePoint(end)
+}
+
 /** The points an arrow passes through, from its start to its end (at least two). */
 export function arrowPoints(arrow: Pick<ArrowItem, 'from' | 'to' | 'route'>, lookup: Lookup): Point[] {
   const a = shapeOf(arrow.from, lookup)
   const b = shapeOf(arrow.to, lookup)
-  // Each end faces the other: its item's middle, or its loose point.
-  const aimA = b ? centre(b) : loosePoint(arrow.to)
-  const aimB = a ? centre(a) : loosePoint(arrow.from)
-  const sideA = a ? sideFacing(a, aimA) : sideFacing({ ...loosePoint(arrow.from), w: 0, h: 0 }, aimA)
-  const sideB = b ? sideFacing(b, aimB) : sideFacing({ ...loosePoint(arrow.to), w: 0, h: 0 }, aimB)
-  const start = a ? sideMiddle(a, sideA) : loosePoint(arrow.from)
-  const end = b ? sideMiddle(b, sideB) : loosePoint(arrow.to)
-  if (arrow.route === 'straight') return [start, end]
-  return tidy([start, ...elbow(start, OUT[sideA], end, OUT[sideB]), end])
+  const start = endOf(arrow.from, a, aimAt(arrow.to, b))
+  const end = endOf(arrow.to, b, aimAt(arrow.from, a))
+  if (arrow.route === 'straight') return [start.p, end.p]
+  return tidy([start.p, ...elbow(start.p, OUT[start.side], end.p, OUT[end.side]), end.p])
 }
 
 /**

@@ -185,3 +185,87 @@ async function clickArrowWithShift(app: App, id: string): Promise<void> {
   const [a, b] = [points[0], points[1]]
   await app.clickAt(...(await app.screenOf((a[0] + b[0]) / 2, (a[1] + b[1]) / 2)), 'left', SHIFT)
 }
+
+test('dots around items: draw arrows from them, pin arrows to them', async ({ app }) => {
+  await app.newBoard('Game')
+  const a = await noteAt(app, 0, 0, 'A') // -100…100
+  const b = await noteAt(app, 400, 0, 'B') // 300…500
+  await app.key('Escape', 'Escape')
+  await app.hoverAt(await app.screenOf(-300, -300))
+  await check('no dots until the pointer comes near', (await app.dots()).length === 0, await app.dots())
+
+  await app.hoverAt(await app.itemCentre(a))
+  let dots = await app.dots()
+  await check('hovering an item shows its dots: corners and side middles', dots.length === 8 && dots.every((d) => d.item === a), dots)
+  const rightDot = await app.dot(a, '1,0.5')
+  await app.hoverAt(rightDot)
+  await check('they stay while the pointer moves out onto them', (await app.dots()).length === 8)
+
+  // Drag from A's right dot to B's left dot: both ends pinned.
+  await app.hoverAt(await app.itemCentre(b))
+  const leftOfB = await app.dot(b, '0,0.5')
+  await app.drag([rightDot, [(rightDot[0] + leftOfB[0]) / 2, rightDot[1] + 20], leftOfB])
+  let arrows = await app.arrows()
+  await check('dragging from a dot draws an arrow, with no tool needed', arrows.length === 1 && near(arrows[0].points[0], 100, 0) && near(arrows[0].points.at(-1), 300, 0), arrows)
+
+  // Pinned ends stay on their dot: move B down, and the arrow still arrives at B's left middle.
+  await app.key('Escape', 'Escape')
+  const fromB = await app.itemCentre(b)
+  const toB = await app.screenOf(400, 300)
+  await app.drag([fromB, [fromB[0], fromB[1] + 100], toB], { modifiers: META })
+  arrows = await app.arrows()
+  await check('a pinned end stays on its dot when the item moves', near(arrows[0].points.at(-1), 300, 300) && near(arrows[0].points[0], 100, 0), arrows)
+
+  // Swinging round behind the item it starts from moves the start to that side.
+  await app.key('Escape', 'Escape')
+  await app.hoverAt(await app.itemCentre(a))
+  const start = await app.dot(a, '1,0.5')
+  const below = await app.screenOf(130, 220)
+  const behind = await app.screenOf(-400, 0)
+  await app.drag([start, [start[0] + 30, start[1] + 10], below, behind])
+  const swung = (await app.arrows()).at(-1)!
+  await check('drawing back round the item moves the start to its far side', swung.points[0][0] <= -100 + 0.5, swung)
+
+  // Dropping on an item's middle (not a dot) joins it by whichever side faces, as before.
+  await app.key('Escape', 'Escape')
+  await app.hoverAt(await app.itemCentre(a))
+  const top = await app.dot(a, '0.5,0')
+  const bCentre = await app.itemCentre(b)
+  await app.drag([top, [top[0] + 100, top[1] - 50], bCentre])
+  const loose = (await app.arrows()).at(-1)!
+  await check('dropping on an item’s middle joins its facing side', near(loose.points.at(-1), 300, 300) || near(loose.points.at(-1), 400, 200), loose)
+
+  // While an arrow is being drawn, every item shows its dots, and the one it would join lights up.
+  await app.key('Escape', 'Escape')
+  await app.hoverAt(await app.itemCentre(a))
+  const from = await app.dot(a, '0,0.5')
+  await app.hoverBeforePress(from)
+  await app.mouse('mousePressed', from)
+  const onto = await app.dot(b, '0.5,1')
+  await app.mouse('mouseMoved', [from[0] - 20, from[1]])
+  await app.mouse('mouseMoved', [onto[0] + 4, onto[1] + 3])
+  await app.settle()
+  dots = await app.dots()
+  await check('all items show dots while drawing', new Set(dots.map((d) => d.item)).size === 2, dots)
+  await check('the dot it would join lights up', await app.js(`!!document.querySelector('.dot.active[data-dot-item="${b}"][data-dot="0.5,1"]')`))
+  await app.mouse('mouseReleased', [onto[0] + 4, onto[1] + 3])
+  await app.settle()
+  await check('let go near a dot: it joins that dot', near((await app.arrows()).at(-1)!.points.at(-1), 400, 400), (await app.arrows()).at(-1))
+
+  // Wider items get more dots along their long sides.
+  await app.tool('b')
+  // (Somewhere clear of the other items, and on screen.)
+  const corner1 = await app.screenOf(-500, 180)
+  const corner2 = await app.screenOf(100, 280)
+  await app.drag([corner1, [corner1[0] + 100, corner1[1] + 50], corner2])
+  await app.key('Escape', 'Escape')
+  const wide = (await app.lastItem()).id
+  await app.key('Escape', 'Escape')
+  await app.hoverAt(await app.itemCentre(wide))
+  const topDots = (await app.dots()).filter((d) => d.item === wide && d.pin.endsWith(',0'))
+  await check('a 600-wide box has seven dots along its top', topDots.length === 7, topDots.map((d) => d.pin))
+  // Double-clicking a dot doesn't make a note.
+  const count = (await app.items()).length
+  await app.doubleClickAt(await app.dot(wide, '0.5,0'))
+  await check('double-clicking a dot doesn’t add a note', (await app.items()).length === count)
+})

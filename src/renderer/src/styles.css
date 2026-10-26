@@ -1148,3 +1148,25 @@ button {
   font-variant-numeric: tabular-nums;
   color: var(--muted);
 }
+
+/* ---------- dots for joining arrows ---------- */
+
+.dot {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  margin: -5px 0 0 -5px;
+  border: 1.5px solid var(--select);
+  border-radius: 50%;
+  background: var(--panel);
+  cursor: crosshair;
+  pointer-events: auto;
+  opacity: 0.85;
+  transition: transform 0.08s ease-out;
+}
+.dot:hover,
+.dot.active {
+  background: var(--select);
+  opacity: 1;
+  transform: scale(1.35);
+}

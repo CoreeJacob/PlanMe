@@ -430,6 +430,24 @@ export class App {
     return (await this.arrows()).find((x) => !before.has(x.id))?.id ?? ''
   }
 
+  /** The dots showing (for joining arrows): which item, where around its edge, and where on screen. */
+  dots(): Promise<Array<{ item: string; pin: string; x: number; y: number }>> {
+    return this.js(`[...document.querySelectorAll('.dot')].map(d => { const r = d.getBoundingClientRect(); return { item: d.dataset.dotItem, pin: d.dataset.dot, x: r.x + r.width / 2, y: r.y + r.height / 2 } })`)
+  }
+
+  /** Where a dot is on screen ('1,0.5' is the middle of the right side), once it's showing. */
+  async dot(item: string, pin: string): Promise<Point> {
+    const found = await this.until(async () => (await this.dots()).find((d) => d.item === item && d.pin === pin))
+    if (!found) throw new Error(`No dot ${pin} showing on ${item}`)
+    return [found.x, found.y]
+  }
+
+  /** Moves the pointer (no button pressed) to a window point. */
+  async hoverAt(point: Point): Promise<void> {
+    await this.mouse('mouseMoved', point, { buttons: 0 })
+    await this.settle()
+  }
+
   /** Makes the next Mac question dialogs answer with these button numbers, recording what they asked. */
   async answerQuestions(...answers: number[]): Promise<void> {
     await this.main(({ dialog }, list) => {
