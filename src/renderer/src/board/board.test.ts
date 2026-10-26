@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_VIEW, FORMAT, type BoardDoc } from '@shared/types'
 import { changes } from './changes'
-import { addTab, moveTab, neighbourTab, nextTabName, removeTab, renameTab } from './doc'
+import { addTab, isUntouched, moveTab, neighbourTab, nextTabName, removeTab, renameTab } from './doc'
 import { EMPTY_HISTORY, LIMIT, record, redo, undo } from './history'
 
 const doc = (...names: string[]): BoardDoc => ({ tabs: names.map((name) => ({ id: name.toLowerCase(), name, items: [] })) })
@@ -36,6 +36,13 @@ describe('tab changes', () => {
   it('names new tabs with the next free number', () => {
     expect(nextTabName(doc('Overview'))).toBe('Tab 2')
     expect(nextTabName(doc('Overview', 'Tab 3'))).toBe('Tab 4')
+  })
+
+  it('knows a tab that is still as it was made (so closing it needn’t ask)', () => {
+    expect(isUntouched({ id: 'a', name: 'Overview', items: [] })).toBe(true)
+    expect(isUntouched({ id: 'a', name: 'Tab 12', items: [] })).toBe(true)
+    expect(isUntouched({ id: 'a', name: 'Levels', items: [] })).toBe(false)
+    expect(isUntouched({ id: 'a', name: 'Tab 2', items: [{ id: 'n', type: 'note', x: 0, y: 0, w: 1, h: 1, text: '', color: 'yellow' }] })).toBe(false)
   })
 
   it('shows the neighbour of a removed tab', () => {

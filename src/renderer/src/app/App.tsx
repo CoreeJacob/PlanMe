@@ -10,6 +10,7 @@ import { BoardScreen } from './BoardScreen'
 import { BoardsScreen } from './BoardsScreen'
 import { PromptDialog, Toasts } from './Overlays'
 import { toolForKey } from './SidePanel'
+import { Tooltips } from './Tooltips'
 import { useApp } from './store'
 
 /** What each menu bar command does while a board is open. */
@@ -109,6 +110,7 @@ export function App() {
       {screen === 'board' && <BoardScreen />}
       <PromptDialog />
       <Toasts />
+      <Tooltips />
     </div>
   )
 }

@@ -1,7 +1,7 @@
 // Things the menus and buttons do: opening and switching boards, and working with tabs.
 
 import type { OpenedBoard } from '@shared/types'
-import { addTab, moveTab, neighbourTab, nextTabName, removeTab, renameTab, tabIndex } from '@/board/doc'
+import { addTab, isUntouched, moveTab, neighbourTab, nextTabName, removeTab, renameTab, tabIndex } from '@/board/doc'
 import { flushSave } from '@/board/saver'
 import { useBoard } from '@/board/store'
 import { attempt, useApp } from './store'
@@ -82,10 +82,16 @@ export function moveTabTo(id: string, index: number): void {
   commit(moveTab(doc, id, index))
 }
 
+/** Deletes a tab, asking first unless it's still blank with the name it was given. */
 export function deleteTab(id: string): void {
   const { doc, tabId, commit } = useBoard.getState()
   const tab = doc.tabs.find((t) => t.id === id)
   if (!tab || doc.tabs.length <= 1) return
+  if (!isUntouched(tab)) {
+    const n = tab.items.length
+    const what = n ? ` and the ${n} item${n === 1 ? '' : 's'} on it` : ''
+    if (!confirm(`Delete the tab “${tab.name}”${what}?\n\nYou can undo this with ⌘Z.`)) return
+  }
   commit(removeTab(doc, id), id === tabId ? neighbourTab(doc, id) : tabId)
   const after = useBoard.getState().doc
   // The message's Undo only applies while the deletion is still the latest change.

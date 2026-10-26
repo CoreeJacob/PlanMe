@@ -49,3 +49,9 @@ export function neighbourTab(doc: BoardDoc, id: string): string {
   const i = tabIndex(doc, id)
   return (doc.tabs[i + 1] ?? doc.tabs[i - 1] ?? doc.tabs[0]).id
 }
+
+/** The names tabs are given automatically: the first tab's, and "Tab 2", "Tab 3"… */
+const GIVEN_NAME = /^(Overview|Tab \d+)$/
+
+/** True for a tab that's still as it was made: nothing on it, and not renamed. */
+export const isUntouched = (tab: Tab): boolean => tab.items.length === 0 && GIVEN_NAME.test(tab.name)

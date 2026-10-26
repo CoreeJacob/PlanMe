@@ -1,19 +1,22 @@
-import { useEffect, useRef, useState } from 'react'
-import { useApp } from './store'
+import { useLayoutEffect, useRef, useState } from 'react'
+import { useApp, type PromptRequest } from './store'
 
 export function PromptDialog() {
   const prompt = useApp((s) => s.prompt)
+  // A fresh form for each question, so its suggested answer is there from the very first moment.
+  return prompt ? <PromptForm key={prompt.id} prompt={prompt} /> : null
+}
+
+function PromptForm({ prompt }: { prompt: PromptRequest }) {
   const closePrompt = useApp((s) => s.closePrompt)
-  const [value, setValue] = useState('')
+  const [value, setValue] = useState(prompt.value)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  useEffect(() => {
-    if (!prompt) return
-    setValue(prompt.value)
-    requestAnimationFrame(() => inputRef.current?.select())
-  }, [prompt])
-
-  if (!prompt) return null
+  // Select the suggestion before anything can be typed, so typing replaces it.
+  useLayoutEffect(() => {
+    inputRef.current?.focus()
+    inputRef.current?.select()
+  }, [])
 
   return (
     <div className="modal-backdrop" onMouseDown={() => closePrompt(null)}>
@@ -28,7 +31,7 @@ export function PromptDialog() {
       >
         <h2>{prompt.title}</h2>
         {prompt.label && <p className="muted">{prompt.label}</p>}
-        <input ref={inputRef} className="input" value={value} onChange={(e) => setValue(e.target.value)} autoFocus />
+        <input ref={inputRef} className="input" value={value} onChange={(e) => setValue(e.target.value)} />
         <div className="modal-actions">
           <button type="button" className="btn" onClick={() => closePrompt(null)}>
             Cancel

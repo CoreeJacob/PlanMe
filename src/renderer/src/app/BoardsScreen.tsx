@@ -30,7 +30,7 @@ export function BoardsScreen() {
     <div className="boards-screen">
       <header className="boards-header drag-region">
         <h1>Boards</h1>
-        <button className="btn primary" onClick={() => void newBoard()}>
+        <button className="btn primary" title="New board — one for each game or idea (⇧⌘N)" onClick={() => void newBoard()}>
           <Icon name="plus" size={16} /> New Board
         </button>
       </header>
@@ -72,7 +72,7 @@ export function BoardsScreen() {
         <span className="boards-root" title={root}>
           Saved in {root.replace(/^\/Users\/[^/]+/, '~')}
         </span>
-        <button className="link" onClick={() => void chooseRoot()}>
+        <button className="link" title="Choose a different folder to keep your boards in" onClick={() => void chooseRoot()}>
           Change…
         </button>
       </footer>

@@ -25,18 +25,18 @@ interface Palette {
 function palettesFor(items: Item[]): Palette[] {
   const first = items[0]
   if (!first || !items.every((i) => i.type === first.type)) return []
-  if (first.type === 'note') return [{ key: 'color', label: 'Colour', choices: NOTE_COLORS, swatch: (n) => `note-${n}`, current: first.color }]
-  if (first.type === 'text') return [{ key: 'color', label: 'Text colour', choices: INK_COLORS, swatch: (n) => `swatch-ink ink-${n}`, current: first.color }]
+  if (first.type === 'note') return [{ key: 'color', label: 'Colour — the note’s colour', choices: NOTE_COLORS, swatch: (n) => `note-${n}`, current: first.color }]
+  if (first.type === 'text') return [{ key: 'color', label: 'Text colour — the colour of the words', choices: INK_COLORS, swatch: (n) => `swatch-ink ink-${n}`, current: first.color }]
   return [
-    { key: 'fill', label: 'Fill', choices: FILL_COLORS, swatch: (n) => `fill-${n}`, current: first.fill },
-    { key: 'border', label: 'Border', choices: BORDER_COLORS, swatch: (n) => `swatch-ink ink-${n}${n === 'none' ? ' none' : ''}`, current: first.border }
+    { key: 'fill', label: 'Fill — the box’s background colour', choices: FILL_COLORS, swatch: (n) => `fill-${n}`, current: first.fill },
+    { key: 'border', label: 'Border — the colour of the box’s edge', choices: BORDER_COLORS, swatch: (n) => `swatch-ink ink-${n}${n === 'none' ? ' none' : ''}`, current: first.border }
   ]
 }
 
 const STYLES: Array<{ style: TextStyle; label: string; command: string; key: string }> = [
-  { style: 'b', label: 'Bold', command: 'bold', key: '⌘B' },
-  { style: 'i', label: 'Italic', command: 'italic', key: '⌘I' },
-  { style: 'u', label: 'Underline', command: 'underline', key: '⌘U' }
+  { style: 'b', label: 'Bold — for all the words, or just the ones picked while typing', command: 'bold', key: '⌘B' },
+  { style: 'i', label: 'Italic — for all the words, or just the ones picked while typing', command: 'italic', key: '⌘I' },
+  { style: 'u', label: 'Underline — for all the words, or just the ones picked while typing', command: 'underline', key: '⌘U' }
 ]
 
 const GAP = 10
@@ -72,7 +72,7 @@ export function ItemToolbar({ view, size, items, editing }: { view: View; size: 
             <span className={`swatch ${p.swatch(p.current)}`} />
           </button>
           {open === p.key && (
-            <div className="swatch-popover" role="menu" aria-label={p.label}>
+            <div className="swatch-popover" role="menu" aria-label={p.label.split(' — ')[0]}>
               {p.choices.map((c) => (
                 <button
                   key={c.name}
@@ -91,7 +91,7 @@ export function ItemToolbar({ view, size, items, editing }: { view: View; size: 
         </div>
       ))}
       {box && box.type === 'box' && (
-        <button className={`toolbar-btn ${box.rounded ? 'active' : ''}`} title="Rounded corners" onClick={() => setOnSelected('rounded', !box.rounded)}>
+        <button className={`toolbar-btn ${box.rounded ? 'active' : ''}`} title="Rounded corners — on or off" onClick={() => setOnSelected('rounded', !box.rounded)}>
           <Icon name="rounded" size={16} />
         </button>
       )}
@@ -107,10 +107,10 @@ export function ItemToolbar({ view, size, items, editing }: { view: View; size: 
         </button>
       ))}
       <span className="toolbar-sep" />
-      <button className="toolbar-btn" title="Bring to front (⌘])" onClick={bringSelectedToFront}>
+      <button className="toolbar-btn" title="Bring to front — on top of everything else (⌘])" onClick={bringSelectedToFront}>
         <Icon name="toFront" size={16} />
       </button>
-      <button className="toolbar-btn" title="Send to back (⌘[)" onClick={sendSelectedToBack}>
+      <button className="toolbar-btn" title="Send to back — behind everything else (⌘[)" onClick={sendSelectedToBack}>
         <Icon name="toBack" size={16} />
       </button>
       <button className="toolbar-btn danger" title="Delete (⌫)" onClick={deleteSelected}>

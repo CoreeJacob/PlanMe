@@ -1,8 +1,8 @@
-import { check, menuItem, META, SHIFT, tab, test, type App } from './support/app'
+import { byTip, check, menuItem, META, SHIFT, tab, tipOf, test, type App } from './support/app'
 
 const editing = (app: App) => app.js<boolean>(`document.activeElement?.classList.contains('item-editor') ?? false`)
-const toolbarButton = (tip: string) => `[...document.querySelectorAll('.item-toolbar button')].find(b => b.title.startsWith(${JSON.stringify(tip)}))`
-const swatch = (label: string) => `[...document.querySelectorAll('.swatch-popover button')].find(b => b.title === ${JSON.stringify(label)})`
+const toolbarButton = (tip: string) => byTip('.item-toolbar button', tip)
+const swatch = (label: string) => `[...document.querySelectorAll('.swatch-popover button')].find(b => (b.title || b.dataset.tip) === ${JSON.stringify(label)})`
 
 /** Adds a note centred on a board point by double-clicking there, types in it, and finishes. Returns its id. */
 async function noteAt(app: App, x: number, y: number, text: string): Promise<string> {
@@ -26,7 +26,7 @@ test('place notes, text and boxes, type in them, and they are saved', async ({ a
   await check('the note has the words', note.type === 'note' && note.text === 'Boss fight', note)
   await check('it is the usual size, centred where clicked', note.w === 200 && note.h === 200 && Math.abs(note.x + 100) <= 1 && Math.abs(note.y + 100) <= 1, note)
   await check('Escape finishes typing and leaves it selected', !(await editing(app)) && (await app.selectedIds()).join() === note.id)
-  await check('back on the Select tool', await app.js(`document.querySelector('.tool-btn.active').title.startsWith('Select')`))
+  await check('back on the Select tool', (await app.js<string>(tipOf(`document.querySelector('.tool-btn.active')`))).startsWith('Select'))
 
   await app.undo()
   await check('one undo takes away the note and its words together', (await app.items()).length === 0, await app.items())

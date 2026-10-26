@@ -31,11 +31,14 @@ export const SHIFT = 8
 
 export const byText = (sel: string, text: string): string =>
   `[...document.querySelectorAll('${sel}')].find(b => b.textContent.trim().startsWith(${JSON.stringify(text)}))`
+/** An element by the start of its hover text (which moves from `title` to `data-tip` once hovered). */
 export const byTip = (sel: string, tip: string): string =>
-  `[...document.querySelectorAll('${sel}')].find(b => (b.getAttribute('title') || '').startsWith(${JSON.stringify(tip)}))`
+  `[...document.querySelectorAll('${sel}')].find(b => (b.getAttribute('title') || b.dataset.tip || '').startsWith(${JSON.stringify(tip)}))`
+/** A snippet giving an element's hover text, wherever it is now. */
+export const tipOf = (el: string): string => `((e => e ? e.getAttribute('title') || e.dataset.tip || '' : '')(${el}))`
 export const menuItem = (label: string): string =>
   `[...document.querySelectorAll('.menu-item')].find(b => b.querySelector('.menu-label').textContent.trim() === ${JSON.stringify(label)})`
-export const tab = (name: string): string => `[...document.querySelectorAll('.tab')].find(t => t.title === ${JSON.stringify(name)})`
+export const tab = (name: string): string => `[...document.querySelectorAll('.tab')].find(t => t.dataset.name === ${JSON.stringify(name)})`
 export const boardCard = (name: string): string =>
   `[...document.querySelectorAll('.board-card')].find(c => c.querySelector('.board-name').textContent === ${JSON.stringify(name)})`
 
@@ -322,11 +325,11 @@ export class App {
   }
 
   tabNames(): Promise<string[]> {
-    return this.js(`[...document.querySelectorAll('.tab')].map(t => t.title)`)
+    return this.js(`[...document.querySelectorAll('.tab')].map(t => t.dataset.name)`)
   }
 
   activeTab(): Promise<string | undefined> {
-    return this.js(`document.querySelector('.tab.active')?.title`)
+    return this.js(`document.querySelector('.tab.active')?.dataset.name`)
   }
 
   /** Adds a tab with the + button and names it. */
@@ -335,7 +338,7 @@ export class App {
     await this.untilJs(`!!document.querySelector('.tab-input')`)
     await this.setInput('.tab-input', name)
     await this.key('Enter', 'Enter')
-    await this.untilJs(`!document.querySelector('.tab-input') && document.querySelector('.tab.active')?.title === ${JSON.stringify(name)}`)
+    await this.untilJs(`!document.querySelector('.tab-input') && document.querySelector('.tab.active')?.dataset.name === ${JSON.stringify(name)}`)
   }
 
   async undo(): Promise<void> {

@@ -4,11 +4,11 @@ import { Icon, type IconName } from './Icon'
 import { useApp, type Tool } from './store'
 
 const TOOLS: Array<{ tool: Tool; label: string; tip?: string; key: string; icon: IconName }> = [
-  { tool: 'select', label: 'Select', key: 'V', icon: 'select' },
-  { tool: 'hand', label: 'Hand', key: 'H', icon: 'hand' },
-  { tool: 'note', label: 'Note', tip: 'Sticky note', key: 'N', icon: 'note' },
-  { tool: 'text', label: 'Text', key: 'T', icon: 'text' },
-  { tool: 'box', label: 'Box', key: 'B', icon: 'box' }
+  { tool: 'select', label: 'Select', tip: 'Select — click to select, drag to move, double-click to type', key: 'V', icon: 'select' },
+  { tool: 'hand', label: 'Hand', tip: 'Hand — drag to move around the board', key: 'H', icon: 'hand' },
+  { tool: 'note', label: 'Note', tip: 'Sticky note — click to place one, or drag to choose its size', key: 'N', icon: 'note' },
+  { tool: 'text', label: 'Text', tip: 'Text — click to place, or drag to choose its width', key: 'T', icon: 'text' },
+  { tool: 'box', label: 'Box', tip: 'Box — click to place one, or drag to choose its size', key: 'B', icon: 'box' }
 ]
 
 export function SidePanel() {

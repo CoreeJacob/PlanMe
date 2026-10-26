@@ -427,7 +427,7 @@ export function Canvas() {
         <button className="icon-btn" title="Zoom out (⌘−)" onClick={() => zoomStep(-1)}>
           <Icon name="minus" size={16} />
         </button>
-        <button className="zoom-level" title="Actual size (⌘0)" onClick={zoomReset}>
+        <button className="zoom-level" title="Actual size — back to 100% (⌘0)" onClick={zoomReset}>
           {Math.round(view.zoom * 100)}%
         </button>
         <button className="icon-btn" title="Zoom in (⌘=)" onClick={() => zoomStep(1)}>

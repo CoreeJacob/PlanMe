@@ -1,5 +1,5 @@
 import path from 'node:path'
-import { CTRL, check, META, readJson, tab, test, type App } from './support/app'
+import { byTip, CTRL, check, META, readJson, tab, tipOf, test, type App } from './support/app'
 
 const zoomLabel = (app: App) => app.js<string>(`document.querySelector('.zoom-level').textContent`)
 const near = (a: number, b: number) => Math.abs(a - b) < 0.01
@@ -34,9 +34,9 @@ test('scrolling moves around, and pinching or ⌘-scrolling zooms where the poin
 
   await app.click(`document.querySelector('.zoom-level')`)
   await check('clicking the percentage goes back to 100%', (await zoomLabel(app)) === '100%', await zoomLabel(app))
-  await app.click(`document.querySelector('[title^="Zoom in"]')`)
+  await app.click(byTip('.zoom-controls button', 'Zoom in'))
   await check('+ steps in', (await zoomLabel(app)) === '125%', await zoomLabel(app))
-  await app.click(`document.querySelector('[title^="Zoom out"]')`)
+  await app.click(byTip('.zoom-controls button', 'Zoom out'))
   await app.menuCommand('zoomOut')
   await check('− and ⌘− step out', (await zoomLabel(app)) === '75%', await zoomLabel(app))
   await app.menuCommand('zoomReset')
@@ -51,7 +51,7 @@ test('the Hand tool, Space and the middle button drag the board', async ({ app }
   await check('dragging with Select doesn’t move the board', JSON.stringify(await app.view()) === '{"x":0,"y":0,"zoom":1}', await app.view())
 
   await app.key('h', 'KeyH')
-  await check('H picks the Hand tool', await app.js(`document.querySelector('.tool-btn.active')?.title.startsWith('Hand')`))
+  await check('H picks the Hand tool', (await app.js<string>(tipOf(`document.querySelector('.tool-btn.active')`))).startsWith('Hand'))
   await app.drag([[x, y], [x + 50, y + 20], [x + 100, y + 40]])
   let view = await app.view()
   await check('the Hand tool drags the board', view.x === -100 && view.y === -40, view)

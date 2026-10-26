@@ -1,10 +1,10 @@
 import { rm } from 'node:fs/promises'
 import path from 'node:path'
-import { boardCard, check, readJson, test } from './support/app'
+import { boardCard, check, readJson, test, tipOf } from './support/app'
 
 test('make a board, and the app reopens it next time', async ({ app }) => {
   await check('starts on an empty Boards screen', await app.js(`!!document.querySelector('.boards-empty')`))
-  await check('says where boards are saved', ((await app.js<string>(`document.querySelector('.boards-root').title`)) ?? '') === app.dirs.boards)
+  await check('says where boards are saved', (await app.js<string>(tipOf(`document.querySelector('.boards-root')`))) === app.dirs.boards)
 
   await app.newBoard('Space Game')
   await check('the new board has one tab', (await app.tabNames()).join() === 'Overview', await app.tabNames())

@@ -19,6 +19,7 @@ export interface Toast {
 }
 
 export interface PromptRequest {
+  id: number
   title: string
   label?: string
   value: string
@@ -45,7 +46,7 @@ interface AppState {
   toast(message: string, options?: { kind?: Toast['kind']; action?: Toast['action'] }): void
   dismissToast(id: number): void
   /** Asks for a name; resolves with it, or null if cancelled. */
-  ask(request: Omit<PromptRequest, 'resolve'>): Promise<string | null>
+  ask(request: Omit<PromptRequest, 'id' | 'resolve'>): Promise<string | null>
   closePrompt(value: string | null): void
 }
 
@@ -60,6 +61,7 @@ function readPanelOpen(): boolean {
 }
 
 let nextToast = 1
+let nextPrompt = 1
 
 export const useApp = create<AppState>((set, get) => ({
   screen: 'loading',
@@ -97,7 +99,7 @@ export const useApp = create<AppState>((set, get) => ({
   ask: (request) =>
     new Promise((resolve) => {
       get().prompt?.resolve(null)
-      set({ prompt: { ...request, resolve } })
+      set({ prompt: { ...request, id: nextPrompt++, resolve } })
     }),
 
   closePrompt: (value) => {

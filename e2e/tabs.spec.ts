@@ -80,3 +80,65 @@ test('new tabs from the menu, switching with keys, and the last tab stays', asyn
   await check('Ctrl-Shift-Tab goes back', (await app.activeTab()) === 'Tab 2')
   await check('no menu left open', !(await app.js(`!!${menuItem('Rename')}`)))
 })
+
+test('the × on a tab closes it, asking first unless the tab is untouched', async ({ app }) => {
+  await app.newBoard('Game')
+  // Record each "are you sure?" question, and answer as the test says.
+  await app.js(`window.__asked = []; window.__answer = true; window.confirm = (m) => (window.__asked.push(m), window.__answer); 1`)
+  const asked = () => app.js<string[]>(`window.__asked.slice()`)
+  const close = (name: string) => `${tab(name)}.querySelector('.tab-close')`
+
+  await check('no × when there is only one tab', await app.js(`!document.querySelector('.tab-close')`))
+
+  // A brand-new tab, still called "Tab 2", closes straight away.
+  await app.menuCommand('newTab')
+  await app.key('Escape', 'Escape')
+  await app.click(close('Tab 2'))
+  await check('an untouched tab closes without asking', (await app.tabNames()).join() === 'Overview' && (await asked()).length === 0, { tabs: await app.tabNames(), asked: await asked() })
+
+  // A renamed tab asks; saying no keeps it.
+  await app.addTab('Levels')
+  await app.js(`window.__answer = false; 1`)
+  await app.click(close('Levels'))
+  await check('a renamed tab asks first', (await asked())[0]?.startsWith('Delete the tab “Levels”?'), await asked())
+  await check('saying no keeps it', (await app.tabNames()).join() === 'Overview,Levels', await app.tabNames())
+
+  // A tab with things on it says how many.
+  await app.click(tab('Overview'))
+  await app.doubleClickAt(await app.screenOf(0, 0))
+  await app.type('A note')
+  await app.key('Escape', 'Escape')
+  await app.js(`window.__answer = true; 1`)
+  await app.click(close('Overview'))
+  await check('it says how many items will go', (await asked())[1]?.includes('and the 1 item on it'), await asked())
+  await check('saying yes deletes it', (await app.tabNames()).join() === 'Levels', await app.tabNames())
+  await app.undo()
+  await check('undo brings it back, with its note', (await app.tabNames()).join() === 'Overview,Levels' && (await app.items()).length === 1)
+
+  // Closing a tab that isn't showing doesn't switch to it first.
+  await app.click(close('Levels'))
+  await check('closing another tab leaves you where you were', (await app.activeTab()) === 'Overview' && (await app.tabNames()).join() === 'Overview')
+})
+
+test('hovering a button explains what it does', async ({ app }) => {
+  await app.newBoard('Game')
+  const hoverOver = async (el: string) => {
+    const [x, y] = await app.centre(el)
+    await app.call('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y })
+    return app.untilJs<string>(`document.querySelector('.tooltip')?.innerText`)
+  }
+  const tip = await hoverOver(`document.querySelector('.tool-btn:nth-child(3)')`)
+  await check('a tool explains itself', tip?.includes('Sticky note') && tip.includes('click to place one'), tip)
+  await check('…and shows its key', (await app.js(`document.querySelector('.tooltip kbd')?.textContent`)) === 'N')
+  await check('…to the side of the panel', await app.js(`document.querySelector('.tooltip').classList.contains('right')`))
+  await check('the slow built-in hover text is gone', await app.js(`!document.querySelector('.tool-btn:nth-child(3)').hasAttribute('title')`))
+
+  await app.key('Escape', 'Escape')
+  await check('a key press hides it', await app.js(`!document.querySelector('.tooltip')`))
+
+  const undo = await hoverOver(`document.querySelector('.topbar-end .icon-btn')`)
+  await check('top bar buttons too', undo?.startsWith('Undo'), undo)
+  await check('below the top bar, not off the top of the window', await app.js(`document.querySelector('.tooltip').classList.contains('below')`))
+  const zoom = await hoverOver(`document.querySelector('.zoom-level')`)
+  await check('zoom too', zoom?.includes('back to 100%'), zoom)
+})

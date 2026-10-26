@@ -20,10 +20,10 @@ export function BoardScreen() {
     <div className={`board-screen ${panelOpen ? '' : 'panel-closed'}`}>
       <header className="topbar drag-region">
         <div className="topbar-start">
-          <button className="icon-btn" title={`${panelOpen ? 'Hide' : 'Show'} side panel (⌘\\)`} onClick={() => setPanelOpen(!panelOpen)}>
+          <button className="icon-btn" title={`${panelOpen ? 'Hide' : 'Show'} side panel — the tools and the task list (⌘\\)`} onClick={() => setPanelOpen(!panelOpen)}>
             <Icon name="panel" />
           </button>
-          <button className="board-switch" title="All boards (⇧⌘B)" onClick={() => void goToBoards()}>
+          <button className="board-switch" title="All boards — back to the list of your boards (⇧⌘B)" onClick={() => void goToBoards()}>
             <Icon name="boards" size={14} />
             <span className="board-title">{name}</span>
           </button>

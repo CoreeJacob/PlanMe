@@ -2,6 +2,7 @@
 // right-click for more.
 
 import { useEffect, useRef, useState } from 'react'
+import { isUntouched } from '@/board/doc'
 import { useBoard } from '@/board/store'
 import { deleteTab, moveTabTo, newTab, renameTabTo } from './actions'
 import { useContextMenu } from './ContextMenu'
@@ -53,7 +54,8 @@ export function TabBar() {
             ]
               .filter(Boolean)
               .join(' ')}
-            title={tab.name}
+            data-name={tab.name}
+            title={`${tab.name} — double-click to rename, drag to move`}
             draggable={editing !== tab.id}
             onMouseDown={(e) => e.button === 0 && setTab(tab.id)}
             onDoubleClick={() => setEditing(tab.id)}
@@ -100,10 +102,24 @@ export function TabBar() {
             ) : (
               <span className="tab-name">{tab.name}</span>
             )}
+            {tabs.length > 1 && editing !== tab.id && (
+              <button
+                className="tab-close"
+                title={isUntouched(tab) ? 'Close tab' : 'Close tab — deletes it and everything on it (asks first)'}
+                aria-label={`Close ${tab.name}`}
+                draggable={false}
+                // Closing a tab shouldn't switch to it first, or start a drag.
+                onMouseDown={(e) => e.stopPropagation()}
+                onDoubleClick={(e) => e.stopPropagation()}
+                onClick={() => deleteTab(tab.id)}
+              >
+                <Icon name="close" size={12} />
+              </button>
+            )}
           </div>
         ))}
       </div>
-      <button className="icon-btn new-tab" title="New tab (⌘T)" onClick={() => setEditing(newTab())}>
+      <button className="icon-btn new-tab" title="New tab — another area of this board to plan in (⌘T)" onClick={() => setEditing(newTab())}>
         <Icon name="plus" size={16} />
       </button>
       {menu.element}
