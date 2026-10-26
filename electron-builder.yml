@@ -1,0 +1,14 @@
+appId: com.planme.app
+productName: PlanMe
+directories:
+  output: dist
+  buildResources: build
+files:
+  - out/**
+  - package.json
+mac:
+  category: public.app-category.productivity
+  icon: build/icon.png
+  target: dmg
+  # Built for your own Mac only, so no Apple signing identity is needed.
+  identity: null
