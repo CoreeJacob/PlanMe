@@ -5,7 +5,11 @@ import { create } from 'zustand'
 import type { BoardSummary } from '@shared/types'
 
 export type Screen = 'loading' | 'boards' | 'board'
-export type Tool = 'select' | 'hand'
+export type Tool = 'select' | 'hand' | 'note' | 'text' | 'box'
+export type PlacingTool = Extract<Tool, 'note' | 'text' | 'box'>
+
+/** Tools that place a new item where you click. */
+export const isPlacingTool = (tool: Tool): tool is PlacingTool => tool === 'note' || tool === 'text' || tool === 'box'
 
 export interface Toast {
   id: number

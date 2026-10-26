@@ -366,6 +366,99 @@ export class App {
   boardDir(name: string): string {
     return path.join(this.dirs.boards, name)
   }
+
+  // ---------- items ----------
+
+  /** The window position of a board point, in whole pixels (as mouse events are). */
+  screenOf(x: number, y: number): Promise<Point> {
+    return this.js(`(() => { const c = document.querySelector('.canvas'); const r = c.getBoundingClientRect(); const [vx, vy, z] = c.dataset.view.split(',').map(Number)
+      return [Math.round(r.x + r.width / 2 + (${x} - vx) * z), Math.round(r.y + r.height / 2 + (${y} - vy) * z)] })()`)
+  }
+
+  /** The items on the tab showing, bottom of the pile first, as drawn. */
+  items(): Promise<ItemInfo[]> {
+    return this.js(`[...document.querySelectorAll('.item')].map(e => { const words = e.querySelector('.item-words'); return {
+      id: e.dataset.itemId, type: e.className.match(/item-(note|text|box)/)[1], classes: e.className,
+      x: parseFloat(e.style.left), y: parseFloat(e.style.top), w: parseFloat(e.style.width), h: e.offsetHeight,
+      text: words.innerText.replace(/\\n$/, ''), html: words.innerHTML, fontSize: parseFloat(getComputedStyle(words).fontSize) } })`)
+  }
+
+  async item(id: string): Promise<ItemInfo> {
+    return (await this.items()).find((i) => i.id === id)!
+  }
+
+  /** The newest item (top of the pile). */
+  async lastItem(): Promise<ItemInfo> {
+    return (await this.items()).at(-1)!
+  }
+
+  /** The window position of an item's middle. */
+  async itemCentre(id: string): Promise<Point> {
+    const i = await this.item(id)
+    return this.screenOf(i.x + i.w / 2, i.y + i.h / 2)
+  }
+
+  selectedIds(): Promise<string[]> {
+    return this.js(`[...document.querySelectorAll('.selection-outline[data-id]')].map(e => e.dataset.id)`)
+  }
+
+  /** A double-click at window coordinates, as two real clicks. */
+  async doubleClickAt([x, y]: Point): Promise<void> {
+    await this.hoverBeforePress([x, y])
+    for (const clickCount of [1, 2]) {
+      await this.call('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', buttons: 1, clickCount })
+      await this.call('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', buttons: 0, clickCount })
+    }
+    await this.settle()
+  }
+
+  /** Types into the text being edited, as the keyboard would. */
+  async type(text: string): Promise<void> {
+    await this.js(`document.execCommand('insertText', false, ${JSON.stringify(text)})`)
+    await this.settle()
+  }
+
+  /** Picks a tool by its key. */
+  tool(letter: string): Promise<void> {
+    return this.key(letter, 'Key' + letter.toUpperCase())
+  }
+
+  /**
+   * Copy, cut or paste through a stand-in clipboard kept in the page, so tests never touch yours.
+   * `text` puts plain text on it first (as if copied from another app).
+   */
+  async clipboard(action: 'copy' | 'cut' | 'paste', text?: string): Promise<void> {
+    await this.js(`(() => {
+      if (!window.__clip || ${text !== undefined || action !== 'paste'}) window.__clip = new DataTransfer()
+      ${text !== undefined ? `window.__clip.setData('text/plain', ${JSON.stringify(text)})` : ''}
+      ;(document.activeElement ?? document.body).dispatchEvent(new ClipboardEvent(${JSON.stringify(action)}, { clipboardData: window.__clip, bubbles: true, cancelable: true }))
+      return 1 })()`)
+    await this.settle()
+  }
+
+  /** The items saved in a tab's file, once it has `count` of them. */
+  async savedItems(board: string, tabIndex: number, count: number): Promise<any[]> {
+    const dir = this.boardDir(board)
+    const saved = await this.until(async () => {
+      const b = await readJson(path.join(dir, 'board.json')).catch(() => null)
+      const tab = b && (await readJson(path.join(dir, 'tabs', `${b.tabs[tabIndex].id}.json`)).catch(() => null))
+      return tab?.items?.length === count ? tab.items : null
+    })
+    return saved ?? []
+  }
+}
+
+export interface ItemInfo {
+  id: string
+  type: 'note' | 'text' | 'box'
+  classes: string
+  x: number
+  y: number
+  w: number
+  h: number
+  text: string
+  html: string
+  fontSize: number
 }
 
 /** Every test gets its own app on its own empty boards folder, so tests never affect each other. */

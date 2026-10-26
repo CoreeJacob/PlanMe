@@ -3,9 +3,12 @@
 import { Icon, type IconName } from './Icon'
 import { useApp, type Tool } from './store'
 
-const TOOLS: Array<{ tool: Tool; label: string; key: string; icon: IconName }> = [
+const TOOLS: Array<{ tool: Tool; label: string; tip?: string; key: string; icon: IconName }> = [
   { tool: 'select', label: 'Select', key: 'V', icon: 'select' },
-  { tool: 'hand', label: 'Hand', key: 'H', icon: 'hand' }
+  { tool: 'hand', label: 'Hand', key: 'H', icon: 'hand' },
+  { tool: 'note', label: 'Note', tip: 'Sticky note', key: 'N', icon: 'note' },
+  { tool: 'text', label: 'Text', key: 'T', icon: 'text' },
+  { tool: 'box', label: 'Box', key: 'B', icon: 'box' }
 ]
 
 export function SidePanel() {
@@ -20,7 +23,7 @@ export function SidePanel() {
             <button
               key={t.tool}
               className={`tool-btn ${tool === t.tool ? 'active' : ''}`}
-              title={`${t.label} (${t.key})`}
+              title={`${t.tip ?? t.label} (${t.key})`}
               aria-pressed={tool === t.tool}
               onClick={() => setTool(t.tool)}
             >

@@ -4,33 +4,21 @@ import path from 'node:path'
 import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from 'electron'
 import type { MenuCommand, SaveRequest, Startup } from '@shared/types'
 import { createBoard, isBoard, listBoards, openBoard, renameBoard, saveBoard } from './boards'
+import { SettingsStore, type Settings } from './settings'
 
 // Lets a test run use its own settings (and so its own boards) instead of yours.
-if (process.env['PLANME_USER_DATA']) app.setPath('userData', process.env['PLANME_USER_DATA'])
+const testData = process.env['PLANME_USER_DATA']
+if (testData) app.setPath('userData', testData)
 
-interface Settings {
-  boardsRoot?: string
-  lastBoard?: string | null
-}
+const settings = new SettingsStore(path.join(app.getPath('userData'), 'settings.json'))
+const updateSettings = (patch: Settings): Promise<void> => settings.update(patch)
 
-const settingsFile = (): string => path.join(app.getPath('userData'), 'settings.json')
-
-async function loadSettings(): Promise<Settings> {
-  try {
-    return JSON.parse(await fs.readFile(settingsFile(), 'utf8'))
-  } catch {
-    return {}
-  }
-}
-
-async function updateSettings(patch: Settings): Promise<void> {
-  const settings = { ...(await loadSettings()), ...patch }
-  await fs.mkdir(path.dirname(settingsFile()), { recursive: true })
-  await fs.writeFile(settingsFile(), JSON.stringify(settings, null, 2))
-}
-
-const defaultRoot = (): string => path.join(app.getPath('documents'), 'PlanMe')
-const boardsRoot = async (): Promise<string> => (await loadSettings()).boardsRoot ?? defaultRoot()
+/**
+ * Where boards go unless you've chosen somewhere else. A test run never falls back to your
+ * Documents folder: it uses a folder inside its own throwaway data instead.
+ */
+const defaultRoot = (): string => (testData ? path.join(testData, 'Boards') : path.join(app.getPath('documents'), 'PlanMe'))
+const boardsRoot = async (): Promise<string> => (await settings.get()).boardsRoot ?? defaultRoot()
 
 let mainWindow: BrowserWindow | null = null
 /** Set by ⌘Q. Holding the window open to save cancels quitting, so quit again once it's closed. */
@@ -118,7 +106,11 @@ function buildMenu(): void {
           { role: 'cut' },
           { role: 'copy' },
           { role: 'paste' },
-          { label: 'Select All', accelerator: 'CmdOrCtrl+A', click: send('selectAll') }
+          { label: 'Select All', accelerator: 'CmdOrCtrl+A', click: send('selectAll') },
+          { label: 'Duplicate', accelerator: 'CmdOrCtrl+D', click: send('duplicate') },
+          { type: 'separator' },
+          { label: 'Bring to Front', accelerator: 'CmdOrCtrl+]', click: send('bringToFront') },
+          { label: 'Send to Back', accelerator: 'CmdOrCtrl+[', click: send('sendToBack') }
         ]
       },
       {
@@ -148,13 +140,13 @@ function registerIpc(): void {
   }
 
   handle('app:startup', async (): Promise<Startup> => {
-    const settings = await loadSettings()
-    const root = settings.boardsRoot ?? defaultRoot()
+    const { lastBoard } = await settings.get()
+    const root = await boardsRoot()
     await fs.mkdir(root, { recursive: true })
     let board = null
-    if (settings.lastBoard && (await isBoard(settings.lastBoard))) {
+    if (lastBoard && (await isBoard(lastBoard))) {
       // A damaged or too-new board shouldn't stop the app starting: show the Boards screen instead.
-      board = await openBoard(settings.lastBoard).catch((err) => (console.error(err), null))
+      board = await openBoard(lastBoard).catch((err) => (console.error(err), null))
     }
     return { root, board }
   })

@@ -19,6 +19,8 @@ My Game/
   tabs/<id>.json   what's on each tab, and where it was last looked at
 ```
 
+The app's own settings (which folder, which board was open) are in `~/Library/Application Support/PlanMe/settings.json`.
+
 Changes are saved a moment after you make them, and straight away when the window closes. Every file is written to a temporary file first and then swapped in, so a crash can't leave one half-written.
 
 ## Keys
@@ -29,6 +31,17 @@ Changes are saved a moment after you make them, and straight away when the windo
 | Pinch, or ⌘-scroll | Zoom where the pointer is |
 | Space + drag, or middle-button drag | Move around |
 | V / H | Select / Hand tool |
+| N / T / B | Sticky note / Text / Box tool (click to place, or drag to size) |
+| Double-click | Empty space: a new sticky note. An item: type in it |
+| Return, Escape | Start typing in the selected item, finish typing |
+| ⌘B ⌘I ⌘U | Bold, italic, underline (while typing) |
+| Shift-click, drag across empty space | Select more than one |
+| Drag | Move; items line up with each other (hold ⌘ to stop that) |
+| Shift while resizing | Keep the shape |
+| Arrows (Shift for 10) | Nudge |
+| ⌫ | Delete |
+| ⌘C ⌘X ⌘V, ⌘D | Copy, cut, paste, duplicate |
+| ⌘] ⌘[ | Bring to front, send to back |
 | ⌘= ⌘− ⌘0 | Zoom in, out, actual size |
 | ⌘T | New tab |
 | Ctrl-Tab, Ctrl-Shift-Tab | Next / previous tab |

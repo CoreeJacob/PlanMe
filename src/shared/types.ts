@@ -12,16 +12,44 @@ export interface View {
 
 export const DEFAULT_VIEW: View = { x: 0, y: 0, zoom: 1 }
 
-/** Anything placed on a tab. The kinds (notes, boxes, arrows…) arrive in later phases. */
-export interface Item {
-  id: string
-  type: string
+/** Position and size on the board, in board units (1 unit = 1 pixel at 100%). */
+export interface Rect {
   x: number
   y: number
   w: number
   h: number
-  [key: string]: unknown
 }
+
+interface ItemBase extends Rect {
+  id: string
+  /** The words on it, as simple HTML: only <b>, <i>, <u>, <div> and <br> are kept. */
+  text: string
+}
+
+/** A sticky note. Its text shrinks to fit. Colours are names (see app/colors.ts). */
+export interface NoteItem extends ItemBase {
+  type: 'note'
+  color: string
+}
+
+/** Words on their own. The height follows the text; the width wraps it. */
+export interface TextItem extends ItemBase {
+  type: 'text'
+  color: string
+  fontSize: number
+}
+
+/** A box with words in the middle, which shrink to fit like a note's. */
+export interface BoxItem extends ItemBase {
+  type: 'box'
+  fill: string
+  border: string
+  rounded: boolean
+}
+
+/** Anything placed on a tab. Later phases add more kinds (arrows, to-do lists, images…). */
+export type Item = NoteItem | TextItem | BoxItem
+export type ItemType = Item['type']
 
 export interface Tab {
   id: string
@@ -92,6 +120,9 @@ export type MenuCommand =
   | 'zoomOut'
   | 'zoomReset'
   | 'togglePanel'
+  | 'duplicate'
+  | 'bringToFront'
+  | 'sendToBack'
 
 export interface PlanMeApi {
   getStartup(): Promise<Startup>

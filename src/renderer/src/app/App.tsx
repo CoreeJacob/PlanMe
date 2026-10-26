@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import type { MenuCommand } from '@shared/types'
 import { flushSave, startSaving } from '@/board/saver'
 import { useBoard } from '@/board/store'
+import { bringSelectedToFront, duplicateSelected, selectAll, sendSelectedToBack } from '@/canvas/actions'
 import { zoomReset, zoomStep } from '@/canvas/Canvas'
 import { isTyping } from '@/lib/dom'
 import { cycleTab, goToBoards, newBoard, newTab } from './actions'
@@ -34,6 +35,14 @@ function runBoardCommand(command: MenuCommand): void {
       return zoomReset()
     case 'togglePanel':
       return app.setPanelOpen(!app.panelOpen)
+    case 'selectAll':
+      return selectAll()
+    case 'duplicate':
+      return duplicateSelected()
+    case 'bringToFront':
+      return bringSelectedToFront()
+    case 'sendToBack':
+      return sendSelectedToBack()
     case 'revealBoard':
       if (board.board) void window.api.revealBoard(board.board.path)
       return
@@ -63,6 +72,9 @@ export function App() {
       window.api.onMenuCommand((command) => {
         if (command === 'undo' || command === 'redo' || command === 'selectAll') {
           if (isTyping() || useApp.getState().prompt) return void document.execCommand(command)
+        } else if (isTyping()) {
+          // Other board commands (⌘D, ⌘]…) wait until typing is finished.
+          return
         }
         if (command === 'newBoard') return void newBoard()
         if (command === 'boards') return void goToBoards()

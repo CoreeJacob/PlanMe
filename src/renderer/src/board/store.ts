@@ -37,6 +37,12 @@ interface BoardState {
   /** The tab showing. */
   tabId: string
   history: History
+  /** Selected items on the tab showing. */
+  selected: string[]
+  /** The item whose words are being typed. */
+  editingId: string | null
+  /** The board as it was when the current drag or typing began, or null between them. */
+  gesture: Step | null
 
   load(opened: OpenedBoard): void
   unload(): void
@@ -47,15 +53,33 @@ interface BoardState {
   setView(tabId: string, view: View): void
   undo(): void
   redo(): void
+
+  select(ids: string[]): void
+  setEditing(id: string | null): void
+  /**
+   * A drag or a stretch of typing: `preview` shows each change as it happens, and `endGesture`
+   * makes them all one undo step. `cancelGesture` puts things back as they were.
+   */
+  beginGesture(): void
+  preview(doc: BoardDoc): void
+  endGesture(): void
+  cancelGesture(): void
+  /** A change the app makes to keep things tidy (like a text item's height), not an undo step. */
+  fixLayout(doc: BoardDoc): void
 }
+
+export const NO_SELECTION: string[] = []
 
 export const useBoard = create<BoardState>((set, get) => {
   /** Shows a step from history: its board, and its tab if that still exists. */
   const show = (step: Step, history: History): void => {
     const tabId = step.doc.tabs.some((t) => t.id === step.tabId) ? step.tabId : step.doc.tabs[0].id
-    set({ doc: step.doc, tabId, history })
+    const items = new Set(step.doc.tabs.find((t) => t.id === tabId)?.items.map((i) => i.id))
+    const selected = get().selected.filter((id) => items.has(id))
+    set({ doc: step.doc, tabId, history, editingId: null, selected: tabId === get().tabId && selected.length ? selected : NO_SELECTION })
   }
   const current = (): Step => ({ doc: get().doc, tabId: get().tabId })
+  const cleared = { selected: NO_SELECTION, editingId: null, gesture: null }
 
   return {
     board: null,
@@ -63,6 +87,7 @@ export const useBoard = create<BoardState>((set, get) => {
     views: NO_VIEWS,
     tabId: '',
     history: EMPTY_HISTORY,
+    ...cleared,
 
     load: (opened) =>
       set({
@@ -70,30 +95,68 @@ export const useBoard = create<BoardState>((set, get) => {
         doc: opened.doc,
         views: opened.views,
         tabId: lastTab(opened),
-        history: EMPTY_HISTORY
+        history: EMPTY_HISTORY,
+        ...cleared
       }),
 
-    unload: () => set({ board: null, doc: NO_DOC, views: NO_VIEWS, tabId: '', history: EMPTY_HISTORY }),
+    unload: () => set({ board: null, doc: NO_DOC, views: NO_VIEWS, tabId: '', history: EMPTY_HISTORY, ...cleared }),
 
     commit: (doc, tabId) => {
+      get().endGesture()
       if (doc === get().doc && (tabId === undefined || tabId === get().tabId)) return
-      set({ doc, tabId: tabId ?? get().tabId, history: record(get().history, current()) })
+      const switching = tabId !== undefined && tabId !== get().tabId
+      set({ doc, tabId: tabId ?? get().tabId, history: record(get().history, current()), ...(switching ? cleared : {}) })
     },
 
     setTab: (id) => {
-      if (get().doc.tabs.some((t) => t.id === id)) set({ tabId: id })
+      if (id === get().tabId || !get().doc.tabs.some((t) => t.id === id)) return
+      get().endGesture()
+      set({ tabId: id, ...cleared })
     },
 
     setView: (tabId, view) => set({ views: { ...get().views, [tabId]: view } }),
 
     undo: () => {
+      get().endGesture()
       const result = undo(get().history, current())
       if (result) show(result.step, result.history)
     },
 
     redo: () => {
+      get().endGesture()
       const result = redo(get().history, current())
       if (result) show(result.step, result.history)
+    },
+
+    select: (ids) => {
+      const same = ids.length === get().selected.length && ids.every((id, k) => id === get().selected[k])
+      if (!same) set({ selected: ids.length ? ids : NO_SELECTION })
+    },
+
+    setEditing: (editingId) => set({ editingId }),
+
+    beginGesture: () => {
+      if (!get().gesture) set({ gesture: current() })
+    },
+
+    preview: (doc) => {
+      get().beginGesture()
+      if (doc !== get().doc) set({ doc })
+    },
+
+    endGesture: () => {
+      const before = get().gesture
+      if (!before) return
+      set({ gesture: null, ...(before.doc !== get().doc ? { history: record(get().history, before) } : {}) })
+    },
+
+    cancelGesture: () => {
+      const before = get().gesture
+      if (before) set({ doc: before.doc, gesture: null })
+    },
+
+    fixLayout: (doc) => {
+      if (doc !== get().doc) set({ doc })
     }
   }
 })

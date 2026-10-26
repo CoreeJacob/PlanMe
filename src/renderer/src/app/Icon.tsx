@@ -17,6 +17,13 @@ const PATHS = {
   right: 'M5 12h14M13 6l6 6-6 6',
   tasks: 'M4 6l1.5 1.5L8 5M11 6.5h9M4 12l1.5 1.5L8 11M11 12.5h9M4 18l1.5 1.5L8 17M11 18.5h9',
   minus: 'M5 12h14',
+  note: 'M5 4h14v10l-6 6H5zM13 20v-6h6',
+  text: 'M5 7V5h14v2M12 5v14M9 19h6',
+  box: 'M4 6h16v12H4z',
+  toFront: 'M10 10h10v10H10zM14 10V4H4v10h6',
+  toBack: 'M4 4h10v10H4zM10 14v6h10V10h-6',
+  rounded: 'M8 5h8a3 3 0 0 1 3 3v8a3 3 0 0 1-3 3H8a3 3 0 0 1-3-3V8a3 3 0 0 1 3-3z',
+  copy: 'M8 8h12v12H8zM4 16V4h12',
   undo: 'M9 14L4 9l5-5M4 9h10a6 6 0 0 1 0 12h-3',
   redo: 'M15 14l5-5-5-5M20 9H10a6 6 0 0 0 0 12h3'
 } as const
