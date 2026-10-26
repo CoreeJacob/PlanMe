@@ -2,9 +2,10 @@
 // front/back and delete.
 
 import { useEffect, useState } from 'react'
-import type { Item, View } from '@shared/types'
+import type { ArrowItem, Item, View } from '@shared/types'
 import { BORDER_COLORS, FILL_COLORS, INK_COLORS, NOTE_COLORS, type ColorChoice } from '@/app/colors'
 import { Icon } from '@/app/Icon'
+import { boxOf, isArrow, type Lookup } from '@/board/arrows'
 import { boundsOf } from '@/board/items'
 import type { TextStyle } from '@/board/richtext'
 import { allStyled, bringSelectedToFront, deleteSelected, sendSelectedToBack, setOnSelected, toggleStyleOnSelected } from './actions'
@@ -27,6 +28,7 @@ function palettesFor(items: Item[]): Palette[] {
   if (!first || !items.every((i) => i.type === first.type)) return []
   if (first.type === 'note') return [{ key: 'color', label: 'Colour — the note’s colour', choices: NOTE_COLORS, swatch: (n) => `note-${n}`, current: first.color }]
   if (first.type === 'text') return [{ key: 'color', label: 'Text colour — the colour of the words', choices: INK_COLORS, swatch: (n) => `swatch-ink ink-${n}`, current: first.color }]
+  if (first.type === 'arrow') return [{ key: 'color', label: 'Colour — the arrow’s colour', choices: INK_COLORS, swatch: (n) => `swatch-ink ink-${n}`, current: first.color }]
   return [
     { key: 'fill', label: 'Fill — the box’s background colour', choices: FILL_COLORS, swatch: (n) => `fill-${n}`, current: first.fill },
     { key: 'border', label: 'Border — the colour of the box’s edge', choices: BORDER_COLORS, swatch: (n) => `swatch-ink ink-${n}${n === 'none' ? ' none' : ''}`, current: first.border }
@@ -39,15 +41,56 @@ const STYLES: Array<{ style: TextStyle; label: string; command: string; key: str
   { style: 'u', label: 'Underline — for all the words, or just the ones picked while typing', command: 'underline', key: '⌘U' }
 ]
 
+const HEADS: Array<ArrowItem['heads']> = ['end', 'both', 'none']
+const HEADS_SAID = { end: 'at the end', both: 'at both ends', none: 'none' }
+const WIDTHS = [2, 3.5, 5]
+const WIDTH_SAID = ['thin', 'medium', 'thick']
+
+/** The arrow-only buttons: line shape, heads, dashes and thickness. */
+function ArrowButtons({ arrow }: { arrow: ArrowItem }) {
+  const widthIndex = Math.max(0, WIDTHS.indexOf(arrow.width))
+  return (
+    <>
+      <button
+        className={`toolbar-btn ${arrow.route === 'elbow' ? 'active' : ''}`}
+        title="Right-angled — the line goes across and down instead of straight"
+        onClick={() => setOnSelected('route', arrow.route === 'elbow' ? 'straight' : 'elbow')}
+      >
+        <Icon name="elbow" size={16} />
+      </button>
+      <button
+        className="toolbar-btn"
+        title={`Arrowheads — ${HEADS_SAID[arrow.heads]}. Click for ${HEADS_SAID[HEADS[(HEADS.indexOf(arrow.heads) + 1) % HEADS.length]]}`}
+        onClick={() => setOnSelected('heads', HEADS[(HEADS.indexOf(arrow.heads) + 1) % HEADS.length])}
+      >
+        <Icon name="heads" size={16} />
+        <span className="toolbar-note">{arrow.heads === 'both' ? '2' : arrow.heads === 'none' ? '0' : '1'}</span>
+      </button>
+      <button className={`toolbar-btn ${arrow.dashed ? 'active' : ''}`} title="Dashed — for maybe routes and ideas" onClick={() => setOnSelected('dashed', !arrow.dashed)}>
+        <Icon name="dashed" size={16} />
+      </button>
+      <button
+        className="toolbar-btn"
+        title={`Thickness — ${WIDTH_SAID[widthIndex]}. Click for ${WIDTH_SAID[(widthIndex + 1) % WIDTHS.length]}`}
+        onClick={() => setOnSelected('width', WIDTHS[(widthIndex + 1) % WIDTHS.length])}
+      >
+        <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden>
+          <line x1="2" y1="8" x2="14" y2="8" stroke="currentColor" strokeWidth={1 + widthIndex * 1.5} strokeLinecap="round" />
+        </svg>
+      </button>
+    </>
+  )
+}
+
 const GAP = 10
 const HEIGHT = 40
 
-export function ItemToolbar({ view, size, items, editing }: { view: View; size: Size; items: Item[]; editing: boolean }) {
+export function ItemToolbar({ view, size, items, lookup, editing }: { view: View; size: Size; items: Item[]; lookup: Lookup; editing: boolean }) {
   const [open, setOpen] = useState<ColorKey | null>(null)
   const ids = items.map((i) => i.id).join()
   useEffect(() => setOpen(null), [ids])
 
-  const bounds = boundsOf(items)
+  const bounds = boundsOf(items.map((i) => boxOf(i, lookup)))
   if (!bounds) return null
   const topLeft = toScreen(view, size, bounds)
   const width = bounds.w * view.zoom
@@ -57,6 +100,7 @@ export function ItemToolbar({ view, size, items, editing }: { view: View; size: 
   const centre = topLeft.x + width / 2
   const palettes = palettesFor(items)
   const box = items.every((i) => i.type === 'box') ? items[0] : null
+  const arrow = items.every(isArrow) ? items[0] : null
 
   return (
     <div
@@ -95,6 +139,7 @@ export function ItemToolbar({ view, size, items, editing }: { view: View; size: 
           <Icon name="rounded" size={16} />
         </button>
       )}
+      {arrow && isArrow(arrow) && <ArrowButtons arrow={arrow} />}
       {palettes.length > 0 && <span className="toolbar-sep" />}
       {STYLES.map((s) => (
         <button

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import type { BoardDoc, Item } from '@shared/types'
+import type { BoardDoc, Item, Shape } from '@shared/types'
 import {
   addItems,
   boundsOf,
@@ -17,7 +17,7 @@ import {
 import { cleanHtml, fromPlainText, isAllStyled, plainText, setWholeStyle } from './richtext'
 import { NO_SELECTION, useBoard } from './store'
 
-const note = (id: string, x = 0, y = 0, w = 100, h = 100): Item => ({ ...newItem('note', id, { x, y, w, h }) })
+const note = (id: string, x = 0, y = 0, w = 100, h = 100): Shape => newItem('note', id, { x, y, w, h })
 const docWith = (...items: Item[]): BoardDoc => ({ tabs: [{ id: 't', name: 'T', items }, { id: 'u', name: 'U', items: [] }] })
 const ids = (doc: BoardDoc): string => itemsOf(doc, 't').map((i) => i.id).join()
 
@@ -129,7 +129,7 @@ describe('drags and typing as one undo step', () => {
     board().preview(moveItems(start, 't', ['a'], 10, 0))
     board().endGesture()
     expect(board().history.past).toHaveLength(1)
-    expect(itemsOf(board().doc, 't')[0].x).toBe(10)
+    expect((itemsOf(board().doc, 't')[0] as Shape).x).toBe(10)
     board().undo()
     expect(board().doc).toBe(start)
 

@@ -175,6 +175,10 @@ function registerIpc(): void {
   })
   handle('boards:save', (dir: string, request: SaveRequest) => saveBoard(dir, request))
   handle('boards:setLast', (dir: string | null) => updateSettings({ lastBoard: dir }))
+  handle('app:ask', async ({ message, detail, buttons }: { message: string; detail?: string; buttons: string[] }) => {
+    const result = await dialog.showMessageBox(mainWindow!, { type: 'question', message, detail, buttons, defaultId: 0, cancelId: buttons.length - 1 })
+    return result.response
+  })
 }
 
 app.whenReady().then(() => {

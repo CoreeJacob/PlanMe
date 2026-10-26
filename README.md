@@ -32,6 +32,8 @@ Changes are saved a moment after you make them, and straight away when the windo
 | Space + drag, or middle-button drag | Move around |
 | V / H | Select / Hand tool |
 | N / T / B | Sticky note / Text / Box tool (click to place, or drag to size) |
+| A | Arrow tool: drag from one item to another (or to empty space) |
+| Double-click an arrow | Label it |
 | Double-click | Empty space: a new sticky note. An item: type in it |
 | Return, Escape | Start typing in the selected item, finish typing |
 | ⌘B ⌘I ⌘U | Bold, italic, underline (while typing) |

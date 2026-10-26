@@ -9,16 +9,18 @@
 // one, or drag to choose its size.
 
 import { useEffect, useRef, useState } from 'react'
-import { DEFAULT_VIEW, type BoardDoc, type Item, type Rect, type View } from '@shared/types'
+import { DEFAULT_VIEW, type ArrowEnd, type ArrowItem, type BoardDoc, type Item, type Rect, type Shape, type View } from '@shared/types'
 import { NOTE_COLORS } from '@/app/colors'
 import { useContextMenu, type MenuEntry } from '@/app/ContextMenu'
 import { Icon } from '@/app/Icon'
-import { isPlacingTool, useApp } from '@/app/store'
+import { isPlacingTool, useApp, type PlacingTool } from '@/app/store'
+import { arrowPoints, boxOf, isArrow, isShape, lookupIn } from '@/board/arrows'
 import { boundsOf, itemsOf, moveItems, overlaps, rectFrom, resizeRect, updateItems, type Handle } from '@/board/items'
 import { NO_SELECTION, selectTab, useBoard } from '@/board/store'
 import { isTyping } from '@/lib/dom'
 import { useElementSize } from '@/lib/useElementSize'
 import {
+  addArrow,
   addItem,
   bringSelectedToFront,
   copySelected,
@@ -33,6 +35,7 @@ import {
   startEditing,
   viewport
 } from './actions'
+import { ArrowView } from './ArrowView'
 import { ItemToolbar } from './ItemToolbar'
 import { ItemView } from './ItemView'
 import { Overlay } from './Overlay'
@@ -67,13 +70,30 @@ const DRAG_START = 3
 /** What a press on the canvas turned into. */
 type Drag =
   | { kind: 'pan'; last: Point }
-  | { kind: 'place'; type: Item['type']; start: Point; now: Point }
+  | { kind: 'place'; type: PlacingTool; start: Point; now: Point }
+  | { kind: 'arrow'; from: ArrowEnd; start: Point; now: Point; over: string | null }
+  | { kind: 'arrowEnd'; base: BoardDoc; arrow: ArrowItem; end: 'from' | 'to' }
   | { kind: 'select'; start: Point; keep: string[] }
   | { kind: 'move'; start: Point; startScreen: Point; base: BoardDoc; ids: string[]; moving: boolean }
-  | { kind: 'resize'; start: Point; base: BoardDoc; item: Item; handle: Handle }
+  | { kind: 'resize'; start: Point; base: BoardDoc; item: Shape; handle: Handle }
 
 const NO_ITEMS: Item[] = []
 const NO_GUIDES: Guide[] = []
+
+/** The shape (not arrow) under a window point, skipping `except`. The canvas holds the pointer during a press, so look. */
+function shapeUnder(x: number, y: number, except: string | null = null): Shape | null {
+  const { doc, tabId } = useBoard.getState()
+  const items = itemsOf(doc, tabId)
+  for (const el of document.elementsFromPoint(x, y)) {
+    const id = el.closest<HTMLElement | SVGElement>('[data-item-id]')?.dataset.itemId
+    const item = id && id !== except ? items.find((i) => i.id === id) : undefined
+    if (item && isShape(item)) return item
+  }
+  return null
+}
+
+/** An arrow end at a board point: attached to `shape` if there is one, otherwise loose there. */
+const endAt = (p: Point, shape: Shape | null): ArrowEnd => ({ item: shape?.id ?? null, x: p.x, y: p.y })
 
 export function Canvas() {
   const ref = useRef<HTMLDivElement>(null)
@@ -90,6 +110,8 @@ export function Canvas() {
   const [marquee, setMarquee] = useState<Rect | null>(null)
   const [ghost, setGhost] = useState<Rect | null>(null)
   const [guides, setGuides] = useState<Guide[]>(NO_GUIDES)
+  const [target, setTarget] = useState<Shape | null>(null)
+  const [drawing, setDrawing] = useState<Point[] | null>(null)
   const menu = useContextMenu()
   const sizeRef = useRef(size)
   sizeRef.current = size
@@ -194,12 +216,14 @@ export function Canvas() {
     setMarquee(null)
     setGhost(null)
     setGuides(NO_GUIDES)
+    setTarget(null)
+    setDrawing(null)
   }
 
   /** Escape during a drag puts things back as they were. */
   const cancelDrag = (): void => {
     const d = dragRef.current
-    if (d?.kind === 'move' || d?.kind === 'resize') useBoard.getState().cancelGesture()
+    if (d?.kind === 'move' || d?.kind === 'resize' || d?.kind === 'arrowEnd') useBoard.getState().cancelGesture()
     endDrag()
   }
 
@@ -225,10 +249,23 @@ export function Canvas() {
       setDrag({ kind: 'place', type: tool, start, now: start })
       return
     }
+    if (tool === 'arrow') {
+      // Start on an item to attach the arrow to it, or on empty space for a loose end.
+      setDrag({ kind: 'arrow', from: endAt(start, shapeUnder(e.clientX, e.clientY)), start, now: start, over: null })
+      return
+    }
+
+    // The round handle at either end of a selected arrow: drag it to attach that end elsewhere.
+    const end = target.closest<HTMLElement>('[data-end]')?.dataset.end as 'from' | 'to' | undefined
+    const selectedArrow = board.selected.length === 1 ? itemsOf(board.doc, board.tabId).find((i) => i.id === board.selected[0]) : undefined
+    if (end && selectedArrow && isArrow(selectedArrow)) {
+      setDrag({ kind: 'arrowEnd', base: board.doc, arrow: selectedArrow, end })
+      return
+    }
 
     const handle = target.closest<HTMLElement>('[data-handle]')?.dataset.handle as Handle | undefined
     const item = board.selected.length === 1 ? itemsOf(board.doc, board.tabId).find((i) => i.id === board.selected[0]) : undefined
-    if (handle && item) {
+    if (handle && item && isShape(item)) {
       setDrag({ kind: 'resize', start, base: board.doc, item, handle })
       return
     }
@@ -271,12 +308,23 @@ export function Canvas() {
       setDrag({ ...d, now: p })
       const r = rectFrom(d.start.x, d.start.y, p.x, p.y)
       setGhost(r.w * zoom > DRAG_START || r.h * zoom > DRAG_START ? r : null)
+    } else if (d.kind === 'arrow') {
+      const over = shapeUnder(e.clientX, e.clientY, d.from.item)
+      setDrag({ ...d, now: p, over: over?.id ?? null })
+      setTarget(over)
+      const lookup = lookupIn(itemsOf(board.doc, board.tabId))
+      setDrawing(arrowPoints({ from: d.from, to: endAt(p, over), route: 'straight' }, lookup))
+    } else if (d.kind === 'arrowEnd') {
+      const other = d.arrow[d.end === 'from' ? 'to' : 'from'].item
+      const over = shapeUnder(e.clientX, e.clientY, other)
+      setTarget(over)
+      board.preview(updateItems(d.base, board.tabId, [d.arrow.id], (a) => ({ ...a, [d.end]: endAt(p, over) })))
     } else if (d.kind === 'select') {
       const r = rectFrom(d.start.x, d.start.y, p.x, p.y)
       setMarquee(r)
-      const crossed = itemsOf(board.doc, board.tabId)
-        .filter((i) => overlaps(i, r))
-        .map((i) => i.id)
+      const all = itemsOf(board.doc, board.tabId)
+      const lookup = lookupIn(all)
+      const crossed = all.filter((i) => overlaps(boxOf(i, lookup), r)).map((i) => i.id)
       board.select([...d.keep, ...crossed.filter((id) => !d.keep.includes(id))])
     } else if (d.kind === 'move') {
       if (!d.moving) {
@@ -285,11 +333,12 @@ export function Canvas() {
       }
       let dx = p.x - d.start.x
       let dy = p.y - d.start.y
-      const baseItems = itemsOf(d.base, board.tabId)
+      const baseShapes = itemsOf(d.base, board.tabId).filter(isShape)
       const moving = new Set(d.ids)
-      const box = boundsOf(baseItems.filter((i) => moving.has(i.id)))
+      // Line up by the shapes being moved (arrows follow them).
+      const box = boundsOf(baseShapes.filter((i) => moving.has(i.id)))
       if (box && !e.metaKey) {
-        const others = baseItems.filter((i) => !moving.has(i.id))
+        const others = baseShapes.filter((i) => !moving.has(i.id))
         const snap = snapMove({ ...box, x: box.x + dx, y: box.y + dy }, others, SNAP_DISTANCE / zoom)
         dx += snap.dx
         dy += snap.dy
@@ -303,7 +352,7 @@ export function Canvas() {
       const keepShape = (isText && corner) || e.shiftKey
       let r = resizeRect(d.item, d.handle, p.x - d.start.x, p.y - d.start.y, keepShape)
       if (!keepShape && !e.metaKey) {
-        const others = itemsOf(d.base, board.tabId).filter((i) => i.id !== d.item.id)
+        const others = itemsOf(d.base, board.tabId).filter((i): i is Shape => isShape(i) && i.id !== d.item.id)
         const snap = snapResize(r, d.handle, others, SNAP_DISTANCE / zoom)
         r = snap.rect
         setGuides(snap.guides)
@@ -327,7 +376,14 @@ export function Canvas() {
       // A text item's height follows its words, so only the dragged width counts.
       addItem(d.type, dragged ? (d.type === 'text' ? { ...r, h: 30 } : r) : d.start)
       useApp.getState().setTool('select')
-    } else if (d.kind === 'move' || d.kind === 'resize') {
+    } else if (d.kind === 'arrow') {
+      const over = d.over ? (itemsOf(useBoard.getState().doc, useBoard.getState().tabId).find((i) => i.id === d.over) as Shape | undefined) : undefined
+      const zoom = currentView().zoom
+      const dragged = Math.hypot(d.now.x - d.start.x, d.now.y - d.start.y) * zoom > DRAG_START * 4
+      // An arrow needs somewhere to go: another item, or a proper drag.
+      if (over || dragged) addArrow(d.from, endAt(d.now, over ?? null))
+      useApp.getState().setTool('select')
+    } else if (d.kind === 'move' || d.kind === 'resize' || d.kind === 'arrowEnd') {
       useBoard.getState().endGesture()
     }
     endDrag()
@@ -338,7 +394,8 @@ export function Canvas() {
     // The canvas holds on to the pointer during a press, so the event says it was on the canvas.
     // Look at what's really under the pointer.
     const target = document.elementFromPoint(e.clientX, e.clientY)
-    if (!target || target.closest('.item-editor, .zoom-controls, .item-toolbar')) return
+    // Handles (for resizing, or an arrow's ends) aren't empty space: no new note there.
+    if (!target || target.closest('.item-editor, .zoom-controls, .item-toolbar, [data-handle], [data-end]')) return
     const hit = target.closest<HTMLElement>('[data-item-id]')?.dataset.itemId
     // Double-click an item to type in it, or empty space for a new sticky note.
     if (hit) startEditing(hit)
@@ -369,7 +426,7 @@ export function Canvas() {
     }
     const chosen = itemsOf(board.doc, board.tabId).filter((i) => useBoard.getState().selected.includes(i.id))
     const entries: MenuEntry[] = []
-    if (chosen.length === 1) entries.push({ label: 'Edit Text', icon: 'rename', hint: '↩', onSelect: () => startEditing(hit) })
+    if (chosen.length === 1) entries.push({ label: isArrow(chosen[0]) ? 'Edit Label' : 'Edit Text', icon: 'rename', hint: '↩', onSelect: () => startEditing(hit) })
     if (chosen.every((i) => i.type === 'note')) {
       entries.push({
         label: 'Colour',
@@ -391,7 +448,8 @@ export function Canvas() {
   const spacing = gridSpacing(view.zoom)
   const selectedItems = selectedIds.length ? items.filter((i) => selectedIds.includes(i.id)) : NO_ITEMS
   const busy = drag !== null && drag.kind !== 'pan' && !(drag.kind === 'move' && !drag.moving)
-  const cursor = drag?.kind === 'pan' ? 'panning' : tool === 'hand' || spaceDown ? 'can-pan' : isPlacingTool(tool) ? 'placing' : ''
+  const cursor = drag?.kind === 'pan' ? 'panning' : tool === 'hand' || spaceDown ? 'can-pan' : isPlacingTool(tool) || tool === 'arrow' ? 'placing' : ''
+  const lookup = lookupIn(items)
 
   return (
     <div
@@ -408,14 +466,35 @@ export function Canvas() {
       onAuxClick={(e) => e.preventDefault()}
     >
       <div className="world" style={{ transform: `translate(${origin.x}px, ${origin.y}px) scale(${view.zoom})`, ['--zoom' as string]: view.zoom }}>
-        {items.map((item) => (
-          <ItemView key={item.id} item={item} editing={item.id === editingId} />
-        ))}
+        {items.map((item) =>
+          isArrow(item) ? (
+            <ArrowView
+              key={item.id}
+              arrow={item}
+              from={item.from.item ? lookup(item.from.item) : undefined}
+              to={item.to.item ? lookup(item.to.item) : undefined}
+              editing={item.id === editingId}
+            />
+          ) : (
+            <ItemView key={item.id} item={item} editing={item.id === editingId} />
+          )
+        )}
       </div>
 
-      <Overlay view={view} size={size} selected={selectedItems} editingId={editingId} marquee={marquee} ghost={ghost} guides={guides} />
+      <Overlay
+        view={view}
+        size={size}
+        selected={selectedItems}
+        lookup={lookup}
+        editingId={editingId}
+        marquee={marquee}
+        ghost={ghost}
+        guides={guides}
+        target={target}
+        drawing={drawing}
+      />
 
-      {selectedItems.length > 0 && !busy && <ItemToolbar view={view} size={size} items={selectedItems} editing={editingId !== null} />}
+      {selectedItems.length > 0 && !busy && <ItemToolbar view={view} size={size} items={selectedItems} lookup={lookup} editing={editingId !== null} />}
 
       {items.length === 0 && (
         <div className="canvas-hint muted">

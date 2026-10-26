@@ -401,8 +401,49 @@ export class App {
     return this.screenOf(i.x + i.w / 2, i.y + i.h / 2)
   }
 
+  /** Selected items and arrows. */
   selectedIds(): Promise<string[]> {
-    return this.js(`[...document.querySelectorAll('.selection-outline[data-id]')].map(e => e.dataset.id)`)
+    return this.js(`[...document.querySelectorAll('.selection-outline[data-id], .arrow-selected[data-id]')].map(e => e.dataset.id)`)
+  }
+
+  /** The arrows on the tab showing, as drawn: the points their lines pass through, and how they look. */
+  arrows(): Promise<ArrowInfo[]> {
+    return this.js(`[...document.querySelectorAll('svg.arrow')].map(e => ({
+      id: e.dataset.itemId, classes: e.getAttribute('class'),
+      points: e.querySelector('.arrow-hit').getAttribute('points').split(' ').map(p => p.split(',').map(Number)),
+      heads: e.querySelectorAll('.arrow-head').length, dashed: e.querySelector('.arrow-line').hasAttribute('stroke-dasharray'),
+      width: Number(e.querySelector('.arrow-line').getAttribute('stroke-width')),
+      label: [...document.querySelectorAll('.arrow-label')].find(l => l.dataset.itemId === e.dataset.itemId)?.innerText ?? '' }))`)
+  }
+
+  async arrow(id: string): Promise<ArrowInfo> {
+    return (await this.arrows()).find((a) => a.id === id)!
+  }
+
+  /** Draws an arrow with the Arrow tool between two board points, and returns the new arrow's id. */
+  async drawArrow(from: [number, number], to: [number, number]): Promise<string> {
+    const before = new Set((await this.arrows()).map((a) => a.id))
+    await this.tool('a')
+    const a = await this.screenOf(...from)
+    const b = await this.screenOf(...to)
+    await this.drag([a, [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], b])
+    return (await this.arrows()).find((x) => !before.has(x.id))?.id ?? ''
+  }
+
+  /** Makes the next Mac question dialogs answer with these button numbers, recording what they asked. */
+  async answerQuestions(...answers: number[]): Promise<void> {
+    await this.main(({ dialog }, list) => {
+      const g = globalThis as any
+      g.__asked = []
+      dialog.showMessageBox = (async (...args: any[]) => {
+        g.__asked.push(args.at(-1).message)
+        return { response: list.shift() ?? args.at(-1).buttons.length - 1, checkboxChecked: false }
+      }) as typeof dialog.showMessageBox
+    }, answers)
+  }
+
+  questionsAsked(): Promise<string[]> {
+    return this.main(() => (globalThis as any).__asked, null) as Promise<string[]>
   }
 
   /** A double-click at window coordinates, as two real clicks. */
@@ -449,6 +490,16 @@ export class App {
     })
     return saved ?? []
   }
+}
+
+export interface ArrowInfo {
+  id: string
+  classes: string
+  points: Array<[number, number]>
+  heads: number
+  dashed: boolean
+  width: number
+  label: string
 }
 
 export interface ItemInfo {

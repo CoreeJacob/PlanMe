@@ -1,7 +1,7 @@
 // Changes to the items on a tab. Like doc.ts, each returns a new BoardDoc and leaves the old
 // one (and every item it doesn't change) untouched.
 
-import type { BoardDoc, BoxItem, Item, ItemType, NoteItem, Rect, TextItem } from '@shared/types'
+import type { ArrowEnd, ArrowItem, BoardDoc, BoxItem, Item, NoteItem, Rect, Shape, ShapeType, TextItem } from '@shared/types'
 
 /** Replaces one tab's items. Returns `doc` itself if they didn't change. */
 export function withItems(doc: BoardDoc, tabId: string, change: (items: Item[]) => Item[]): BoardDoc {
@@ -42,9 +42,19 @@ export function updateItems(doc: BoardDoc, tabId: string, ids: readonly string[]
   })
 }
 
+/** An arrow end moved by (dx, dy) if it's loose. Attached ends go wherever their item goes. */
+const moveEnd = (end: ArrowEnd, dx: number, dy: number): ArrowEnd => (end.item ? end : { ...end, x: end.x + dx, y: end.y + dy })
+
+/** An item moved by (dx, dy). An arrow moves only its loose ends. */
+export function moved(item: Item, dx: number, dy: number): Item {
+  if (item.type !== 'arrow') return { ...item, x: item.x + dx, y: item.y + dy }
+  if (item.from.item && item.to.item) return item
+  return { ...item, from: moveEnd(item.from, dx, dy), to: moveEnd(item.to, dx, dy) }
+}
+
 export function moveItems(doc: BoardDoc, tabId: string, ids: readonly string[], dx: number, dy: number): BoardDoc {
   if (!dx && !dy) return doc
-  return updateItems(doc, tabId, ids, (i) => ({ ...i, x: i.x + dx, y: i.y + dy }))
+  return updateItems(doc, tabId, ids, (i) => moved(i, dx, dy))
 }
 
 /** Moves items to the top of the pile (drawn last), keeping their order among themselves. */
@@ -64,14 +74,25 @@ export function sendToBack(doc: BoardDoc, tabId: string, ids: readonly string[])
   })
 }
 
-/** Copies of items with new ids, moved by (dx, dy). */
+/**
+ * Copies of items with new ids, moved by (dx, dy). Arrows between copied items join the copies;
+ * an end attached to something not copied is left loose (pass items through `detach` first to
+ * keep where it was).
+ */
 export function copiesOf(items: readonly Item[], dx: number, dy: number, newId: () => string): Item[] {
-  return items.map((i) => ({ ...i, id: newId(), x: i.x + dx, y: i.y + dy }))
+  const ids = new Map(items.map((i) => [i.id, newId()]))
+  const copyEnd = (end: ArrowEnd): ArrowEnd =>
+    end.item && ids.has(end.item) ? { ...end, item: ids.get(end.item)!, x: end.x + dx, y: end.y + dy } : { item: null, x: end.x + dx, y: end.y + dy }
+  return items.map((i) => {
+    const id = ids.get(i.id)!
+    if (i.type !== 'arrow') return { ...i, id, x: i.x + dx, y: i.y + dy }
+    return { ...i, id, from: copyEnd(i.from), to: copyEnd(i.to) } satisfies ArrowItem
+  })
 }
 
 // ---------- shapes and sizes ----------
 
-export const DEFAULT_SIZE: Record<ItemType, { w: number; h: number }> = {
+export const DEFAULT_SIZE: Record<ShapeType, { w: number; h: number }> = {
   note: { w: 200, h: 200 },
   text: { w: 240, h: 30 },
   box: { w: 200, h: 120 }
@@ -80,15 +101,20 @@ export const MIN_SIZE = 20
 export const DEFAULT_FONT_SIZE = 20
 
 /** A new, empty item filling `rect`. */
-export function newItem(type: ItemType, id: string, rect: Rect): Item {
+export function newItem(type: ShapeType, id: string, rect: Rect): Shape {
   const base = { id, text: '', x: rect.x, y: rect.y, w: Math.max(MIN_SIZE, rect.w), h: Math.max(MIN_SIZE, rect.h) }
   if (type === 'note') return { ...base, type, color: 'yellow' } satisfies NoteItem
   if (type === 'text') return { ...base, type, color: 'default', fontSize: DEFAULT_FONT_SIZE } satisfies TextItem
   return { ...base, type, fill: 'white', border: 'default', rounded: false } satisfies BoxItem
 }
 
+/** A new arrow between two ends, with the usual look. */
+export function newArrow(id: string, from: ArrowEnd, to: ArrowEnd): ArrowItem {
+  return { id, type: 'arrow', text: '', from, to, route: 'straight', heads: 'end', dashed: false, color: 'default', width: 2 }
+}
+
 /** An item of the default size centred on a point. */
-export function newItemAt(type: ItemType, id: string, x: number, y: number): Item {
+export function newItemAt(type: ShapeType, id: string, x: number, y: number): Shape {
   const { w, h } = DEFAULT_SIZE[type]
   return newItem(type, id, { x: Math.round(x - w / 2), y: Math.round(y - h / 2), w, h })
 }

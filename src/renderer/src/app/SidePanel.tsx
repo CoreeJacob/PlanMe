@@ -8,7 +8,8 @@ const TOOLS: Array<{ tool: Tool; label: string; tip?: string; key: string; icon:
   { tool: 'hand', label: 'Hand', tip: 'Hand — drag to move around the board', key: 'H', icon: 'hand' },
   { tool: 'note', label: 'Note', tip: 'Sticky note — click to place one, or drag to choose its size', key: 'N', icon: 'note' },
   { tool: 'text', label: 'Text', tip: 'Text — click to place, or drag to choose its width', key: 'T', icon: 'text' },
-  { tool: 'box', label: 'Box', tip: 'Box — click to place one, or drag to choose its size', key: 'B', icon: 'box' }
+  { tool: 'box', label: 'Box', tip: 'Box — click to place one, or drag to choose its size', key: 'B', icon: 'box' },
+  { tool: 'arrow', label: 'Arrow', tip: 'Arrow — drag from one item to another to join them', key: 'A', icon: 'arrow' }
 ]
 
 export function SidePanel() {

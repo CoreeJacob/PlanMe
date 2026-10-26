@@ -18,6 +18,7 @@ const api: PlanMeApi = {
   chooseRoot: () => ipcRenderer.invoke('boards:chooseRoot'),
   saveBoard: (path, request) => ipcRenderer.invoke('boards:save', path, request),
   setLastBoard: (path) => ipcRenderer.invoke('boards:setLast', path),
+  ask: (question) => ipcRenderer.invoke('app:ask', question),
   onMenuCommand: (callback) => subscribe<MenuCommand>('menu:command', callback),
   onFlush: (callback) =>
     subscribe<void>('app:flush', () => {

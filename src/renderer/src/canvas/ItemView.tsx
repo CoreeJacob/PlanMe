@@ -1,14 +1,14 @@
 // One item on the canvas, drawn in board units (the canvas scales the whole board at once).
 
 import { memo, useLayoutEffect, useRef } from 'react'
-import type { Item } from '@shared/types'
+import type { Item, Shape } from '@shared/types'
 import { updateItems } from '@/board/items'
 import { cleanHtml } from '@/board/richtext'
 import { useBoard } from '@/board/store'
 import { editText, finishEditing } from './actions'
 
 /** The largest text size for a note or box: bigger items get bigger words. */
-const maxFontSize = (item: Item): number => Math.min(item.w, item.h) * (item.type === 'note' ? 0.16 : 0.18)
+const maxFontSize = (item: Shape): number => Math.min(item.w, item.h) * (item.type === 'note' ? 0.16 : 0.18)
 const MIN_FONT_SIZE = 6
 
 /**
@@ -31,13 +31,13 @@ function fitText(area: HTMLElement, text: HTMLElement, max: number): void {
   text.style.fontSize = `${lo}px`
 }
 
-function itemClasses(item: Item): string {
+function itemClasses(item: Shape): string {
   if (item.type === 'note') return `note-${item.color}`
   if (item.type === 'box') return `fill-${item.fill} border-${item.border}${item.rounded ? ' rounded' : ''}`
   return `ink-${item.color}`
 }
 
-export const ItemView = memo(function ItemView({ item, editing }: { item: Item; editing: boolean }) {
+export const ItemView = memo(function ItemView({ item, editing }: { item: Shape; editing: boolean }) {
   const area = useRef<HTMLDivElement>(null)
   const text = useRef<HTMLDivElement>(null)
   const fits = item.type !== 'text'
@@ -78,8 +78,8 @@ export const ItemView = memo(function ItemView({ item, editing }: { item: Item; 
   )
 })
 
-/** Typing in an item. The words are set once when it opens; after that the browser owns them. */
-function Editor({ item, textRef }: { item: Item; textRef: React.RefObject<HTMLDivElement | null> }) {
+/** Typing in an item (or an arrow's label). The words are set once when it opens; after that the browser owns them. */
+export function Editor({ item, textRef }: { item: Pick<Item, 'id' | 'text'>; textRef: React.RefObject<HTMLDivElement | null> }) {
   useLayoutEffect(() => {
     const el = textRef.current
     if (!el) return

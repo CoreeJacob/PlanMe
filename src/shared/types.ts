@@ -47,9 +47,38 @@ export interface BoxItem extends ItemBase {
   rounded: boolean
 }
 
-/** Anything placed on a tab. Later phases add more kinds (arrows, to-do lists, images…). */
-export type Item = NoteItem | TextItem | BoxItem
+/** One end of an arrow: attached to an item, or loose at a point on the board. */
+export interface ArrowEnd {
+  /** The item it's attached to, or null for a loose end. */
+  item: string | null
+  /** Where a loose end is. For an attached end, roughly where it was last (a fallback if the item goes). */
+  x: number
+  y: number
+}
+
+/** An arrow from one item (or point) to another. It has no box of its own: its ends decide where it goes. */
+export interface ArrowItem {
+  id: string
+  type: 'arrow'
+  /** A label on the arrow, as simple HTML like other items' words. */
+  text: string
+  from: ArrowEnd
+  to: ArrowEnd
+  route: 'straight' | 'elbow'
+  /** Which ends have arrowheads. */
+  heads: 'end' | 'both' | 'none'
+  dashed: boolean
+  color: string
+  /** Line thickness in board units. */
+  width: number
+}
+
+/** The items that take up a box on the board (everything but arrows). */
+export type Shape = NoteItem | TextItem | BoxItem
+/** Anything placed on a tab. Later phases add more kinds (to-do lists, images…). */
+export type Item = Shape | ArrowItem
 export type ItemType = Item['type']
+export type ShapeType = Shape['type']
 
 export interface Tab {
   id: string
@@ -136,6 +165,8 @@ export interface PlanMeApi {
   /** Asks for a different folder to keep boards in; returns it, or null if cancelled. */
   chooseRoot(): Promise<string | null>
   saveBoard(path: string, request: SaveRequest): Promise<void>
+  /** Asks a question in a Mac dialog and resolves with the index of the button chosen. The last button is Cancel. */
+  ask(question: { message: string; detail?: string; buttons: string[] }): Promise<number>
   /** Remembers which board to reopen next launch (null: start on the Boards screen). */
   setLastBoard(path: string | null): Promise<void>
   onMenuCommand(callback: (command: MenuCommand) => void): () => void
