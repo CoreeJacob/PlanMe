@@ -72,7 +72,17 @@ type Drag =
   | { kind: 'pan'; last: Point }
   | { kind: 'place'; type: PlacingTool; start: Point; now: Point }
   | { kind: 'arrow'; from: ArrowEnd; start: Point; now: Point; to: ArrowEnd }
-  | { kind: 'arrowEnd'; base: BoardDoc; arrow: ArrowItem; end: 'from' | 'to' }
+  | {
+      kind: 'arrowEnd'
+      base: BoardDoc
+      arrow: ArrowItem
+      end: 'from' | 'to'
+      /**
+       * When the arrow was picked up by its line rather than its end handle: how far the end is
+       * from the pointer (board units), and whether it has moved enough to count as a drag.
+       */
+      grab?: { offset: Point; startScreen: Point; moving: boolean }
+    }
   | { kind: 'select'; start: Point; keep: string[] }
   | { kind: 'move'; start: Point; startScreen: Point; base: BoardDoc; ids: string[]; moving: boolean }
   | { kind: 'resize'; start: Point; base: BoardDoc; item: Shape; handle: Handle }
@@ -365,6 +375,15 @@ export function Canvas() {
         board.select([hit])
       }
       const ids = useBoard.getState().selected
+      // An arrow on its own with one loose end, picked up by its line: pull that end along, so it
+      // can be joined to an item like dragging its end handle.
+      const picked = ids.length === 1 ? itemsOf(board.doc, board.tabId).find((i) => i.id === ids[0]) : undefined
+      if (picked && isArrow(picked) && !picked.from.item !== !picked.to.item) {
+        const end = picked.from.item ? 'to' : 'from'
+        const offset = { x: picked[end].x - start.x, y: picked[end].y - start.y }
+        setDrag({ kind: 'arrowEnd', base: board.doc, arrow: picked, end, grab: { offset, startScreen: { x: e.clientX, y: e.clientY }, moving: false } })
+        return
+      }
       setDrag({ kind: 'move', start, startScreen: { x: e.clientX, y: e.clientY }, base: board.doc, ids, moving: false })
       return
     }
@@ -405,7 +424,18 @@ export function Canvas() {
       setDrawing(arrowPoints({ from, to, route: 'straight' }, lookup))
     } else if (d.kind === 'arrowEnd') {
       const other = d.arrow[d.end === 'from' ? 'to' : 'from'].item
-      const end = endUnderPointer(e, p, other)
+      let at = p
+      let pointer: { clientX: number; clientY: number } = e
+      if (d.grab) {
+        // Picked up by the line: the end keeps its distance from the pointer, and looks for dots where it is.
+        if (!d.grab.moving) {
+          if (Math.hypot(e.clientX - d.grab.startScreen.x, e.clientY - d.grab.startScreen.y) < DRAG_START) return
+          setDrag({ ...d, grab: { ...d.grab, moving: true } })
+        }
+        at = { x: p.x + d.grab.offset.x, y: p.y + d.grab.offset.y }
+        pointer = { clientX: e.clientX + d.grab.offset.x * zoom, clientY: e.clientY + d.grab.offset.y * zoom }
+      }
+      const end = endUnderPointer(pointer, at, other)
       board.preview(updateItems(d.base, board.tabId, [d.arrow.id], (a) => ({ ...a, [d.end]: end })))
     } else if (d.kind === 'select') {
       const r = rectFrom(d.start.x, d.start.y, p.x, p.y)
@@ -534,12 +564,14 @@ export function Canvas() {
   const origin = toScreen(view, size, { x: 0, y: 0 })
   const spacing = gridSpacing(view.zoom)
   const selectedItems = selectedIds.length ? items.filter((i) => selectedIds.includes(i.id)) : NO_ITEMS
-  const busy = drag !== null && drag.kind !== 'pan' && !(drag.kind === 'move' && !drag.moving)
+  // A press that hasn't become a drag yet (it may just be a click) doesn't count.
+  const pressOnly = (drag?.kind === 'move' && !drag.moving) || (drag?.kind === 'arrowEnd' && drag.grab && !drag.grab.moving)
+  const busy = drag !== null && drag.kind !== 'pan' && !pressOnly
   const cursor = drag?.kind === 'pan' ? 'panning' : tool === 'hand' || spaceDown ? 'can-pan' : isPlacingTool(tool) || tool === 'arrow' ? 'placing' : ''
   const lookup = lookupIn(items)
   // Dots show on every item while an arrow is being drawn or moved; otherwise on the item under
   // the pointer and the one selected (not while typing in it, or during other drags).
-  const drawingArrow = drag?.kind === 'arrow' || drag?.kind === 'arrowEnd'
+  const drawingArrow = drag?.kind === 'arrow' || (drag?.kind === 'arrowEnd' && !pressOnly)
   const dotsShow = (tool === 'select' || tool === 'arrow') && !spaceDown && (drawingArrow || !busy)
   const dotted = !dotsShow
     ? NO_SHAPES

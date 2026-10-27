@@ -1129,6 +1129,13 @@ button {
   cursor: move;
   pointer-events: auto;
 }
+/* A bigger, invisible area around the handle, so it's easy to grab. */
+.end-handle::before {
+  content: '';
+  position: absolute;
+  inset: -8px;
+  border-radius: 50%;
+}
 .end-handle.attached {
   background: var(--select);
 }

@@ -269,3 +269,61 @@ test('dots around items: draw arrows from them, pin arrows to them', async ({ ap
   await app.doubleClickAt(await app.dot(wide, '0.5,0'))
   await check('double-clicking a dot doesn’t add a note', (await app.items()).length === count)
 })
+
+test('an arrow left loose can be joined to an item later, by its end or its line', async ({ app }) => {
+  // The steps from the bug report: a box, an arrow from its dot into empty space, a second box,
+  // then pick the arrow up again and join it to the second box.
+  await app.newBoard('Game')
+  await app.tool('b')
+  await app.clickAt(...(await app.screenOf(0, 0))) // a box from -100,-60 to 100,60
+  await app.key('Escape', 'Escape')
+  const one = (await app.lastItem()).id
+  await app.key('Escape', 'Escape')
+  await app.hoverAt(await app.itemCentre(one))
+  const right = await app.dot(one, '1,0.5')
+  const empty = await app.screenOf(260, 40)
+  await app.drag([right, [right[0] + 60, right[1]], empty])
+  const arrow = (await app.arrows())[0].id
+  await app.tool('b')
+  await app.clickAt(...(await app.screenOf(500, 300))) // a box from 400,240 to 600,360
+  await app.key('Escape', 'Escape')
+  const two = (await app.lastItem()).id
+  await app.key('Escape', 'Escape')
+
+  // Pick the arrow up by its line, near the loose end, and drag that end onto box 2's top dot.
+  const loose = (await app.arrow(arrow)).points.at(-1)!
+  const grab = await app.screenOf(loose[0] - 30, loose[1] - 3)
+  const topOfTwo = await app.screenOf(500, 240)
+  const drop: [number, number] = [topOfTwo[0] - 30, topOfTwo[1] - 3] // keeps the same distance from the end
+  await app.hoverBeforePress(grab)
+  await app.mouse('mousePressed', grab)
+  await app.mouse('mouseMoved', [grab[0] + 40, grab[1] + 40])
+  await app.mouse('mouseMoved', drop)
+  await app.settle()
+  await check('dragging the line shows the dots of the items it could join', (await app.dots()).some((d) => d.item === two), await app.dots())
+  await check('…and the dot it would join lights up', await app.js(`!!document.querySelector('.dot.active[data-dot-item="${two}"]')`))
+  await app.mouse('mouseReleased', drop)
+  await app.settle()
+  let info = await app.arrow(arrow)
+  await check('the loose end joins box 2’s dot', near(info.points.at(-1), 500, 240) && near(info.points[0], 100, 0), info)
+  await app.undo()
+  await check('undo lets it go again', near((await app.arrow(arrow)).points.at(-1), loose[0], loose[1]), await app.arrow(arrow))
+
+  // The end handle has a generous grab area: a press a few pixels off it still picks up the end.
+  await clickArrow(app, arrow)
+  const handle = await app.js<[number, number]>(`(() => { const r = document.querySelector('.end-handle[data-end="to"]').getBoundingClientRect(); return [r.x + r.width / 2 + 9, r.y + r.height / 2] })()`)
+  const leftOfTwo = await app.screenOf(400, 300)
+  await app.drag([handle, [handle[0] + 40, handle[1] + 60], [leftOfTwo[0] + 9, leftOfTwo[1]]])
+  info = await app.arrow(arrow)
+  await check('grabbing just beside the end handle still drags the end, and it snaps to the dot', near(info.points.at(-1), 400, 300), info)
+
+  // An arrow whose ends are both loose still moves as a whole when dragged by its line.
+  const free = await app.drawArrow([-300, 300], [-100, 300])
+  await app.key('Escape', 'Escape')
+  const before = (await app.arrow(free)).points
+  await clickArrow(app, free)
+  const mid = await app.screenOf(-200, 300)
+  await app.drag([mid, [mid[0], mid[1] + 20], [mid[0], mid[1] + 50]])
+  const after = (await app.arrow(free)).points
+  await check('a fully loose arrow moves as a whole', near(after[0], before[0][0], before[0][1] + 50) && near(after.at(-1), before.at(-1)![0], before.at(-1)![1] + 50), { before, after })
+})
