@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import type { BoardDoc, Item, Shape } from '@shared/types'
 import {
   addItems,
+  besideRect,
   boundsOf,
   bringToFront,
   copiesOf,
@@ -9,6 +10,7 @@ import {
   moveItems,
   newItem,
   newItemAt,
+  newLike,
   removeItems,
   resizeRect,
   sendToBack,
@@ -162,5 +164,23 @@ describe('drags and typing as one undo step', () => {
     expect(board().selected).toEqual(['a'])
     board().setTab('u')
     expect(board().selected).toBe(NO_SELECTION)
+  })
+})
+
+describe('building outwards from a dot', () => {
+  const source = { x: 0, y: 0, w: 200, h: 100 }
+  it('puts the new item just past the drop point, facing back', () => {
+    expect(besideRect(source, { x: 400, y: 200 })).toEqual({ x: 400, y: 150, w: 200, h: 100 })
+    expect(besideRect(source, { x: -300, y: 200 })).toEqual({ x: -500, y: 150, w: 200, h: 100 })
+    expect(besideRect(source, { x: 300, y: 600 })).toEqual({ x: 200, y: 600, w: 200, h: 100 })
+    expect(besideRect(source, { x: 300, y: -500 })).toEqual({ x: 200, y: -600, w: 200, h: 100 })
+  })
+  it('lines it up with the original when it’s nearly in line', () => {
+    expect(besideRect(source, { x: 400, y: 80 })).toEqual({ x: 400, y: 0, w: 200, h: 100 })
+    expect(besideRect(source, { x: 120, y: 400 })).toEqual({ x: 0, y: 400, w: 200, h: 100 })
+  })
+  it('copies the look but not the words', () => {
+    const box = { ...newItem('box', 'b', source, 'diamond'), text: 'Has key?', fill: 'pink' }
+    expect(newLike(box, 'n', { x: 5, y: 6, w: 200, h: 100 })).toEqual({ ...box, id: 'n', text: '', x: 5, y: 6 })
   })
 })

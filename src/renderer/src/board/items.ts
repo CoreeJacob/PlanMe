@@ -174,3 +174,32 @@ export function resizeRect(r: Rect, handle: Handle, dx: number, dy: number, keep
   }
   return { x: left, y: top, w: right - left, h: bottom - top }
 }
+
+// ---------- building outwards from a dot ----------
+
+/** How close (board units) the new item's middle must be to the original's to line up with it. */
+const LINE_UP = 40
+
+/**
+ * Where a new item the size of `source` goes when an arrow from it is dropped at `at`: just past
+ * that point, facing back towards `source`, and lined up with it when it's nearly in line.
+ */
+export function besideRect(source: Rect, at: { x: number; y: number }): Rect {
+  const { w, h } = source
+  const cx = source.x + w / 2
+  const cy = source.y + h / 2
+  const dx = at.x - cx
+  const dy = at.y - cy
+  if (Math.abs(dx) * h >= Math.abs(dy) * w) {
+    // Off to one side: the new item's near side meets the drop point.
+    const y = Math.abs(at.y - cy) <= LINE_UP ? source.y : at.y - h / 2
+    return { x: dx >= 0 ? at.x : at.x - w, y, w, h }
+  }
+  const x = Math.abs(at.x - cx) <= LINE_UP ? source.x : at.x - w / 2
+  return { x, y: dy >= 0 ? at.y : at.y - h, w, h }
+}
+
+/** A new, empty item that looks like `source` (same kind, colours, outline), filling `rect`. */
+export function newLike(source: Shape, id: string, rect: Rect): Shape {
+  return { ...source, id, text: '', x: rect.x, y: rect.y, w: rect.w, h: rect.h }
+}

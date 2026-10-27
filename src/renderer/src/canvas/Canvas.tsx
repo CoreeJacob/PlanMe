@@ -15,13 +15,14 @@ import { useContextMenu, type MenuEntry } from '@/app/ContextMenu'
 import { Icon } from '@/app/Icon'
 import { isPlacingTool, useApp, type PlacingTool } from '@/app/store'
 import { arrowPoints, boxOf, crossesBox, isArrow, isShape, lookupIn, nearestPin, pinPoint, pinsOf, type Pin } from '@/board/arrows'
-import { boundsOf, itemsOf, moveItems, overlaps, rectFrom, resizeRect, updateItems, type Handle } from '@/board/items'
+import { besideRect, boundsOf, itemsOf, moveItems, overlaps, rectFrom, resizeRect, updateItems, type Handle } from '@/board/items'
 import { drawingOrder, isSection, within, withContents } from '@/board/sections'
 import { NO_SELECTION, selectTab, useBoard } from '@/board/store'
 import { isTyping } from '@/lib/dom'
 import { useElementSize } from '@/lib/useElementSize'
 import {
   addArrow,
+  addConnected,
   addItem,
   bringSelectedToFront,
   copySelected,
@@ -72,7 +73,8 @@ const DRAG_START = 3
 type Drag =
   | { kind: 'pan'; last: Point }
   | { kind: 'place'; type: PlacingTool; start: Point; now: Point }
-  | { kind: 'arrow'; from: ArrowEnd; start: Point; now: Point; to: ArrowEnd }
+  /** Drawing an arrow. `fromDot`: started from an item's dot, so dropping on empty space builds a new item there. */
+  | { kind: 'arrow'; from: ArrowEnd; start: Point; now: Point; to: ArrowEnd; fromDot: boolean }
   | {
       kind: 'arrowEnd'
       base: BoardDoc
@@ -341,14 +343,14 @@ export function Canvas() {
       const [x, y] = dotItem.dataset.dot!.split(',').map(Number)
       if (shape && isShape(shape)) {
         const from = endOnDot(shape, { x, y })
-        setDrag({ kind: 'arrow', from, start, now: start, to: endAt(start, null) })
+        setDrag({ kind: 'arrow', from, start, now: start, to: endAt(start, null), fromDot: true })
         return
       }
     }
     if (tool === 'arrow') {
       // Start on an item to attach the arrow to it, or on empty space for a loose end.
       const from = endAt(start, shapeUnder(e.clientX, e.clientY))
-      setDrag({ kind: 'arrow', from, start, now: start, to: endAt(start, null) })
+      setDrag({ kind: 'arrow', from, start, now: start, to: endAt(start, null), fromDot: false })
       return
     }
 
@@ -426,6 +428,8 @@ export function Canvas() {
       const to = endUnderPointer(e, p, from.item)
       setDrag({ ...d, from, now: p, to })
       setDrawing(arrowPoints({ from, to, route: 'straight' }, lookup))
+      // From a dot over empty space: outline where a new item will go (⌥ for just an arrow).
+      setGhost(d.fromDot && home && !to.item && !e.altKey ? besideRect(home, p) : null)
     } else if (d.kind === 'arrowEnd') {
       const other = d.arrow[d.end === 'from' ? 'to' : 'from'].item
       let at = p
@@ -489,7 +493,7 @@ export function Canvas() {
     }
   }
 
-  const onPointerUp = (): void => {
+  const onPointerUp = (e: React.PointerEvent): void => {
     const d = dragRef.current
     if (!d) return
     if (d.kind === 'place') {
@@ -499,11 +503,17 @@ export function Canvas() {
       // A text item's height follows its words, so only the dragged width counts.
       addItem(d.type, dragged ? (d.type === 'text' ? { ...r, h: 30 } : r) : d.start, useApp.getState().boxShape)
       useApp.getState().setTool('select')
-    } else if (d.kind === 'arrow') {
+    } else if (d.kind === 'arrow' && e.type !== 'pointercancel') {
       const zoom = currentView().zoom
       const dragged = Math.hypot(d.now.x - d.start.x, d.now.y - d.start.y) * zoom > DRAG_START * 4
-      // An arrow needs somewhere to go: another item, or a proper drag.
-      if (d.to.item || dragged) addArrow(d.from, d.to)
+      const home = d.from.item ? itemsOf(useBoard.getState().doc, useBoard.getState().tabId).find((i) => i.id === d.from.item) : undefined
+      if (d.fromDot && home && isShape(home) && !d.to.item && dragged && !e.altKey) {
+        // Dropped on empty space from a dot: build a new item there, joined to this one.
+        addConnected(home, d.from, besideRect(home, d.now))
+      } else if (d.to.item || dragged) {
+        // An arrow needs somewhere to go: another item, or a proper drag.
+        addArrow(d.from, d.to)
+      }
       useApp.getState().setTool('select')
     } else if (d.kind === 'move' || d.kind === 'resize' || d.kind === 'arrowEnd') {
       useBoard.getState().endGesture()

@@ -1,4 +1,4 @@
-import { byTip, check, META, SHIFT, test, type App } from './support/app'
+import { ALT, byTip, check, META, SHIFT, test, type App } from './support/app'
 
 /** Adds a note centred on a board point (by double-clicking there), with words, and returns its id. */
 async function noteAt(app: App, x: number, y: number, text: string): Promise<string> {
@@ -222,7 +222,7 @@ test('dots around items: draw arrows from them, pin arrows to them', async ({ ap
   const start = await app.dot(a, '1,0.5')
   const below = await app.screenOf(130, 220)
   const behind = await app.screenOf(-400, 0)
-  await app.drag([start, [start[0] + 30, start[1] + 10], below, behind])
+  await app.drag([start, [start[0] + 30, start[1] + 10], below, behind], { modifiers: ALT })
   const swung = (await app.arrows()).at(-1)!
   await check('drawing back round the item moves the start to its far side', swung.points[0][0] <= -100 + 0.5, swung)
 
@@ -282,7 +282,8 @@ test('an arrow left loose can be joined to an item later, by its end or its line
   await app.hoverAt(await app.itemCentre(one))
   const right = await app.dot(one, '1,0.5')
   const empty = await app.screenOf(260, 40)
-  await app.drag([right, [right[0] + 60, right[1]], empty])
+  // (⌥ for just an arrow: dropping from a dot on empty space otherwise builds a new item there.)
+  await app.drag([right, [right[0] + 60, right[1]], empty], { modifiers: ALT })
   const arrow = (await app.arrows())[0].id
   await app.tool('b')
   await app.clickAt(...(await app.screenOf(500, 300))) // a box from 400,240 to 600,360
@@ -326,4 +327,58 @@ test('an arrow left loose can be joined to an item later, by its end or its line
   await app.drag([mid, [mid[0], mid[1] + 20], [mid[0], mid[1] + 50]])
   const after = (await app.arrow(free)).points
   await check('a fully loose arrow moves as a whole', near(after[0], before[0][0], before[0][1] + 50) && near(after.at(-1), before.at(-1)![0], before.at(-1)![1] + 50), { before, after })
+})
+
+test('dropping an arrow from a dot on empty space builds a new item there', async ({ app }) => {
+  await app.newBoard('Game')
+  const a = await noteAt(app, 0, 0, 'Start')
+  await app.click(byTip('.item-toolbar button', 'Colour'))
+  await app.click(`[...document.querySelectorAll('.swatch-popover button')].find(b => (b.title || b.dataset.tip) === 'Pink')`)
+  await app.key('Escape', 'Escape')
+
+  // Drag from the right dot to empty space, a little below the line: an outline shows where it'll go.
+  await app.hoverAt(await app.itemCentre(a))
+  const right = await app.dot(a, '1,0.5')
+  const drop = await app.screenOf(400, 30)
+  await app.hoverBeforePress(right)
+  await app.mouse('mousePressed', right)
+  await app.mouse('mouseMoved', [right[0] + 60, right[1]])
+  await app.mouse('mouseMoved', drop)
+  await app.settle()
+  await check('an outline shows where the new item will go', await app.js(`!!document.querySelector('.ghost')`))
+  await app.mouse('mouseReleased', drop)
+  await app.settle()
+  await check('the new item is ready to type in', await app.until(() => app.js(`document.activeElement?.classList.contains('item-editor')`)))
+  await app.type('Next')
+  await app.key('Escape', 'Escape')
+  const made = await app.lastItem()
+  await check('it looks like the one it came from', made.type === 'note' && made.classes.includes('note-pink') && made.w === 200 && made.h === 200, made)
+  await check('it lines up with it, just past where the arrow was dropped', made.x === 400 && made.y === -100, made)
+  const arrow = (await app.arrows())[0]
+  await check('an arrow joins them', near(arrow.points[0], 100, 0) && near(arrow.points.at(-1), 400, 0), arrow)
+
+  await app.undo()
+  await check('one undo takes away the new item and its arrow', (await app.items()).length === 1 && (await app.arrows()).length === 0)
+
+  // With ⌥ held, it's just an arrow.
+  await app.hoverAt(await app.itemCentre(a))
+  const right2 = await app.dot(a, '1,0.5')
+  await app.drag([right2, [right2[0] + 60, right2[1]], drop], { modifiers: ALT })
+  await check('with ⌥ it’s a loose arrow, no new item', (await app.items()).length === 1 && (await app.arrows()).length === 1)
+  await app.undo()
+
+  // A text item left empty goes again, arrow and all.
+  await app.tool('t')
+  await app.clickAt(...(await app.screenOf(0, 300)))
+  await app.type('Words')
+  await app.key('Escape', 'Escape')
+  const words = (await app.lastItem()).id
+  await app.key('Escape', 'Escape')
+  await app.hoverAt(await app.itemCentre(words))
+  const below = await app.dot(words, '0.5,1')
+  const further = await app.screenOf(0, 500)
+  await app.drag([below, [below[0], below[1] + 40], further])
+  await app.until(() => app.js(`document.activeElement?.classList.contains('item-editor')`))
+  await app.key('Escape', 'Escape')
+  await check('a new text item left empty goes, with its arrow', (await app.items()).length === 2 && (await app.arrows()).length === 0, { items: await app.items(), arrows: await app.arrows() })
 })

@@ -1,7 +1,7 @@
 // What can be done to items on the tab showing: adding, typing, deleting, copying, colouring…
 // Shared by the keys, the menus, the floating toolbar and the right-click menu.
 
-import { DEFAULT_VIEW, type ArrowEnd, type BoxShape, type Item, type Rect, type ShapeType } from '@shared/types'
+import { DEFAULT_VIEW, type ArrowEnd, type BoxShape, type Item, type Rect, type Shape, type ShapeType } from '@shared/types'
 import { arrowsAttached, boxOf, detach, isArrow, lookupIn } from '@/board/arrows'
 import {
   addItems,
@@ -13,6 +13,7 @@ import {
   newArrow,
   newItem,
   newItemAt,
+  newLike,
   overlaps,
   removeItems,
   sendToBack,
@@ -65,6 +66,20 @@ export function addArrow(from: ArrowEnd, to: ArrowEnd): void {
   select([arrow.id])
 }
 
+/**
+ * Builds outwards: a new item like `source` in `rect`, joined to it by an arrow from `from`, ready
+ * to type in. All one undo step (and if it's a text item left empty, it all goes again).
+ */
+export function addConnected(source: Shape, from: ArrowEnd, rect: Rect): void {
+  const item = newLike(source, newId(), rect)
+  const arrow = newArrow(newId(), from, { item: item.id, x: rect.x, y: rect.y })
+  const { beginGesture, preview, select, setEditing, tabId } = state()
+  beginGesture()
+  preview(addItems(state().doc, tabId, [item, arrow]))
+  select([item.id])
+  setEditing(item.id)
+}
+
 /** Starts typing in an item (or an arrow's label). */
 export function startEditing(id: string): void {
   if (state().editingId === id) return
@@ -87,7 +102,10 @@ export function finishEditing(): void {
   if (!editingId) return
   const item = currentItems().find((i) => i.id === editingId)
   if (item?.type === 'text' && !plainText(item.text).trim()) {
-    state().preview(removeItems(doc, tabId, [item.id]))
+    // Arrows that were made with it go too (they'd be joined to nothing).
+    const items = itemsOf(doc, tabId)
+    const joined = arrowsAttached(items, new Set([item.id])).map((a) => a.id)
+    state().preview(removeItems(doc, tabId, [item.id, ...joined]))
     state().select([])
   }
   state().setEditing(null)
