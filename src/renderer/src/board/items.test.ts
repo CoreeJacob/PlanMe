@@ -55,7 +55,7 @@ describe('item changes', () => {
 
   it('makes new items with sensible defaults', () => {
     expect(newItemAt('note', 'n', 100, 100)).toMatchObject({ type: 'note', x: 0, y: 0, w: 200, h: 200, color: 'yellow', text: '' })
-    expect(newItem('box', 'b', { x: 0, y: 0, w: 5, h: 5 })).toMatchObject({ w: 20, h: 20, fill: 'white', border: 'default', rounded: false })
+    expect(newItem('box', 'b', { x: 0, y: 0, w: 5, h: 5 })).toMatchObject({ w: 20, h: 20, fill: 'white', border: 'default', shape: 'rect' })
     expect(newItem('text', 't', { x: 0, y: 0, w: 300, h: 30 })).toMatchObject({ fontSize: 20, color: 'default' })
   })
 

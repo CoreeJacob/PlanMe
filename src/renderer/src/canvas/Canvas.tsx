@@ -16,6 +16,7 @@ import { Icon } from '@/app/Icon'
 import { isPlacingTool, useApp, type PlacingTool } from '@/app/store'
 import { arrowPoints, boxOf, crossesBox, isArrow, isShape, lookupIn, nearestPin, pinPoint, pinsOf, type Pin } from '@/board/arrows'
 import { boundsOf, itemsOf, moveItems, overlaps, rectFrom, resizeRect, updateItems, type Handle } from '@/board/items'
+import { drawingOrder, isSection, within, withContents } from '@/board/sections'
 import { NO_SELECTION, selectTab, useBoard } from '@/board/store'
 import { isTyping } from '@/lib/dom'
 import { useElementSize } from '@/lib/useElementSize'
@@ -98,7 +99,8 @@ function shapeUnder(x: number, y: number, except: string | null = null): Shape |
   for (const el of document.elementsFromPoint(x, y)) {
     const id = el.closest<HTMLElement | SVGElement>('[data-item-id]')?.dataset.itemId
     const item = id && id !== except ? items.find((i) => i.id === id) : undefined
-    if (item && isShape(item)) return item
+    // Arrows join notes, text and shapes; sections are only backgrounds.
+    if (item && isShape(item) && !isSection(item)) return item
   }
   return null
 }
@@ -252,7 +254,7 @@ export function Canvas() {
     let best: { shape: Shape; pin: Pin } | null = null
     let bestDistance = DOT_SNAP
     for (const shape of itemsOf(doc, tabId).filter(isShape)) {
-      if (shape.id === except) continue
+      if (shape.id === except || isSection(shape)) continue
       for (const pin of pinsOf(shape)) {
         // Near the dot itself, or the spot on the edge it stands for.
         const dot = dotOnScreen(view, sizeRef.current, shape, pin)
@@ -290,7 +292,7 @@ export function Canvas() {
     const p = boardPoint(e)
     const reach = DOT_REACH / currentView().zoom
     const { doc, tabId } = useBoard.getState()
-    const shapes = itemsOf(doc, tabId).filter(isShape)
+    const shapes = itemsOf(doc, tabId).filter((i): i is Shape => isShape(i) && !isSection(i))
     // The top-most item the pointer is over, or close enough to reach its dots.
     let found: string | null = null
     for (let k = shapes.length - 1; k >= 0; k--) {
@@ -374,10 +376,12 @@ export function Canvas() {
       } else if (!board.selected.includes(hit)) {
         board.select([hit])
       }
-      const ids = useBoard.getState().selected
+      const selected = useBoard.getState().selected
+      // A section takes whatever's inside it along.
+      const ids = withContents(selected, itemsOf(board.doc, board.tabId), lookupIn(itemsOf(board.doc, board.tabId)))
       // An arrow on its own with one loose end, picked up by its line: pull that end along, so it
       // can be joined to an item like dragging its end handle.
-      const picked = ids.length === 1 ? itemsOf(board.doc, board.tabId).find((i) => i.id === ids[0]) : undefined
+      const picked = selected.length === 1 ? itemsOf(board.doc, board.tabId).find((i) => i.id === selected[0]) : undefined
       if (picked && isArrow(picked) && !picked.from.item !== !picked.to.item) {
         const end = picked.from.item ? 'to' : 'from'
         const offset = { x: picked[end].x - start.x, y: picked[end].y - start.y }
@@ -442,7 +446,8 @@ export function Canvas() {
       setMarquee(r)
       const all = itemsOf(board.doc, board.tabId)
       const lookup = lookupIn(all)
-      const crossed = all.filter((i) => overlaps(boxOf(i, lookup), r)).map((i) => i.id)
+      // Anything the box touches, except sections, which it must go all the way round.
+      const crossed = all.filter((i) => (isSection(i) ? within(i, r) : overlaps(boxOf(i, lookup), r))).map((i) => i.id)
       board.select([...d.keep, ...crossed.filter((id) => !d.keep.includes(id))])
     } else if (d.kind === 'move') {
       if (!d.moving) {
@@ -492,7 +497,7 @@ export function Canvas() {
       const zoom = currentView().zoom
       const dragged = r.w * zoom > DRAG_START || r.h * zoom > DRAG_START
       // A text item's height follows its words, so only the dragged width counts.
-      addItem(d.type, dragged ? (d.type === 'text' ? { ...r, h: 30 } : r) : d.start)
+      addItem(d.type, dragged ? (d.type === 'text' ? { ...r, h: 30 } : r) : d.start, useApp.getState().boxShape)
       useApp.getState().setTool('select')
     } else if (d.kind === 'arrow') {
       const zoom = currentView().zoom
@@ -531,7 +536,8 @@ export function Canvas() {
       menu.show(e.clientX, e.clientY, [
         { label: 'Add Sticky Note Here', icon: 'note', onSelect: () => addItem('note', at) },
         { label: 'Add Text Here', icon: 'text', onSelect: () => addItem('text', at) },
-        { label: 'Add Box Here', icon: 'box', onSelect: () => addItem('box', at) },
+        { label: 'Add Shape Here', icon: 'box', onSelect: () => addItem('box', at, useApp.getState().boxShape) },
+        { label: 'Add Section Here', icon: 'section', onSelect: () => addItem('section', at) },
         'separator',
         { label: 'Select All', hint: '⌘A', disabled: !items.length, onSelect: selectAll }
       ])
@@ -543,7 +549,8 @@ export function Canvas() {
     }
     const chosen = itemsOf(board.doc, board.tabId).filter((i) => useBoard.getState().selected.includes(i.id))
     const entries: MenuEntry[] = []
-    if (chosen.length === 1) entries.push({ label: isArrow(chosen[0]) ? 'Edit Label' : 'Edit Text', icon: 'rename', hint: '↩', onSelect: () => startEditing(hit) })
+    const editLabel = isArrow(chosen[0]) ? 'Edit Label' : isSection(chosen[0]) ? 'Edit Title' : 'Edit Text'
+    if (chosen.length === 1) entries.push({ label: editLabel, icon: 'rename', hint: '↩', onSelect: () => startEditing(hit) })
     if (chosen.every((i) => i.type === 'note')) {
       entries.push({
         label: 'Colour',
@@ -576,8 +583,10 @@ export function Canvas() {
   const dotted = !dotsShow
     ? NO_SHAPES
     : drawingArrow
-      ? items.filter(isShape)
-      : items.filter((i): i is Shape => isShape(i) && i.id !== editingId && (i.id === hovered || (selectedIds.length === 1 && selectedIds[0] === i.id)))
+      ? items.filter((i): i is Shape => isShape(i) && !isSection(i))
+      : items.filter(
+          (i): i is Shape => isShape(i) && !isSection(i) && i.id !== editingId && (i.id === hovered || (selectedIds.length === 1 && selectedIds[0] === i.id))
+        )
 
   return (
     <div
@@ -595,7 +604,7 @@ export function Canvas() {
       onAuxClick={(e) => e.preventDefault()}
     >
       <div className="world" style={{ transform: `translate(${origin.x}px, ${origin.y}px) scale(${view.zoom})`, ['--zoom' as string]: view.zoom }}>
-        {items.map((item) =>
+        {drawingOrder(items).map((item) =>
           isArrow(item) ? (
             <ArrowView
               key={item.id}

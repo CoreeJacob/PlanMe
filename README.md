@@ -31,7 +31,7 @@ Changes are saved a moment after you make them, and straight away when the windo
 | Pinch, or ⌘-scroll | Zoom where the pointer is |
 | Space + drag, or middle-button drag | Move around |
 | V / H | Select / Hand tool |
-| N / T / B | Sticky note / Text / Box tool (click to place, or drag to size) |
+| N / T / B / S | Sticky note / Text / Shape / Section tool (click to place, or drag to size). The Shape tool offers rectangle, rounded, oval, diamond, parallelogram and cylinder |
 | A | Arrow tool: drag from one item to another (or to empty space) |
 | Drag a dot | The dots round an item (shown when the pointer is near): draw an arrow from there. Drop on a dot to pin the arrow to it, or on an item's middle to let it pick the facing side |
 | Double-click an arrow | Label it |

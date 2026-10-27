@@ -39,12 +39,25 @@ export interface TextItem extends ItemBase {
   fontSize: number
 }
 
-/** A box with words in the middle, which shrink to fit like a note's. */
+/** The outlines a box (a "shape" on screen) can have. */
+export const BOX_SHAPES = ['rect', 'rounded', 'oval', 'diamond', 'parallelogram', 'cylinder'] as const
+export type BoxShape = (typeof BOX_SHAPES)[number]
+
+/** A shape with words in the middle, which shrink to fit like a note's. */
 export interface BoxItem extends ItemBase {
   type: 'box'
+  shape: BoxShape
   fill: string
   border: string
-  rounded: boolean
+}
+
+/**
+ * A labelled area for grouping things ("Act 1"). Its words are its title. Anything inside it moves
+ * with it; it's always drawn behind everything else.
+ */
+export interface SectionItem extends ItemBase {
+  type: 'section'
+  color: string
 }
 
 /** One end of an arrow: attached to an item, or loose at a point on the board. */
@@ -80,7 +93,7 @@ export interface ArrowItem {
 }
 
 /** The items that take up a box on the board (everything but arrows). */
-export type Shape = NoteItem | TextItem | BoxItem
+export type Shape = NoteItem | TextItem | BoxItem | SectionItem
 /** Anything placed on a tab. Later phases add more kinds (to-do lists, images…). */
 export type Item = Shape | ArrowItem
 export type ItemType = Item['type']

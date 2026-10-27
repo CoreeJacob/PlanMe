@@ -13,6 +13,7 @@ import {
   FORMAT,
   type BoardFile,
   type BoardSummary,
+  type Item,
   type OpenedBoard,
   type SaveRequest,
   type Tab,
@@ -50,6 +51,16 @@ function checkFormat(format: unknown, file: string): void {
   if (typeof format === 'number' && format > FORMAT) {
     throw new Error(`${path.basename(file)} was saved by a newer version of PlanMe`)
   }
+}
+
+/** Brings an item saved by an earlier PlanMe up to date. */
+export function upgradeItem(item: Item): Item {
+  // Boxes used to be square-cornered or rounded; now they have a shape.
+  if (item.type === 'box' && !item.shape) {
+    const { rounded, ...rest } = item as typeof item & { rounded?: boolean }
+    return { ...rest, shape: rounded ? 'rounded' : 'rect' }
+  }
+  return item
 }
 
 export async function listBoards(root: string): Promise<BoardSummary[]> {
@@ -99,7 +110,7 @@ export async function openBoard(dir: string): Promise<OpenedBoard> {
     try {
       const tab = await readJson<TabFile>(tabPath(dir, id))
       checkFormat(tab.format, tabPath(dir, id))
-      items = tab.items ?? []
+      items = (tab.items ?? []).map(upgradeItem)
       if (tab.view) views[id] = tab.view
     } catch (err) {
       // A tab file that's missing (e.g. never saved) is an empty tab; a newer one stops the open.

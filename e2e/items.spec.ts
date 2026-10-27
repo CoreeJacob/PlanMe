@@ -190,9 +190,10 @@ test('colours, bold, front and back, duplicate, copy and paste', async ({ app })
   await app.click(swatch('Teal'))
   await app.click(toolbarButton('Border'))
   await app.click(swatch('Red'))
-  await app.click(toolbarButton('Rounded'))
+  await app.click(toolbarButton('Shape'))
+  await app.click(`[...document.querySelectorAll('.shape-popover button')].find(b => (b.title || b.dataset.tip) === 'Rounded')`)
   const boxInfo = await app.item(box)
-  await check('box fill, border and rounded corners', ['fill-teal', 'border-red', 'rounded'].every((c) => boxInfo.classes.includes(c)), boxInfo)
+  await check('box fill, border and rounded corners', ['fill-teal', 'border-red', 'shape-rounded'].every((c) => boxInfo.classes.includes(c)), boxInfo)
 
   // Text colour.
   await app.tool('t')

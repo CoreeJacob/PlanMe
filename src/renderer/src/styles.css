@@ -780,35 +780,170 @@ button {
 .note-grey { background: var(--note-grey); }
 
 .item-box {
-  border: 2px solid var(--ink-default);
   color: var(--text);
 }
+/* The outline is drawn to the box's size; its colours come from the fill and border classes. */
+.outline {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+}
+.outline > * {
+  fill: var(--fill);
+  stroke: var(--stroke);
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+.outline > .outline-rim {
+  fill: none;
+}
+/* The words sit inside each outline, clear of its slopes and curves. */
 .item-box .item-area {
   inset: 6px 10px;
 }
-.item-box.rounded {
-  border-radius: 14px;
+.shape-oval .item-area {
+  inset: 15% 14%;
+}
+.shape-diamond .item-area {
+  inset: 25%;
+}
+.shape-parallelogram .item-area {
+  inset: 6px 22%;
+}
+.shape-cylinder .item-area {
+  inset: 25% 10px 10px;
 }
 /* Coloured fills are pale, so their words are always dark. */
-.fill-none { background: transparent; }
-.fill-white { background: var(--box-plain); }
-.fill-yellow { background: var(--note-yellow); }
-.fill-orange { background: var(--note-orange); }
-.fill-pink { background: var(--note-pink); }
-.fill-purple { background: var(--note-purple); }
-.fill-blue { background: var(--note-blue); }
-.fill-teal { background: var(--note-teal); }
-.fill-green { background: var(--note-green); }
-.fill-grey { background: var(--note-grey); }
+.fill-none { --fill: transparent; }
+.fill-white { --fill: var(--box-plain); }
+.fill-yellow { --fill: var(--note-yellow); }
+.fill-orange { --fill: var(--note-orange); }
+.fill-pink { --fill: var(--note-pink); }
+.fill-purple { --fill: var(--note-purple); }
+.fill-blue { --fill: var(--note-blue); }
+.fill-teal { --fill: var(--note-teal); }
+.fill-green { --fill: var(--note-green); }
+.fill-grey { --fill: var(--note-grey); }
+.swatch-fill { background: var(--fill); }
 .item-box:not(.fill-none):not(.fill-white) { color: var(--note-ink); }
-.border-default { border-color: var(--ink-default); }
-.border-grey { border-color: var(--ink-grey); }
-.border-red { border-color: var(--ink-red); }
-.border-orange { border-color: var(--ink-orange); }
-.border-green { border-color: var(--ink-green); }
-.border-blue { border-color: var(--ink-blue); }
-.border-purple { border-color: var(--ink-purple); }
-.border-none { border-color: transparent; }
+.border-default { --stroke: var(--ink-default); }
+.border-grey { --stroke: var(--ink-grey); }
+.border-red { --stroke: var(--ink-red); }
+.border-orange { --stroke: var(--ink-orange); }
+.border-green { --stroke: var(--ink-green); }
+.border-blue { --stroke: var(--ink-blue); }
+.border-purple { --stroke: var(--ink-purple); }
+.border-none { --stroke: transparent; }
+
+/* ---------- sections ---------- */
+
+/* Inside a section is like empty board: only its title and edges take clicks. */
+.item-section {
+  pointer-events: none;
+  border: calc(1.5px / var(--zoom)) solid var(--section-edge);
+  border-radius: 12px;
+  background: var(--section-fill);
+}
+.section-grey { --section-tint: var(--ink-grey); }
+.section-yellow { --section-tint: #e8b900; }
+.section-orange { --section-tint: #f08c00; }
+.section-pink { --section-tint: #e64980; }
+.section-purple { --section-tint: #845ef7; }
+.section-blue { --section-tint: #339af0; }
+.section-teal { --section-tint: #20c997; }
+.section-green { --section-tint: #51cf66; }
+.item-section {
+  --section-fill: color-mix(in srgb, var(--section-tint) 8%, transparent);
+  --section-edge: color-mix(in srgb, var(--section-tint) 55%, transparent);
+}
+.section-title {
+  position: absolute;
+  left: 0;
+  bottom: 100%;
+  max-width: 100%;
+  margin-bottom: calc(4px / var(--zoom));
+  padding: 2px 4px;
+  border-radius: 4px;
+  font-size: calc(15px / max(var(--zoom), 0.5));
+  font-weight: 600;
+  line-height: 1.3;
+  color: color-mix(in srgb, var(--section-tint) 55%, var(--text));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: auto;
+}
+.section-title.untitled {
+  font-weight: 500;
+  opacity: 0.6;
+}
+.item-section.editing .section-title {
+  min-width: 120px;
+  overflow: visible;
+  background: var(--panel);
+}
+.section-title .item-words {
+  white-space: nowrap;
+}
+.section-edge {
+  position: absolute;
+  pointer-events: auto;
+}
+.section-edge.top,
+.section-edge.bottom {
+  left: 0;
+  right: 0;
+  height: calc(10px / var(--zoom));
+}
+.section-edge.left,
+.section-edge.right {
+  top: 0;
+  bottom: 0;
+  width: calc(10px / var(--zoom));
+}
+.section-edge.top { top: calc(-5px / var(--zoom)); }
+.section-edge.bottom { bottom: calc(-5px / var(--zoom)); }
+.section-edge.left { left: calc(-5px / var(--zoom)); }
+.section-edge.right { right: calc(-5px / var(--zoom)); }
+
+/* ---------- picking a shape ---------- */
+
+.shape-row {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 2px;
+  margin-top: 8px;
+  padding: 4px;
+  border-radius: 8px;
+  background: var(--panel-2);
+}
+.shape-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+.shape-btn:hover {
+  color: var(--text);
+}
+.shape-btn.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.shape-popover {
+  grid-template-columns: repeat(3, 34px);
+}
+.shape-popover .swatch-btn {
+  width: 34px;
+  height: 34px;
+  color: var(--text);
+}
 
 .item-text {
   min-height: 1.3em;

@@ -1,6 +1,7 @@
 // The panel on the left: tools at the top, and (from phase 4) every task on the board below.
 
 import { Icon, type IconName } from './Icon'
+import { SHAPE_CHOICES, shapeChoice } from './shapes'
 import { useApp, type Tool } from './store'
 
 const TOOLS: Array<{ tool: Tool; label: string; tip?: string; key: string; icon: IconName }> = [
@@ -8,13 +9,16 @@ const TOOLS: Array<{ tool: Tool; label: string; tip?: string; key: string; icon:
   { tool: 'hand', label: 'Hand', tip: 'Hand — drag to move around the board', key: 'H', icon: 'hand' },
   { tool: 'note', label: 'Note', tip: 'Sticky note — click to place one, or drag to choose its size', key: 'N', icon: 'note' },
   { tool: 'text', label: 'Text', tip: 'Text — click to place, or drag to choose its width', key: 'T', icon: 'text' },
-  { tool: 'box', label: 'Box', tip: 'Box — click to place one, or drag to choose its size', key: 'B', icon: 'box' },
-  { tool: 'arrow', label: 'Arrow', tip: 'Arrow — drag from one item to another to join them', key: 'A', icon: 'arrow' }
+  { tool: 'box', label: 'Shape', tip: 'Shape — a box, oval, diamond and more: click to place one, or drag to choose its size', key: 'B', icon: 'box' },
+  { tool: 'arrow', label: 'Arrow', tip: 'Arrow — drag from one item to another to join them', key: 'A', icon: 'arrow' },
+  { tool: 'section', label: 'Section', tip: 'Section — drag out a labelled area; whatever’s inside moves with it', key: 'S', icon: 'section' }
 ]
 
 export function SidePanel() {
   const tool = useApp((s) => s.tool)
   const setTool = useApp((s) => s.setTool)
+  const boxShape = useApp((s) => s.boxShape)
+  const setBoxShape = useApp((s) => s.setBoxShape)
   return (
     <aside className="side-panel">
       <section className="panel-section">
@@ -28,11 +32,26 @@ export function SidePanel() {
               aria-pressed={tool === t.tool}
               onClick={() => setTool(t.tool)}
             >
-              <Icon name={t.icon} size={18} />
+              <Icon name={t.tool === 'box' ? shapeChoice(boxShape).icon : t.icon} size={18} />
               <span>{t.label}</span>
             </button>
           ))}
         </div>
+        {tool === 'box' && (
+          <div className="shape-row" role="group" aria-label="Shape to make">
+            {SHAPE_CHOICES.map((c) => (
+              <button
+                key={c.shape}
+                className={`shape-btn ${boxShape === c.shape ? 'active' : ''}`}
+                title={c.label}
+                aria-pressed={boxShape === c.shape}
+                onClick={() => setBoxShape(c.shape)}
+              >
+                <Icon name={c.icon} size={16} />
+              </button>
+            ))}
+          </div>
+        )}
       </section>
       <section className="panel-section grow">
         <h2 className="panel-heading">

@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react'
 import type { ArrowItem, Item, View } from '@shared/types'
 import { BORDER_COLORS, FILL_COLORS, INK_COLORS, NOTE_COLORS, type ColorChoice } from '@/app/colors'
 import { Icon } from '@/app/Icon'
+import { SHAPE_CHOICES, shapeChoice } from '@/app/shapes'
 import { boxOf, isArrow, type Lookup } from '@/board/arrows'
 import { boundsOf } from '@/board/items'
 import type { TextStyle } from '@/board/richtext'
@@ -29,8 +30,9 @@ function palettesFor(items: Item[]): Palette[] {
   if (first.type === 'note') return [{ key: 'color', label: 'Colour — the note’s colour', choices: NOTE_COLORS, swatch: (n) => `note-${n}`, current: first.color }]
   if (first.type === 'text') return [{ key: 'color', label: 'Text colour — the colour of the words', choices: INK_COLORS, swatch: (n) => `swatch-ink ink-${n}`, current: first.color }]
   if (first.type === 'arrow') return [{ key: 'color', label: 'Colour — the arrow’s colour', choices: INK_COLORS, swatch: (n) => `swatch-ink ink-${n}`, current: first.color }]
+  if (first.type === 'section') return [{ key: 'color', label: 'Colour — the section’s tint', choices: NOTE_COLORS, swatch: (n) => `note-${n}`, current: first.color }]
   return [
-    { key: 'fill', label: 'Fill — the box’s background colour', choices: FILL_COLORS, swatch: (n) => `fill-${n}`, current: first.fill },
+    { key: 'fill', label: 'Fill — the box’s background colour', choices: FILL_COLORS, swatch: (n) => `swatch-fill fill-${n}`, current: first.fill },
     { key: 'border', label: 'Border — the colour of the box’s edge', choices: BORDER_COLORS, swatch: (n) => `swatch-ink ink-${n}${n === 'none' ? ' none' : ''}`, current: first.border }
   ]
 }
@@ -86,7 +88,7 @@ const GAP = 10
 const HEIGHT = 40
 
 export function ItemToolbar({ view, size, items, lookup, editing }: { view: View; size: Size; items: Item[]; lookup: Lookup; editing: boolean }) {
-  const [open, setOpen] = useState<ColorKey | null>(null)
+  const [open, setOpen] = useState<ColorKey | 'shape' | null>(null)
   const ids = items.map((i) => i.id).join()
   useEffect(() => setOpen(null), [ids])
 
@@ -135,9 +137,28 @@ export function ItemToolbar({ view, size, items, lookup, editing }: { view: View
         </div>
       ))}
       {box && box.type === 'box' && (
-        <button className={`toolbar-btn ${box.rounded ? 'active' : ''}`} title="Rounded corners — on or off" onClick={() => setOnSelected('rounded', !box.rounded)}>
-          <Icon name="rounded" size={16} />
-        </button>
+        <div className="toolbar-group">
+          <button className={`toolbar-btn ${open === 'shape' ? 'active' : ''}`} title="Shape — change the outline, keeping the words and colours" onClick={() => setOpen(open === 'shape' ? null : 'shape')}>
+            <Icon name={shapeChoice(box.shape).icon} size={16} />
+          </button>
+          {open === 'shape' && (
+            <div className="swatch-popover shape-popover" role="menu" aria-label="Shape">
+              {SHAPE_CHOICES.map((c) => (
+                <button
+                  key={c.shape}
+                  className={`swatch-btn ${c.shape === box.shape ? 'current' : ''}`}
+                  title={c.label}
+                  onClick={() => {
+                    setOnSelected('shape', c.shape)
+                    setOpen(null)
+                  }}
+                >
+                  <Icon name={c.icon} size={18} />
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       )}
       {arrow && isArrow(arrow) && <ArrowButtons arrow={arrow} />}
       {palettes.length > 0 && <span className="toolbar-sep" />}

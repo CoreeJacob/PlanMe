@@ -1,7 +1,7 @@
 // Changes to the items on a tab. Like doc.ts, each returns a new BoardDoc and leaves the old
 // one (and every item it doesn't change) untouched.
 
-import type { ArrowEnd, ArrowItem, BoardDoc, BoxItem, Item, NoteItem, Rect, Shape, ShapeType, TextItem } from '@shared/types'
+import type { ArrowEnd, ArrowItem, BoardDoc, BoxItem, BoxShape, Item, NoteItem, Rect, SectionItem, Shape, ShapeType, TextItem } from '@shared/types'
 
 /** Replaces one tab's items. Returns `doc` itself if they didn't change. */
 export function withItems(doc: BoardDoc, tabId: string, change: (items: Item[]) => Item[]): BoardDoc {
@@ -95,17 +95,19 @@ export function copiesOf(items: readonly Item[], dx: number, dy: number, newId: 
 export const DEFAULT_SIZE: Record<ShapeType, { w: number; h: number }> = {
   note: { w: 200, h: 200 },
   text: { w: 240, h: 30 },
-  box: { w: 200, h: 120 }
+  box: { w: 200, h: 120 },
+  section: { w: 600, h: 400 }
 }
 export const MIN_SIZE = 20
 export const DEFAULT_FONT_SIZE = 20
 
-/** A new, empty item filling `rect`. */
-export function newItem(type: ShapeType, id: string, rect: Rect): Shape {
+/** A new, empty item filling `rect`. A box gets the outline `shape`. */
+export function newItem(type: ShapeType, id: string, rect: Rect, shape: BoxShape = 'rect'): Shape {
   const base = { id, text: '', x: rect.x, y: rect.y, w: Math.max(MIN_SIZE, rect.w), h: Math.max(MIN_SIZE, rect.h) }
   if (type === 'note') return { ...base, type, color: 'yellow' } satisfies NoteItem
   if (type === 'text') return { ...base, type, color: 'default', fontSize: DEFAULT_FONT_SIZE } satisfies TextItem
-  return { ...base, type, fill: 'white', border: 'default', rounded: false } satisfies BoxItem
+  if (type === 'section') return { ...base, type, color: 'grey' } satisfies SectionItem
+  return { ...base, type, shape, fill: 'white', border: 'default' } satisfies BoxItem
 }
 
 /** A new arrow between two ends, with the usual look. */
@@ -114,9 +116,9 @@ export function newArrow(id: string, from: ArrowEnd, to: ArrowEnd): ArrowItem {
 }
 
 /** An item of the default size centred on a point. */
-export function newItemAt(type: ShapeType, id: string, x: number, y: number): Shape {
+export function newItemAt(type: ShapeType, id: string, x: number, y: number, shape?: BoxShape): Shape {
   const { w, h } = DEFAULT_SIZE[type]
-  return newItem(type, id, { x: Math.round(x - w / 2), y: Math.round(y - h / 2), w, h })
+  return newItem(type, id, { x: Math.round(x - w / 2), y: Math.round(y - h / 2), w, h }, shape)
 }
 
 /** The smallest rectangle around all the given rectangles, or null if there are none. */

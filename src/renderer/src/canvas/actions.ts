@@ -1,7 +1,7 @@
 // What can be done to items on the tab showing: adding, typing, deleting, copying, colouring…
 // Shared by the keys, the menus, the floating toolbar and the right-click menu.
 
-import { DEFAULT_VIEW, type ArrowEnd, type Item, type Rect, type ShapeType } from '@shared/types'
+import { DEFAULT_VIEW, type ArrowEnd, type BoxShape, type Item, type Rect, type ShapeType } from '@shared/types'
 import { arrowsAttached, boxOf, detach, isArrow, lookupIn } from '@/board/arrows'
 import {
   addItems,
@@ -19,6 +19,7 @@ import {
   updateItems
 } from '@/board/items'
 import { cleanHtml, fromPlainText, isAllStyled, plainText, setWholeStyle, type TextStyle } from '@/board/richtext'
+import { withContents } from '@/board/sections'
 import { useBoard } from '@/board/store'
 
 const newId = (): string => crypto.randomUUID()
@@ -45,9 +46,9 @@ function visibleArea(): Rect {
 // ---------- adding and typing ----------
 
 /** Adds an item (at a point, at its usual size, or filling a rectangle) and starts typing in it. */
-export function addItem(type: ShapeType, at: { x: number; y: number } | Rect): void {
+export function addItem(type: ShapeType, at: { x: number; y: number } | Rect, shape?: BoxShape): void {
   const id = newId()
-  const item = 'w' in at ? newItem(type, id, at) : newItemAt(type, id, at.x, at.y)
+  const item = 'w' in at ? newItem(type, id, at, shape) : newItemAt(type, id, at.x, at.y, shape)
   const { beginGesture, preview, select, setEditing, tabId } = state()
   // Adding it and typing its words are one undo step.
   beginGesture()
@@ -100,17 +101,31 @@ export function selectAll(): void {
 }
 
 /**
- * Deletes the selection. If arrows are attached to what's going, asks whether they go too or
- * stay with loose ends.
+ * Deletes the selection. For a section with things in it, asks whether they go too. If arrows are
+ * attached to what's going, asks whether they go too or stay with loose ends.
  */
 export async function deleteSelected(): Promise<void> {
   finishEditing()
   const { doc, tabId, selected } = state()
   if (!selected.length) return
-  const ids = new Set(selected)
   const items = itemsOf(doc, tabId)
+  const lookup = lookupIn(items)
+  let going = selected
+  const contents = withContents(selected, items, lookup).filter((id) => !selected.includes(id))
+  if (contents.length) {
+    const n = contents.length
+    const sections = selected.filter((id) => items.find((i) => i.id === id)?.type === 'section').length
+    const choice = await window.api.ask({
+      message: `Delete everything in the ${sections === 1 ? 'section' : 'sections'} too?`,
+      detail: `There ${n === 1 ? 'is 1 thing' : `are ${n} things`} inside. If you keep them, they stay where they are.`,
+      buttons: ['Delete Everything', sections === 1 ? 'Just the Section' : 'Just the Sections', 'Cancel']
+    })
+    if (choice === 2) return
+    if (choice === 0) going = [...selected, ...contents]
+  }
+  const ids = new Set(going)
   const arrows = arrowsAttached(items, ids)
-  let next = removeItems(doc, tabId, selected)
+  let next = removeItems(doc, tabId, going)
   if (arrows.length) {
     const n = arrows.length
     const choice = await window.api.ask({
@@ -119,7 +134,6 @@ export async function deleteSelected(): Promise<void> {
       buttons: [n === 1 ? 'Delete Arrow' : 'Delete Arrows', n === 1 ? 'Keep Arrow' : 'Keep Arrows', 'Cancel']
     })
     if (choice === 2) return
-    const lookup = lookupIn(items)
     const attached = new Set(arrows.map((a) => a.id))
     next =
       choice === 0
@@ -132,11 +146,15 @@ export async function deleteSelected(): Promise<void> {
   state().select([])
 }
 
-/** The selected items, with arrows that reach outside the selection let go at that end. */
+/**
+ * The selected items (and whatever's in selected sections), with arrows that reach outside them
+ * let go at that end.
+ */
 function selectionToCopy(): Item[] {
-  const items = selectedItems()
-  const ids = new Set(items.map((i) => i.id))
-  const lookup = lookupIn(currentItems())
+  const all = currentItems()
+  const lookup = lookupIn(all)
+  const ids = new Set(withContents(state().selected, all, lookup))
+  const items = all.filter((i) => ids.has(i.id))
   const outside = new Set(currentItems().map((i) => i.id).filter((id) => !ids.has(id)))
   return items.map((i) => (isArrow(i) ? detach(i, outside, lookup) : i))
 }
@@ -151,7 +169,9 @@ export function duplicateSelected(): void {
 
 export function nudgeSelected(dx: number, dy: number): void {
   const { doc, tabId, selected, commit } = state()
-  commit(moveItems(doc, tabId, selected, dx, dy))
+  const items = itemsOf(doc, tabId)
+  // A section takes what's inside it along.
+  commit(moveItems(doc, tabId, withContents(selected, items, lookupIn(items)), dx, dy))
 }
 
 export function bringSelectedToFront(): void {
@@ -167,7 +187,7 @@ export function sendSelectedToBack(): void {
 // ---------- looks ----------
 
 /** A setting some kinds of item have, like a note's colour or an arrow's heads. */
-export type LookKey = 'color' | 'fill' | 'border' | 'rounded' | 'route' | 'heads' | 'dashed' | 'width'
+export type LookKey = 'color' | 'fill' | 'border' | 'shape' | 'route' | 'heads' | 'dashed' | 'width'
 
 /** Sets a look (like a note's colour) on every selected item that has it. */
 export function setOnSelected(key: LookKey, value: string | number | boolean): void {

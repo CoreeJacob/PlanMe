@@ -2,14 +2,14 @@
 // and pop-ups (messages and name prompts).
 
 import { create } from 'zustand'
-import type { BoardSummary } from '@shared/types'
+import type { BoardSummary, BoxShape } from '@shared/types'
 
 export type Screen = 'loading' | 'boards' | 'board'
-export type Tool = 'select' | 'hand' | 'note' | 'text' | 'box' | 'arrow'
-export type PlacingTool = Extract<Tool, 'note' | 'text' | 'box'>
+export type Tool = 'select' | 'hand' | 'note' | 'text' | 'box' | 'arrow' | 'section'
+export type PlacingTool = Extract<Tool, 'note' | 'text' | 'box' | 'section'>
 
 /** Tools that place a new item where you click. */
-export const isPlacingTool = (tool: Tool): tool is PlacingTool => tool === 'note' || tool === 'text' || tool === 'box'
+export const isPlacingTool = (tool: Tool): tool is PlacingTool => tool === 'note' || tool === 'text' || tool === 'box' || tool === 'section'
 
 export interface Toast {
   id: number
@@ -34,6 +34,8 @@ interface AppState {
   boards: BoardSummary[]
   panelOpen: boolean
   tool: Tool
+  /** The outline the Shape tool makes. */
+  boxShape: BoxShape
   /** The tab whose name is being edited in the tab bar. */
   editingTab: string | null
   toasts: Toast[]
@@ -42,6 +44,7 @@ interface AppState {
   setScreen(screen: Screen): void
   setPanelOpen(open: boolean): void
   setTool(tool: Tool): void
+  setBoxShape(shape: BoxShape): void
   setEditingTab(id: string | null): void
   toast(message: string, options?: { kind?: Toast['kind']; action?: Toast['action'] }): void
   dismissToast(id: number): void
@@ -69,6 +72,7 @@ export const useApp = create<AppState>((set, get) => ({
   boards: [],
   panelOpen: readPanelOpen(),
   tool: 'select',
+  boxShape: 'rect',
   editingTab: null,
   toasts: [],
   prompt: null,
@@ -85,6 +89,8 @@ export const useApp = create<AppState>((set, get) => ({
   },
 
   setTool: (tool) => set({ tool }),
+
+  setBoxShape: (boxShape) => set({ boxShape }),
 
   setEditingTab: (editingTab) => set({ editingTab }),
 

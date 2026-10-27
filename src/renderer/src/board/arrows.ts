@@ -26,12 +26,22 @@ export function sideFacing(r: Rect, p: Point): Side {
   return dy >= 0 ? 'bottom' : 'top'
 }
 
-function sideMiddle(r: Rect, side: Side): Point {
+/** How far a parallelogram's top leans right, as a fraction of its width. */
+export const SLANT = 0.2
+/** The height of a cylinder's top and bottom curves. */
+export const cylinderCap = (w: number, h: number): number => Math.min(h * 0.12, w * 0.25)
+
+/** The outline a rectangle stands for: a box's shape, or a plain rectangle for anything else. */
+type Outlined = Rect & { shape?: string }
+
+/** The middle of a side, on the item's outline (a parallelogram's sloping sides are in from the corners). */
+function sideMiddle(r: Outlined, side: Side): Point {
   const c = centre(r)
+  const lean = r.shape === 'parallelogram' ? (r.w * SLANT) / 2 : 0
   if (side === 'top') return { x: c.x, y: r.y }
   if (side === 'bottom') return { x: c.x, y: r.y + r.h }
-  if (side === 'left') return { x: r.x, y: c.y }
-  return { x: r.x + r.w, y: c.y }
+  if (side === 'left') return { x: r.x + lean, y: c.y }
+  return { x: r.x + r.w - lean, y: c.y }
 }
 
 export type Lookup = (id: string) => Shape | undefined
@@ -60,10 +70,42 @@ function along(length: number): number[] {
   return Array.from({ length: parts - 1 }, (_, k) => (k + 1) / parts)
 }
 
+const SIDE_MIDDLES: Pin[] = [
+  { x: 0.5, y: 0 },
+  { x: 1, y: 0.5 },
+  { x: 0.5, y: 1 },
+  { x: 0, y: 0.5 }
+]
+
+/** Which way is "out" from a dot, as a direction (diagonal at corners, none in the middle). */
+export function pinOut(pin: Pin): Point {
+  // A dot part-way down a side (even a parallelogram's sloping one) points sideways.
+  const sideways = pin.y > 0 && pin.y < 1 ? (pin.x < 0.5 ? -1 : 1) : 0
+  return { x: pin.x === 0 ? -1 : pin.x === 1 ? 1 : sideways, y: pin.y === 0 ? -1 : pin.y === 1 ? 1 : 0 }
+}
+
 /** The dots an arrow can be dropped on: the corners, the middle of each side, and more along long sides. */
-export function pinsOf(r: Rect): Pin[] {
+export function pinsOf(r: Outlined): Pin[] {
   const across = along(r.w)
   const down = along(r.h)
+  // Ovals and diamonds only touch their box at the middle of each side.
+  if (r.shape === 'oval' || r.shape === 'diamond') return SIDE_MIDDLES
+  if (r.shape === 'parallelogram') {
+    // The corners and sloping sides are in from the box: dots go on the actual outline.
+    const half = SLANT / 2
+    return [
+      { x: SLANT, y: 0 },
+      ...across.map((x) => ({ x: SLANT + x * (1 - SLANT), y: 0 })),
+      { x: 1, y: 0 },
+      { x: 1 - half, y: 0.5 },
+      { x: 1 - SLANT, y: 1 },
+      ...across.map((x) => ({ x: (1 - SLANT) * (1 - x), y: 1 })),
+      { x: 0, y: 1 },
+      { x: half, y: 0.5 }
+    ]
+  }
+  // A cylinder's top and bottom are curved: no corner dots.
+  if (r.shape === 'cylinder') return [{ x: 0.5, y: 0 }, ...down.map((y) => ({ x: 1, y })), { x: 0.5, y: 1 }, ...down.map((y) => ({ x: 0, y: 1 - y }))]
   return [
     { x: 0, y: 0 },
     ...across.map((x) => ({ x, y: 0 })),
@@ -80,11 +122,12 @@ export const pinPoint = (r: Rect, pin: Pin): Point => ({ x: r.x + pin.x * r.w, y
 
 /** Which way is "out" from a dot. A corner has two; it uses the one facing `aim` more. */
 export function pinSide(pin: Pin, r: Rect, aim: Point): Side {
+  const out = pinOut(pin)
   const sides: Side[] = []
-  if (pin.x === 0) sides.push('left')
-  if (pin.x === 1) sides.push('right')
-  if (pin.y === 0) sides.push('top')
-  if (pin.y === 1) sides.push('bottom')
+  if (out.x < 0) sides.push('left')
+  if (out.x > 0) sides.push('right')
+  if (out.y < 0) sides.push('top')
+  if (out.y > 0) sides.push('bottom')
   if (!sides.length) return sideFacing(r, aim)
   const p = pinPoint(r, pin)
   const facing = (s: Side): number => (aim.x - p.x) * OUT[s].x + (aim.y - p.y) * OUT[s].y

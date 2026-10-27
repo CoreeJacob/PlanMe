@@ -3,7 +3,7 @@
 // new-item outlines, and the arrow being drawn.
 
 import type { Item, Rect, Shape, View } from '@shared/types'
-import { arrowPoints, isArrow, pinPoint, pinsOf, type Lookup, type Pin, type Point } from '@/board/arrows'
+import { arrowPoints, isArrow, pinOut, pinPoint, pinsOf, type Lookup, type Pin, type Point } from '@/board/arrows'
 import { boundsOf, type Handle } from '@/board/items'
 import type { Guide } from './snap'
 import { toScreen, type Size } from './view'
@@ -20,7 +20,7 @@ export const DOT_OFFSET = 14
 /** Where a dot is drawn on screen: just outside the edge, straight out from it (diagonally at corners). */
 export function dotOnScreen(view: View, size: Size, item: Shape, pin: Pin): Point {
   const p = toScreen(view, size, pinPoint(item, pin))
-  const out = { x: pin.x === 0 ? -1 : pin.x === 1 ? 1 : 0, y: pin.y === 0 ? -1 : pin.y === 1 ? 1 : 0 }
+  const out = pinOut(pin)
   const length = Math.hypot(out.x, out.y) || 1
   return { x: p.x + (out.x / length) * DOT_OFFSET, y: p.y + (out.y / length) * DOT_OFFSET }
 }

@@ -3,7 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { FORMAT } from '@shared/types'
-import { cleanName, createBoard, listBoards, openBoard, renameBoard, saveBoard } from './boards'
+import { cleanName, createBoard, listBoards, openBoard, renameBoard, saveBoard, upgradeItem } from './boards'
 
 let root: string
 
@@ -76,6 +76,15 @@ describe('boards on disk', () => {
     const dir = await createBoard(root, 'Game', 't1')
     await fs.rm(path.join(dir, 'tabs', 't1.json'))
     expect((await openBoard(dir)).doc.tabs).toEqual([{ id: 't1', name: 'Overview', items: [] }])
+  })
+
+  it('brings boxes saved before shapes up to date', async () => {
+    const dir = await createBoard(root, 'Game', 't1')
+    const old = { id: 'b', type: 'box', text: '', x: 0, y: 0, w: 10, h: 10, fill: 'white', border: 'default', rounded: true }
+    await fs.writeFile(path.join(dir, 'tabs', 't1.json'), JSON.stringify({ format: FORMAT, id: 't1', view: { x: 0, y: 0, zoom: 1 }, items: [old] }))
+    const [box] = (await openBoard(dir)).doc.tabs[0].items
+    expect(box).toEqual({ id: 'b', type: 'box', text: '', x: 0, y: 0, w: 10, h: 10, fill: 'white', border: 'default', shape: 'rounded' })
+    expect(upgradeItem({ ...old, rounded: false } as never)).toMatchObject({ shape: 'rect' })
   })
 
   it('refuses boards from a newer PlanMe instead of damaging them', async () => {
