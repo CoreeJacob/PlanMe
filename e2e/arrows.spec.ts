@@ -1,27 +1,9 @@
-import { ALT, byTip, check, META, SHIFT, test, type App } from './support/app'
-
-/** Adds a note centred on a board point (by double-clicking there), with words, and returns its id. */
-async function noteAt(app: App, x: number, y: number, text: string): Promise<string> {
-  await app.doubleClickAt(await app.screenOf(x, y))
-  await app.untilJs(`document.activeElement?.classList.contains('item-editor')`)
-  await app.type(text)
-  await app.key('Escape', 'Escape')
-  return (await app.lastItem()).id
-}
-
-const near = (p: [number, number] | undefined, x: number, y: number) => !!p && Math.abs(p[0] - x) < 0.5 && Math.abs(p[1] - y) < 0.5
-const toolbarButton = (tip: string) => byTip('.item-toolbar button', tip)
-/** Clicks the middle of an arrow's line. */
-async function clickArrow(app: App, id: string): Promise<void> {
-  const points = (await app.arrow(id)).points
-  const [a, b] = [points[0], points[1]]
-  await app.clickAt(...(await app.screenOf((a[0] + b[0]) / 2, (a[1] + b[1]) / 2)))
-}
+import { ALT, check, META, near, pickerChoice, SHIFT, test, toolbarButton } from './support/app'
 
 test('draw arrows between items, and they follow when the items move', async ({ app }) => {
   await app.newBoard('Game')
-  const a = await noteAt(app, 0, 0, 'Start') // spans -100…100
-  const b = await noteAt(app, 400, 0, 'Boss') // spans 300…500
+  const a = await app.noteAt(0, 0, 'Start') // spans -100…100
+  const b = await app.noteAt(400, 0, 'Boss') // spans 300…500
 
   const arrow = await app.drawArrow([0, 0], [400, 0])
   let info = await app.arrow(arrow)
@@ -33,7 +15,7 @@ test('draw arrows between items, and they follow when the items move', async ({ 
   await app.key('Escape', 'Escape')
   const from = await app.itemCentre(b)
   const to = await app.screenOf(0, 400)
-  await app.drag([from, [(from[0] + to[0]) / 2, (from[1] + to[1]) / 2], to], { modifiers: META })
+  await app.dragBetween(from, to, { modifiers: META })
   info = await app.arrow(arrow)
   await check('it follows the item, joining the facing sides', near(info.points[0], 0, 100) && near(info.points.at(-1), 0, 300), info)
   await app.undo()
@@ -58,13 +40,13 @@ test('draw arrows between items, and they follow when the items move', async ({ 
 
 test('select, restyle, label and re-attach arrows', async ({ app }) => {
   await app.newBoard('Game')
-  await noteAt(app, 0, 0, 'A')
-  await noteAt(app, 400, 300, 'B')
-  const c = await noteAt(app, 400, -300, 'C')
+  await app.noteAt(0, 0, 'A')
+  await app.noteAt(400, 300, 'B')
+  const c = await app.noteAt(400, -300, 'C')
   const arrow = await app.drawArrow([0, 0], [400, 300])
   await app.key('Escape', 'Escape')
 
-  await clickArrow(app, arrow)
+  await app.clickArrow(arrow)
   await check('clicking the line selects the arrow', (await app.selectedIds()).join() === arrow, await app.selectedIds())
   await check('it shows a handle at each end', (await app.js<number>(`document.querySelectorAll('.end-handle').length`)) === 2)
 
@@ -80,7 +62,7 @@ test('select, restyle, label and re-attach arrows', async ({ app }) => {
   await app.click(toolbarButton('Thickness'))
   await check('thicker', (await app.arrow(arrow)).width === 3.5, await app.arrow(arrow))
   await app.click(toolbarButton('Colour'))
-  await app.click(`[...document.querySelectorAll('.swatch-popover button')].find(b => (b.title || b.dataset.tip) === 'Red')`)
+  await app.click(pickerChoice('Red'))
   await check('red', (await app.arrow(arrow)).classes.includes('ink-red'), await app.arrow(arrow))
 
   // Double-clicking an end handle isn't empty space: no new note.
@@ -88,7 +70,7 @@ test('select, restyle, label and re-attach arrows', async ({ app }) => {
   const before = (await app.items()).length
   await app.doubleClickAt(handle)
   await check('double-clicking an arrow’s end handle doesn’t add a note', (await app.items()).length === before, await app.items())
-  await clickArrow(app, arrow)
+  await app.clickArrow(arrow)
 
   // Label: double-click the line.
   const line = (await app.arrow(arrow)).points
@@ -99,25 +81,25 @@ test('select, restyle, label and re-attach arrows', async ({ app }) => {
   await check('the label shows', (await app.arrow(arrow)).label === 'yes', await app.arrow(arrow))
 
   // Drag the end handle onto another note.
-  await clickArrow(app, arrow)
+  await app.clickArrow(arrow)
   const end = await app.js<[number, number]>(`(() => { const r = document.querySelector('.end-handle[data-end="to"]').getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2] })()`)
   const onto = await app.itemCentre(c)
-  await app.drag([end, [(end[0] + onto[0]) / 2, (end[1] + onto[1]) / 2], onto])
+  await app.dragBetween(end, onto)
   info = await app.arrow(arrow)
   const C = await app.item(c)
   await check('dragging an end onto another item joins it there', info.points.at(-1)![0] === C.x || info.points.at(-1)![1] === C.y + C.h || info.points.at(-1)![0] === C.x + C.w / 2, { info, C })
   // …and onto empty space leaves it loose there.
   const end2 = await app.js<[number, number]>(`(() => { const r = document.querySelector('.end-handle[data-end="to"]').getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2] })()`)
   const empty = await app.screenOf(800, 0)
-  await app.drag([end2, [(end2[0] + empty[0]) / 2, (end2[1] + empty[1]) / 2], empty])
+  await app.dragBetween(end2, empty)
   await check('…or onto empty space leaves it loose', near((await app.arrow(arrow)).points.at(-1), 800, 0), await app.arrow(arrow))
   await check('a loose end shows a hollow handle', await app.js(`!document.querySelector('.end-handle[data-end="to"]').classList.contains('attached')`))
 })
 
 test('deleting an item asks what to do with its arrows', async ({ app }) => {
   await app.newBoard('Game')
-  const a = await noteAt(app, 0, 0, 'A')
-  await noteAt(app, 400, 0, 'B')
+  const a = await app.noteAt(0, 0, 'A')
+  await app.noteAt(400, 0, 'B')
   const arrow = await app.drawArrow([0, 0], [400, 0])
   const pick = async (id: string) => {
     await app.key('Escape', 'Escape')
@@ -137,7 +119,7 @@ test('deleting an item asks what to do with its arrows', async ({ app }) => {
   await app.undo()
   await check('undo brings the note back', (await app.items()).length === 2)
   await app.key('Escape', 'Escape')
-  await clickArrow(app, arrow)
+  await app.clickArrow(arrow)
   await check('…with the arrow joined to it again', await app.js(`document.querySelector('.end-handle[data-end="from"]').classList.contains('attached')`))
 
   await pick(a)
@@ -150,15 +132,15 @@ test('deleting an item asks what to do with its arrows', async ({ app }) => {
   // Deleting just the arrow doesn't ask.
   await app.answerQuestions()
   await app.key('Escape', 'Escape')
-  await clickArrow(app, arrow)
+  await app.clickArrow(arrow)
   await app.key('Backspace', 'Backspace')
   await check('deleting an arrow on its own doesn’t ask', (await app.arrows()).length === 0 && (await app.questionsAsked()).length === 0)
 })
 
 test('duplicating and pasting keep arrows joined to the copies', async ({ app }) => {
   await app.newBoard('Game')
-  await noteAt(app, 0, 0, 'A')
-  await noteAt(app, 400, 0, 'B')
+  await app.noteAt(0, 0, 'A')
+  await app.noteAt(400, 0, 'B')
   await app.drawArrow([0, 0], [400, 0])
   await app.key('Escape', 'Escape')
 
@@ -173,23 +155,17 @@ test('duplicating and pasting keep arrows joined to the copies', async ({ app })
   await app.key('Escape', 'Escape')
   const first = (await app.items())[0]
   await app.clickAt(...(await app.screenOf(first.x + 10, first.y + 10)))
-  await clickArrowWithShift(app, arrows[0].id)
+  await app.clickArrow(arrows[0].id, SHIFT)
   await app.clipboard('copy')
   await app.clipboard('paste')
   const pasted = (await app.arrows()).at(-1)!
   await check('pasting an arrow with only one of its notes leaves the other end loose', near(pasted.points[0], 124, 24) && near(pasted.points.at(-1), 324, 24), pasted)
 })
 
-async function clickArrowWithShift(app: App, id: string): Promise<void> {
-  const points = (await app.arrow(id)).points
-  const [a, b] = [points[0], points[1]]
-  await app.clickAt(...(await app.screenOf((a[0] + b[0]) / 2, (a[1] + b[1]) / 2)), 'left', SHIFT)
-}
-
 test('dots around items: draw arrows from them, pin arrows to them', async ({ app }) => {
   await app.newBoard('Game')
-  const a = await noteAt(app, 0, 0, 'A') // -100…100
-  const b = await noteAt(app, 400, 0, 'B') // 300…500
+  const a = await app.noteAt(0, 0, 'A') // -100…100
+  const b = await app.noteAt(400, 0, 'B') // 300…500
   await app.key('Escape', 'Escape')
   await app.hoverAt(await app.screenOf(-300, -300))
   await check('no dots until the pointer comes near', (await app.dots()).length === 0, await app.dots())
@@ -311,7 +287,7 @@ test('an arrow left loose can be joined to an item later, by its end or its line
   await check('undo lets it go again', near((await app.arrow(arrow)).points.at(-1), loose[0], loose[1]), await app.arrow(arrow))
 
   // The end handle has a generous grab area: a press a few pixels off it still picks up the end.
-  await clickArrow(app, arrow)
+  await app.clickArrow(arrow)
   const handle = await app.js<[number, number]>(`(() => { const r = document.querySelector('.end-handle[data-end="to"]').getBoundingClientRect(); return [r.x + r.width / 2 + 9, r.y + r.height / 2] })()`)
   const leftOfTwo = await app.screenOf(400, 300)
   await app.drag([handle, [handle[0] + 40, handle[1] + 60], [leftOfTwo[0] + 9, leftOfTwo[1]]])
@@ -322,7 +298,7 @@ test('an arrow left loose can be joined to an item later, by its end or its line
   const free = await app.drawArrow([-300, 300], [-100, 300])
   await app.key('Escape', 'Escape')
   const before = (await app.arrow(free)).points
-  await clickArrow(app, free)
+  await app.clickArrow(free)
   const mid = await app.screenOf(-200, 300)
   await app.drag([mid, [mid[0], mid[1] + 20], [mid[0], mid[1] + 50]])
   const after = (await app.arrow(free)).points
@@ -331,9 +307,9 @@ test('an arrow left loose can be joined to an item later, by its end or its line
 
 test('dropping an arrow from a dot on empty space builds a new item there', async ({ app }) => {
   await app.newBoard('Game')
-  const a = await noteAt(app, 0, 0, 'Start')
-  await app.click(byTip('.item-toolbar button', 'Colour'))
-  await app.click(`[...document.querySelectorAll('.swatch-popover button')].find(b => (b.title || b.dataset.tip) === 'Pink')`)
+  const a = await app.noteAt(0, 0, 'Start')
+  await app.click(toolbarButton('Colour'))
+  await app.click(pickerChoice('Pink'))
   await app.key('Escape', 'Escape')
 
   // Drag from the right dot to empty space, a little below the line: an outline shows where it'll go.

@@ -3,8 +3,6 @@ import type { BoardDoc, Item, Shape } from '@shared/types'
 import {
   addItems,
   besideRect,
-  boundsOf,
-  bringToFront,
   copiesOf,
   itemsOf,
   moveItems,
@@ -13,9 +11,10 @@ import {
   newLike,
   removeItems,
   resizeRect,
-  sendToBack,
+  restack,
   updateItems
 } from './items'
+import { boundsOf } from '@/lib/geometry'
 import { cleanHtml, fromPlainText, isAllStyled, plainText, setWholeStyle } from './richtext'
 import { NO_SELECTION, useBoard } from './store'
 
@@ -39,14 +38,14 @@ describe('item changes', () => {
     expect(removeItems(start, 't', ['zzz'])).toBe(start)
     expect(moveItems(start, 't', ['a'], 0, 0)).toBe(start)
     expect(updateItems(start, 't', ['a'], (i) => i)).toBe(start)
-    expect(bringToFront(start, 't', ['b'])).toBe(start)
-    expect(sendToBack(start, 't', ['a'])).toBe(start)
+    expect(restack(start, 't', ['b'], 'front')).toBe(start)
+    expect(restack(start, 't', ['a'], 'back')).toBe(start)
   })
 
   it('brings to front and sends to back, keeping their order', () => {
     const start = docWith(note('a'), note('b'), note('c'), note('d'))
-    expect(ids(bringToFront(start, 't', ['b', 'a']))).toBe('c,d,a,b')
-    expect(ids(sendToBack(start, 't', ['d', 'c']))).toBe('c,d,a,b')
+    expect(ids(restack(start, 't', ['b', 'a'], 'front'))).toBe('c,d,a,b')
+    expect(ids(restack(start, 't', ['d', 'c'], 'back'))).toBe('c,d,a,b')
   })
 
   it('copies with new ids, moved over', () => {

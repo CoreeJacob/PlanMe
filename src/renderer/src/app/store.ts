@@ -3,6 +3,7 @@
 
 import { create } from 'zustand'
 import type { BoardSummary, BoxShape } from '@shared/types'
+import { readPref, writePref } from '@/lib/prefs'
 
 export type Screen = 'loading' | 'boards' | 'board'
 export type Tool = 'select' | 'hand' | 'note' | 'text' | 'box' | 'arrow' | 'section'
@@ -55,13 +56,6 @@ interface AppState {
 
 const PANEL_KEY = 'planme.panelOpen'
 
-function readPanelOpen(): boolean {
-  try {
-    return localStorage.getItem(PANEL_KEY) !== 'false'
-  } catch {
-    return true
-  }
-}
 
 let nextToast = 1
 let nextPrompt = 1
@@ -70,7 +64,7 @@ export const useApp = create<AppState>((set, get) => ({
   screen: 'loading',
   root: '',
   boards: [],
-  panelOpen: readPanelOpen(),
+  panelOpen: readPref(PANEL_KEY) !== 'false',
   tool: 'select',
   boxShape: 'rect',
   editingTab: null,
@@ -81,11 +75,7 @@ export const useApp = create<AppState>((set, get) => ({
 
   setPanelOpen: (panelOpen) => {
     set({ panelOpen })
-    try {
-      localStorage.setItem(PANEL_KEY, String(panelOpen))
-    } catch {
-      // Only a convenience; fine to lose.
-    }
+    writePref(PANEL_KEY, String(panelOpen))
   },
 
   setTool: (tool) => set({ tool }),

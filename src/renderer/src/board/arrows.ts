@@ -3,9 +3,8 @@
 // leave and arrive straight out from those sides.
 
 import type { ArrowEnd, ArrowItem, Item, Rect, Shape } from '@shared/types'
-
-export type Point = { x: number; y: number }
-export type Side = 'top' | 'right' | 'bottom' | 'left'
+import { centre, sideFacing, type Point, type Side } from '@/lib/geometry'
+import { SLANT, sideMiddle, type Outlined } from './outlines'
 
 const OUT: Record<Side, Point> = { top: { x: 0, y: -1 }, right: { x: 1, y: 0 }, bottom: { x: 0, y: 1 }, left: { x: -1, y: 0 } }
 /** How far an elbow arrow goes straight out from a side before turning. */
@@ -13,36 +12,6 @@ const ELBOW_GAP = 24
 
 export const isArrow = (item: Item): item is ArrowItem => item.type === 'arrow'
 export const isShape = (item: Item): item is Shape => item.type !== 'arrow'
-export const centre = (r: Rect): Point => ({ x: r.x + r.w / 2, y: r.y + r.h / 2 })
-
-/** The side of `r` that the line from its middle towards `p` leaves through. */
-export function sideFacing(r: Rect, p: Point): Side {
-  const c = centre(r)
-  const dx = p.x - c.x
-  const dy = p.y - c.y
-  // Measured against the box's shape, so a wide box uses its long sides for things above and below.
-  const horizontal = r.w || r.h ? Math.abs(dx) * r.h >= Math.abs(dy) * r.w : Math.abs(dx) >= Math.abs(dy)
-  if (horizontal) return dx >= 0 ? 'right' : 'left'
-  return dy >= 0 ? 'bottom' : 'top'
-}
-
-/** How far a parallelogram's top leans right, as a fraction of its width. */
-export const SLANT = 0.2
-/** The height of a cylinder's top and bottom curves. */
-export const cylinderCap = (w: number, h: number): number => Math.min(h * 0.12, w * 0.25)
-
-/** The outline a rectangle stands for: a box's shape, or a plain rectangle for anything else. */
-type Outlined = Rect & { shape?: string }
-
-/** The middle of a side, on the item's outline (a parallelogram's sloping sides are in from the corners). */
-function sideMiddle(r: Outlined, side: Side): Point {
-  const c = centre(r)
-  const lean = r.shape === 'parallelogram' ? (r.w * SLANT) / 2 : 0
-  if (side === 'top') return { x: c.x, y: r.y }
-  if (side === 'bottom') return { x: c.x, y: r.y + r.h }
-  if (side === 'left') return { x: r.x + lean, y: c.y }
-  return { x: r.x + r.w - lean, y: c.y }
-}
 
 export type Lookup = (id: string) => Shape | undefined
 

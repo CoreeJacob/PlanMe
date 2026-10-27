@@ -1,24 +1,15 @@
-import { byTip, check, test, type App } from './support/app'
+import { check, menuItem, pickerChoice, test, toolbarButton, type App } from './support/app'
 
 const SHAPES = ['rect', 'rounded', 'oval', 'diamond', 'parallelogram', 'cylinder']
 const shapeOf = (classes: string) => classes.match(/shape-(\w+)/)?.[1]
-
-/** Adds a note centred on a board point (by double-clicking there), with words, and returns its id. */
-async function noteAt(app: App, x: number, y: number, text: string): Promise<string> {
-  await app.doubleClickAt(await app.screenOf(x, y))
-  await app.untilJs(`document.activeElement?.classList.contains('item-editor')`)
-  await app.type(text)
-  await app.key('Escape', 'Escape')
-  return (await app.lastItem()).id
-}
 
 /** Draws a section with the Section tool between two board points, titles it, and returns its id. */
 async function sectionFrom(app: App, a: [number, number], b: [number, number], title: string): Promise<string> {
   await app.tool('s')
   const p = await app.screenOf(...a)
   const q = await app.screenOf(...b)
-  await app.drag([p, [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2], q])
-  await app.untilJs(`document.activeElement?.classList.contains('item-editor')`)
+  await app.dragBetween(p, q)
+  await app.untilEditing()
   await app.type(title)
   await app.key('Escape', 'Escape')
   return (await app.items()).find((i) => i.type === 'section' && i.text === title)!.id
@@ -46,10 +37,10 @@ test('six shapes: place any of them, and switch an outline keeping its words and
   // Switch the rectangle to a diamond: same words, same colours.
   const rect = items[0].id
   await app.click(`document.querySelector('[data-item-id="${rect}"]')`)
-  await app.click(byTip('.item-toolbar button', 'Fill'))
-  await app.click(`[...document.querySelectorAll('.swatch-popover button')].find(b => (b.title || b.dataset.tip) === 'Pink')`)
-  await app.click(byTip('.item-toolbar button', 'Shape'))
-  await app.click(`[...document.querySelectorAll('.shape-popover button')].find(b => (b.title || b.dataset.tip || '').startsWith('Diamond'))`)
+  await app.click(toolbarButton('Fill'))
+  await app.click(pickerChoice('Pink'))
+  await app.click(toolbarButton('Shape'))
+  await app.click(pickerChoice('Diamond'))
   const diamond = await app.item(rect)
   await check('switching the outline keeps the words and colours', shapeOf(diamond.classes) === 'diamond' && diamond.text === 'rect' && diamond.classes.includes('fill-pink'), diamond)
   await app.undo()
@@ -69,7 +60,7 @@ test('six shapes: place any of them, and switch an outline keeping its words and
 
 test('sections hold what’s inside them, and things can come and go', async ({ app }) => {
   await app.newBoard('Game')
-  const before = await noteAt(app, -250, 0, 'Already here') // made before the section, so lower in the pile
+  const before = await app.noteAt(-250, 0, 'Already here') // made before the section, so lower in the pile
   const act = await sectionFrom(app, [-400, -200], [200, 250], 'Act 1')
   let section = await app.item(act)
   await check('a section with its title', section.text === 'Act 1' && section.w === 600 && section.h === 450, section)
@@ -77,12 +68,12 @@ test('sections hold what’s inside them, and things can come and go', async ({ 
 
   // Inside a section is like empty board: double-click makes a note there, drag selects.
   await app.key('Escape', 'Escape')
-  const inside = await noteAt(app, 50, 100, 'Village')
+  const inside = await app.noteAt(50, 100, 'Village')
   await check('double-clicking inside a section makes a note', (await app.item(inside))?.text === 'Village')
   await app.key('Escape', 'Escape')
   const a = await app.screenOf(-380, -180)
   const b = await app.screenOf(180, 230)
-  await app.drag([a, [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], b])
+  await app.dragBetween(a, b)
   await check('dragging inside a section selects what’s in it, not the section', (await app.selectedIds()).sort().join() === [before, inside].sort().join(), await app.selectedIds())
   await app.key('Escape', 'Escape')
   await check('a section shows no arrow dots', await (async () => {
@@ -91,7 +82,7 @@ test('sections hold what’s inside them, and things can come and go', async ({ 
   })())
 
   // Drag the section by its title: everything inside comes too; things outside stay.
-  const outside = await noteAt(app, 500, 0, 'Elsewhere')
+  const outside = await app.noteAt(500, 0, 'Elsewhere')
   await app.key('Escape', 'Escape')
   const title = await app.centre(`document.querySelector('[data-item-id="${act}"] .section-title')`)
   await app.drag([title, [title[0] + 20, title[1] + 20], [title[0] + 50, title[1] + 100]], { modifiers: 4 })
@@ -123,4 +114,35 @@ test('sections hold what’s inside them, and things can come and go', async ({ 
   await app.key('Backspace', 'Backspace')
   await app.until(async () => !(await app.items()).some((i) => i.id === act))
   await check('“Delete Everything” takes what’s inside too', !(await app.items()).some((i) => i.id === before) && (await app.items()).some((i) => i.id === outside), await app.items())
+})
+
+test('right-click colours for any kind of item, and pasting a copy made before shapes', async ({ app }) => {
+  await app.newBoard('Game')
+  await app.tool('b')
+  await app.clickAt(...(await app.screenOf(0, 0)))
+  await app.key('Escape', 'Escape')
+  const box = (await app.lastItem()).id
+
+  // The right-click menu offers the same colours as the toolbar: Fill and Border for a shape.
+  await app.rightClick(`document.querySelector('[data-item-id="${box}"]')`)
+  const labels = await app.menuLabels()
+  await check('a shape’s right-click menu has Fill and Border', labels.includes('Fill') && labels.includes('Border'), labels)
+  await app.js(`${menuItem('Fill')}.click()`)
+  await app.settle()
+  await app.pickMenu('Teal')
+  await check('choosing a fill there colours the shape', (await app.item(box)).classes.includes('fill-teal'), await app.item(box))
+  const note = await app.noteAt(400, 0, 'Note')
+  await app.rightClick(`document.querySelector('[data-item-id="${note}"]')`)
+  await check('a note’s right-click menu has Colour', (await app.menuLabels()).includes('Colour'), await app.menuLabels())
+  await app.key('Escape', 'Escape')
+
+  // A box copied before shapes existed (it says "rounded" instead) pastes as a rounded shape.
+  await app.js(`(() => {
+    window.__clip = new DataTransfer()
+    window.__clip.setData('application/x-planme-items', JSON.stringify({ tabId: 'elsewhere', items: [
+      { id: 'old', type: 'box', text: 'Old copy', x: 0, y: 0, w: 200, h: 120, fill: 'white', border: 'default', rounded: true }] }))
+    return 1 })()`)
+  await app.clipboard('paste')
+  const pasted = await app.lastItem()
+  await check('an old copy is brought up to date when pasted', pasted.text === 'Old copy' && pasted.classes.includes('shape-rounded'), pasted)
 })

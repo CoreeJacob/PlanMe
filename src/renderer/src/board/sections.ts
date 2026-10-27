@@ -2,13 +2,10 @@
 // worked out from where things are, so dragging an item in or out is all it takes to join or leave.
 
 import type { Item, Rect, SectionItem } from '@shared/types'
+import { within } from '@/lib/geometry'
 import { boxOf, type Lookup } from './arrows'
 
 export const isSection = (item: Item): item is SectionItem => item.type === 'section'
-
-/** True if `inner` is entirely within `outer`. */
-export const within = (inner: Rect, outer: Rect): boolean =>
-  inner.x >= outer.x && inner.y >= outer.y && inner.x + inner.w <= outer.x + outer.w && inner.y + inner.h <= outer.y + outer.h
 
 /** The ids of the items (not other sections) entirely inside a section. */
 export function contentsOf(section: Rect, items: readonly Item[], lookup: Lookup): string[] {

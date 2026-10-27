@@ -3,7 +3,8 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { FORMAT } from '@shared/types'
-import { cleanName, createBoard, listBoards, openBoard, renameBoard, saveBoard, upgradeItem } from './boards'
+import { upgradeItem } from '@shared/upgrade'
+import { cleanName, createBoard, listBoards, openBoard, renameBoard, saveBoard } from './boards'
 
 let root: string
 

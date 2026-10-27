@@ -2,6 +2,7 @@
 
 import { create } from 'zustand'
 import type { BoardDoc, OpenedBoard, View } from '@shared/types'
+import { readPref, writePref } from '@/lib/prefs'
 import { EMPTY_HISTORY, record, redo, undo, type History, type Step } from './history'
 
 const NO_DOC: BoardDoc = { tabs: [] }
@@ -12,21 +13,12 @@ const NO_VIEWS: Record<string, View> = {}
 const lastTabKey = (path: string): string => `planme.lastTab:${path}`
 
 function lastTab(opened: OpenedBoard): string {
-  try {
-    const id = localStorage.getItem(lastTabKey(opened.path))
-    if (id && opened.doc.tabs.some((t) => t.id === id)) return id
-  } catch {
-    // Storage unavailable: start on the first tab.
-  }
-  return opened.doc.tabs[0].id
+  const id = readPref(lastTabKey(opened.path))
+  return id && opened.doc.tabs.some((t) => t.id === id) ? id : opened.doc.tabs[0].id
 }
 
 function rememberTab(path: string | undefined, id: string): void {
-  try {
-    if (path && id) localStorage.setItem(lastTabKey(path), id)
-  } catch {
-    // Only a convenience; fine to lose.
-  }
+  if (path && id) writePref(lastTabKey(path), id)
 }
 
 interface BoardState {

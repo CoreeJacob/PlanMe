@@ -5,32 +5,29 @@
 //
 // With the Select tool: click an item to select it (Shift adds), drag across empty space to
 // select what you cross, drag items to move them (they line up with others; hold ⌘ not to),
-// drag a handle to resize, double-click to type. With a note, text or box tool: click to place
-// one, or drag to choose its size.
+// drag a handle to resize, double-click to type. Drag from the dots round an item to draw an
+// arrow; dropped on empty space, it builds a new item there (⌥ for just the arrow). With a note,
+// text, shape or section tool: click to place one, or drag to choose its size.
 
-import { useEffect, useRef, useState } from 'react'
-import { DEFAULT_VIEW, type ArrowEnd, type ArrowItem, type BoardDoc, type Item, type Rect, type Shape, type View } from '@shared/types'
-import { NOTE_COLORS } from '@/app/colors'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { DEFAULT_VIEW, type ArrowEnd, type ArrowItem, type BoardDoc, type Item, type Rect, type Shape } from '@shared/types'
 import { useContextMenu, type MenuEntry } from '@/app/ContextMenu'
 import { Icon } from '@/app/Icon'
 import { isPlacingTool, useApp, type PlacingTool } from '@/app/store'
-import { arrowPoints, boxOf, crossesBox, isArrow, isShape, lookupIn, nearestPin, pinPoint, pinsOf, type Pin } from '@/board/arrows'
-import { besideRect, boundsOf, itemsOf, moveItems, overlaps, rectFrom, resizeRect, updateItems, type Handle } from '@/board/items'
-import { drawingOrder, isSection, within, withContents } from '@/board/sections'
+import { arrowPoints, boxOf, crossesBox, isArrow, isShape, lookupIn, nearestPin, pinPoint } from '@/board/arrows'
+import { besideRect, itemsOf, moveItems, resizeRect, updateItems, type Handle } from '@/board/items'
+import { drawingOrder, isSection, withContents } from '@/board/sections'
 import { NO_SELECTION, selectTab, useBoard } from '@/board/store'
-import { isTyping } from '@/lib/dom'
+import { boundsOf, overlaps, rectFrom, within, type Point } from '@/lib/geometry'
 import { useElementSize } from '@/lib/useElementSize'
 import {
   addArrow,
   addConnected,
   addItem,
   bringSelectedToFront,
-  copySelected,
   deleteSelected,
   duplicateSelected,
   finishEditing,
-  nudgeSelected,
-  paste,
   selectAll,
   sendSelectedToBack,
   setOnSelected,
@@ -40,30 +37,13 @@ import {
 import { ArrowView } from './ArrowView'
 import { ItemToolbar } from './ItemToolbar'
 import { ItemView } from './ItemView'
-import { DOT_OFFSET, dotOnScreen, Overlay, type ActiveDot } from './Overlay'
+import { palettesFor, paletteName } from './looks'
+import { canJoin, currentView, itemById, onlySelected, setCurrentView, zoomReset, zoomStep } from './current'
+import { useCanvasKeys, useClipboard } from './keys'
+import { Overlay, type ActiveDot } from './Overlay'
 import { snapMove, snapResize, type Guide } from './snap'
-import { gridSpacing, panBy, stepZoom, toBoard, toScreen, zoomAt, type Point } from './view'
-
-/** The current tab's view, read fresh (event handlers run between renders). */
-function currentView(): View {
-  const { views, tabId } = useBoard.getState()
-  return views[tabId] ?? DEFAULT_VIEW
-}
-
-function setCurrentView(view: View): void {
-  const { tabId, setView } = useBoard.getState()
-  setView(tabId, view)
-}
-
-/** Zooms in or out a step, keeping the middle of the screen where it is. */
-export function zoomStep(dir: 1 | -1): void {
-  const view = currentView()
-  setCurrentView({ ...view, zoom: stepZoom(view.zoom, dir) })
-}
-
-export function zoomReset(): void {
-  setCurrentView({ ...currentView(), zoom: 1 })
-}
+import { dotNear, endAt, endOnDot, shapeAround, shapeUnder } from './targets'
+import { gridSpacing, panBy, toBoard, toScreen, zoomAt } from './view'
 
 /** How close (in screen pixels) things must be to line up, and to count as a drag rather than a click. */
 const SNAP_DISTANCE = 6
@@ -94,35 +74,14 @@ const NO_ITEMS: Item[] = []
 const NO_SHAPES: Shape[] = []
 const NO_GUIDES: Guide[] = []
 
-/** The shape (not arrow) under a window point, skipping `except`. The canvas holds the pointer during a press, so look. */
-function shapeUnder(x: number, y: number, except: string | null = null): Shape | null {
-  const { doc, tabId } = useBoard.getState()
-  const items = itemsOf(doc, tabId)
-  for (const el of document.elementsFromPoint(x, y)) {
-    const id = el.closest<HTMLElement | SVGElement>('[data-item-id]')?.dataset.itemId
-    const item = id && id !== except ? items.find((i) => i.id === id) : undefined
-    // Arrows join notes, text and shapes; sections are only backgrounds.
-    if (item && isShape(item) && !isSection(item)) return item
-  }
-  return null
-}
-
-/** An arrow end at a board point: attached to `shape` if there is one, otherwise loose there. */
-const endAt = (p: Point, shape: Shape | null): ArrowEnd => ({ item: shape?.id ?? null, x: p.x, y: p.y })
-
-/** An arrow end pinned to one of an item's dots. */
-const endOnDot = (shape: Shape, pin: Pin): ArrowEnd => ({ item: shape.id, ...pinPoint(shape, pin), pin })
-
-/** How close (in screen pixels) the pointer must be to a dot for an arrow to snap to it. */
-const DOT_SNAP = 14
-/** How far outside an item (in screen pixels) the pointer can go and still show its dots. */
-const DOT_REACH = DOT_OFFSET + 12
-
 export function Canvas() {
   const ref = useRef<HTMLDivElement>(null)
   const size = useElementSize(ref)
-  viewport.width = size.width
-  viewport.height = size.height
+  // Pasting needs to know how much of the board is on screen.
+  useLayoutEffect(() => {
+    viewport.width = size.width
+    viewport.height = size.height
+  }, [size])
   const items = useBoard((s) => selectTab(s)?.items ?? NO_ITEMS)
   const view = useBoard((s) => s.views[s.tabId] ?? DEFAULT_VIEW)
   const selectedIds = useBoard((s) => s.selected)
@@ -164,72 +123,12 @@ export function Canvas() {
     return () => el.removeEventListener('wheel', onWheel)
   }, [])
 
-  // Keys: Space to pan; Escape, Delete, Return and the arrows for the selection.
-  useEffect(() => {
-    const down = (e: KeyboardEvent): void => {
-      if (isTyping() || useApp.getState().prompt) return
-      const { selected } = useBoard.getState()
-      if (e.code === 'Space') {
-        e.preventDefault()
-        setSpaceDown(true)
-      } else if (e.key === 'Escape') {
-        if (dragRef.current) cancelDrag()
-        else if (useApp.getState().tool !== 'select') useApp.getState().setTool('select')
-        else useBoard.getState().select([])
-      } else if ((e.key === 'Backspace' || e.key === 'Delete') && selected.length) {
-        e.preventDefault()
-        deleteSelected()
-      } else if (e.key === 'Enter' && selected.length === 1) {
-        e.preventDefault()
-        startEditing(selected[0])
-      } else if (e.key.startsWith('Arrow') && selected.length && !e.metaKey) {
-        e.preventDefault()
-        const step = e.shiftKey ? 10 : 1
-        const [dx, dy] = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[e.key] ?? [0, 0]
-        nudgeSelected(dx, dy)
-      }
-    }
-    const up = (e: KeyboardEvent): void => {
-      if (e.code === 'Space') setSpaceDown(false)
-    }
-    const blur = (): void => setSpaceDown(false)
-    window.addEventListener('keydown', down)
-    window.addEventListener('keyup', up)
-    window.addEventListener('blur', blur)
-    return () => {
-      window.removeEventListener('keydown', down)
-      window.removeEventListener('keyup', up)
-      window.removeEventListener('blur', blur)
-    }
-  }, [])
-
-  // Copy, cut and paste items (text boxes keep their own).
-  useEffect(() => {
-    const busy = (): boolean => isTyping() || !!useApp.getState().prompt
-    const onCopy = (e: ClipboardEvent): void => {
-      if (busy() || !e.clipboardData) return
-      if (copySelected(e.clipboardData)) e.preventDefault()
-    }
-    const onCut = (e: ClipboardEvent): void => {
-      if (busy() || !e.clipboardData) return
-      if (copySelected(e.clipboardData)) {
-        e.preventDefault()
-        deleteSelected()
-      }
-    }
-    const onPaste = (e: ClipboardEvent): void => {
-      if (busy() || !e.clipboardData) return
-      if (paste(e.clipboardData)) e.preventDefault()
-    }
-    document.addEventListener('copy', onCopy)
-    document.addEventListener('cut', onCut)
-    document.addEventListener('paste', onPaste)
-    return () => {
-      document.removeEventListener('copy', onCopy)
-      document.removeEventListener('cut', onCut)
-      document.removeEventListener('paste', onPaste)
-    }
-  }, [])
+  useCanvasKeys(setSpaceDown, () => {
+    if (!dragRef.current) return false
+    cancelDrag()
+    return true
+  })
+  useClipboard()
 
   /** A pointer position as a board point. */
   const boardPoint = (e: { clientX: number; clientY: number }): Point => {
@@ -247,36 +146,13 @@ export function Canvas() {
     setActiveDot(null)
   }
 
-  /** The dot nearest the pointer (within DOT_SNAP), on any item but `except`. */
-  const dotNear = (e: { clientX: number; clientY: number }, except: string | null): { shape: Shape; pin: Pin } | null => {
-    const r = ref.current!.getBoundingClientRect()
-    const at = { x: e.clientX - r.left, y: e.clientY - r.top }
-    const { doc, tabId } = useBoard.getState()
-    const view = currentView()
-    let best: { shape: Shape; pin: Pin } | null = null
-    let bestDistance = DOT_SNAP
-    for (const shape of itemsOf(doc, tabId).filter(isShape)) {
-      if (shape.id === except || isSection(shape)) continue
-      for (const pin of pinsOf(shape)) {
-        // Near the dot itself, or the spot on the edge it stands for.
-        const dot = dotOnScreen(view, sizeRef.current, shape, pin)
-        const edge = toScreen(view, sizeRef.current, pinPoint(shape, pin))
-        const distance = Math.min(Math.hypot(dot.x - at.x, dot.y - at.y), Math.hypot(edge.x - at.x, edge.y - at.y))
-        if (distance <= bestDistance) {
-          best = { shape, pin }
-          bestDistance = distance
-        }
-      }
-    }
-    return best
-  }
-
   /**
    * Where an arrow end being dragged would join: a dot if one's close, otherwise the item under
    * the pointer (choosing its side as things move), otherwise loose. Shows which.
    */
   const endUnderPointer = (e: { clientX: number; clientY: number }, p: Point, except: string | null): ArrowEnd => {
-    const dot = dotNear(e, except)
+    const r = ref.current!.getBoundingClientRect()
+    const dot = dotNear({ x: e.clientX - r.left, y: e.clientY - r.top }, currentView(), sizeRef.current, except)
     if (dot) {
       setTarget(dot.shape)
       setActiveDot({ item: dot.shape.id, pin: dot.pin })
@@ -291,19 +167,7 @@ export function Canvas() {
   /** Keeps track of which item the pointer is over (or just around), to show its dots. */
   const trackHover = (e: React.PointerEvent): void => {
     if ((tool !== 'select' && tool !== 'arrow') || spaceDown) return void setHovered(null)
-    const p = boardPoint(e)
-    const reach = DOT_REACH / currentView().zoom
-    const { doc, tabId } = useBoard.getState()
-    const shapes = itemsOf(doc, tabId).filter((i): i is Shape => isShape(i) && !isSection(i))
-    // The top-most item the pointer is over, or close enough to reach its dots.
-    let found: string | null = null
-    for (let k = shapes.length - 1; k >= 0; k--) {
-      const s = shapes[k]
-      if (p.x >= s.x - reach && p.x <= s.x + s.w + reach && p.y >= s.y - reach && p.y <= s.y + s.h + reach) {
-        found = s.id
-        break
-      }
-    }
+    const found = shapeAround(boardPoint(e), currentView().zoom)
     if (found !== hovered) setHovered(found)
   }
 
@@ -339,9 +203,9 @@ export function Canvas() {
     // A dot around an item: drag from it to draw an arrow, with any tool that shows dots.
     const dotItem = target.closest<HTMLElement>('[data-dot]')
     if (dotItem) {
-      const shape = itemsOf(board.doc, board.tabId).find((i) => i.id === dotItem.dataset.dotItem)
+      const shape = itemById(dotItem.dataset.dotItem)
       const [x, y] = dotItem.dataset.dot!.split(',').map(Number)
-      if (shape && isShape(shape)) {
+      if (canJoin(shape)) {
         const from = endOnDot(shape, { x, y })
         setDrag({ kind: 'arrow', from, start, now: start, to: endAt(start, null), fromDot: true })
         return
@@ -355,17 +219,16 @@ export function Canvas() {
     }
 
     // The round handle at either end of a selected arrow: drag it to attach that end elsewhere.
+    // The handles on the one selected item: an arrow's ends, or a shape's resize handles.
+    const only = onlySelected()
     const end = target.closest<HTMLElement>('[data-end]')?.dataset.end as 'from' | 'to' | undefined
-    const selectedArrow = board.selected.length === 1 ? itemsOf(board.doc, board.tabId).find((i) => i.id === board.selected[0]) : undefined
-    if (end && selectedArrow && isArrow(selectedArrow)) {
-      setDrag({ kind: 'arrowEnd', base: board.doc, arrow: selectedArrow, end })
+    if (end && only && isArrow(only)) {
+      setDrag({ kind: 'arrowEnd', base: board.doc, arrow: only, end })
       return
     }
-
     const handle = target.closest<HTMLElement>('[data-handle]')?.dataset.handle as Handle | undefined
-    const item = board.selected.length === 1 ? itemsOf(board.doc, board.tabId).find((i) => i.id === board.selected[0]) : undefined
-    if (handle && item && isShape(item)) {
-      setDrag({ kind: 'resize', start, base: board.doc, item, handle })
+    if (handle && only && isShape(only)) {
+      setDrag({ kind: 'resize', start, base: board.doc, item: only, handle })
       return
     }
 
@@ -378,18 +241,18 @@ export function Canvas() {
       } else if (!board.selected.includes(hit)) {
         board.select([hit])
       }
-      const selected = useBoard.getState().selected
-      // A section takes whatever's inside it along.
-      const ids = withContents(selected, itemsOf(board.doc, board.tabId), lookupIn(itemsOf(board.doc, board.tabId)))
       // An arrow on its own with one loose end, picked up by its line: pull that end along, so it
       // can be joined to an item like dragging its end handle.
-      const picked = selected.length === 1 ? itemsOf(board.doc, board.tabId).find((i) => i.id === selected[0]) : undefined
+      const picked = onlySelected()
       if (picked && isArrow(picked) && !picked.from.item !== !picked.to.item) {
         const end = picked.from.item ? 'to' : 'from'
         const offset = { x: picked[end].x - start.x, y: picked[end].y - start.y }
         setDrag({ kind: 'arrowEnd', base: board.doc, arrow: picked, end, grab: { offset, startScreen: { x: e.clientX, y: e.clientY }, moving: false } })
         return
       }
+      // A section takes whatever's inside it along.
+      const items = itemsOf(board.doc, board.tabId)
+      const ids = withContents(useBoard.getState().selected, items, lookupIn(items))
       setDrag({ kind: 'move', start, startScreen: { x: e.clientX, y: e.clientY }, base: board.doc, ids, moving: false })
       return
     }
@@ -506,8 +369,8 @@ export function Canvas() {
     } else if (d.kind === 'arrow' && e.type !== 'pointercancel') {
       const zoom = currentView().zoom
       const dragged = Math.hypot(d.now.x - d.start.x, d.now.y - d.start.y) * zoom > DRAG_START * 4
-      const home = d.from.item ? itemsOf(useBoard.getState().doc, useBoard.getState().tabId).find((i) => i.id === d.from.item) : undefined
-      if (d.fromDot && home && isShape(home) && !d.to.item && dragged && !e.altKey) {
+      const home = itemById(d.from.item)
+      if (d.fromDot && canJoin(home) && !d.to.item && dragged && !e.altKey) {
         // Dropped on empty space from a dot: build a new item there, joined to this one.
         addConnected(home, d.from, besideRect(home, d.now))
       } else if (d.to.item || dragged) {
@@ -561,11 +424,9 @@ export function Canvas() {
     const entries: MenuEntry[] = []
     const editLabel = isArrow(chosen[0]) ? 'Edit Label' : isSection(chosen[0]) ? 'Edit Title' : 'Edit Text'
     if (chosen.length === 1) entries.push({ label: editLabel, icon: 'rename', hint: '↩', onSelect: () => startEditing(hit) })
-    if (chosen.every((i) => i.type === 'note')) {
-      entries.push({
-        label: 'Colour',
-        submenu: NOTE_COLORS.map((c) => ({ label: c.label, onSelect: () => setOnSelected('color', c.name) }))
-      })
+    // The same colour choices as the floating toolbar (Colour, or Fill and Border for shapes…).
+    for (const p of palettesFor(chosen)) {
+      entries.push({ label: paletteName(p), submenu: p.choices.map((c) => ({ label: c.label, onSelect: () => setOnSelected(p.key, c.name) })) })
     }
     entries.push(
       'separator',
@@ -592,11 +453,10 @@ export function Canvas() {
   const dotsShow = (tool === 'select' || tool === 'arrow') && !spaceDown && (drawingArrow || !busy)
   const dotted = !dotsShow
     ? NO_SHAPES
-    : drawingArrow
-      ? items.filter((i): i is Shape => isShape(i) && !isSection(i))
-      : items.filter(
-          (i): i is Shape => isShape(i) && !isSection(i) && i.id !== editingId && (i.id === hovered || (selectedIds.length === 1 && selectedIds[0] === i.id))
-        )
+    : items.filter(
+        (i): i is Shape =>
+          canJoin(i) && (drawingArrow || (i.id !== editingId && (i.id === hovered || (selectedIds.length === 1 && selectedIds[0] === i.id))))
+      )
 
   return (
     <div

@@ -4,6 +4,7 @@ import type { OpenedBoard } from '@shared/types'
 import { addTab, isUntouched, moveTab, neighbourTab, nextTabName, removeTab, renameTab, tabIndex } from '@/board/doc'
 import { flushSave } from '@/board/saver'
 import { useBoard } from '@/board/store'
+import { count } from '@/lib/format'
 import { attempt, useApp } from './store'
 
 // ---------- boards ----------
@@ -89,7 +90,7 @@ export function deleteTab(id: string): void {
   if (!tab || doc.tabs.length <= 1) return
   if (!isUntouched(tab)) {
     const n = tab.items.length
-    const what = n ? ` and the ${n} item${n === 1 ? '' : 's'} on it` : ''
+    const what = n ? ` and the ${count(n, 'item')} on it` : ''
     if (!confirm(`Delete the tab “${tab.name}”${what}?\n\nYou can undo this with ⌘Z.`)) return
   }
   commit(removeTab(doc, id), id === tabId ? neighbourTab(doc, id) : tabId)

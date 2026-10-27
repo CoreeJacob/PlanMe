@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { ArrowItem, Item, Shape } from '@shared/types'
-import { arrowPoints, arrowsAttached, boxOf, crossesBox, detach, halfway, lookupIn, nearestPin, pinSide, pinsOf, sideFacing } from './arrows'
+import { sideFacing } from '@/lib/geometry'
+import { arrowPoints, arrowsAttached, boxOf, crossesBox, detach, halfway, lookupIn, nearestPin, pinSide, pinsOf } from './arrows'
 import { copiesOf, moved, newArrow, newItem } from './items'
 
 const box = (id: string, x: number, y: number, w = 100, h = 100): Shape => newItem('box', id, { x, y, w, h })

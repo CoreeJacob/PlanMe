@@ -96,7 +96,6 @@ export interface ArrowItem {
 export type Shape = NoteItem | TextItem | BoxItem | SectionItem
 /** Anything placed on a tab. Later phases add more kinds (to-do lists, images…). */
 export type Item = Shape | ArrowItem
-export type ItemType = Item['type']
 export type ShapeType = Shape['type']
 
 export interface Tab {

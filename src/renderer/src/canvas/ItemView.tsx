@@ -1,12 +1,12 @@
 // One item on the canvas, drawn in board units (the canvas scales the whole board at once).
 
 import { memo, useLayoutEffect, useRef } from 'react'
-import type { BoxItem, Item, Shape } from '@shared/types'
-import { cylinderCap, SLANT } from '@/board/arrows'
+import type { Item, Shape } from '@shared/types'
 import { updateItems } from '@/board/items'
 import { cleanHtml } from '@/board/richtext'
 import { useBoard } from '@/board/store'
 import { editText, finishEditing } from './actions'
+import { Outline } from './Outline'
 
 /** The largest text size for a note or box: bigger items get bigger words. */
 const maxFontSize = (item: Shape): number => Math.min(item.w, item.h) * (item.type === 'note' ? 0.16 : 0.18)
@@ -37,34 +37,6 @@ function itemClasses(item: Shape): string {
   if (item.type === 'box') return `shape-${item.shape} fill-${item.fill} border-${item.border}`
   if (item.type === 'section') return `section-${item.color}`
   return `ink-${item.color}`
-}
-
-const STROKE = 2
-
-/** A box's outline, drawn to its size so the line stays the same thickness however big it is. */
-function Outline({ shape, w, h }: { shape: BoxItem['shape']; w: number; h: number }) {
-  const i = STROKE / 2
-  let body: React.ReactNode
-  if (shape === 'oval') body = <ellipse cx={w / 2} cy={h / 2} rx={w / 2 - i} ry={h / 2 - i} />
-  else if (shape === 'diamond') body = <polygon points={`${w / 2},${i} ${w - i},${h / 2} ${w / 2},${h - i} ${i},${h / 2}`} />
-  else if (shape === 'parallelogram') {
-    const slant = w * SLANT
-    body = <polygon points={`${slant},${i} ${w - i},${i} ${w - slant},${h - i} ${i},${h - i}`} />
-  } else if (shape === 'cylinder') {
-    const rx = w / 2 - i
-    const ry = cylinderCap(w, h)
-    body = (
-      <>
-        <path d={`M${i},${ry} A${rx},${ry} 0 0 1 ${w - i},${ry} V${h - ry} A${rx},${ry} 0 0 1 ${i},${h - ry} Z`} />
-        <path className="outline-rim" d={`M${i},${ry} A${rx},${ry} 0 0 0 ${w - i},${ry}`} />
-      </>
-    )
-  } else body = <rect x={i} y={i} width={w - STROKE} height={h - STROKE} rx={shape === 'rounded' ? Math.min(14, w / 4, h / 4) : 0} />
-  return (
-    <svg className="outline" width={w} height={h} aria-hidden>
-      {body}
-    </svg>
-  )
 }
 
 export const ItemView = memo(function ItemView({ item, editing }: { item: Shape; editing: boolean }) {

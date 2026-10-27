@@ -39,6 +39,13 @@ export const tipOf = (el: string): string => `((e => e ? e.getAttribute('title')
 export const menuItem = (label: string): string =>
   `[...document.querySelectorAll('.menu-item')].find(b => b.querySelector('.menu-label').textContent.trim() === ${JSON.stringify(label)})`
 export const tab = (name: string): string => `[...document.querySelectorAll('.tab')].find(t => t.dataset.name === ${JSON.stringify(name)})`
+/** A button on the floating toolbar, by the start of its hover text. */
+export const toolbarButton = (tip: string): string => byTip('.item-toolbar button', tip)
+/** A choice in an open colour or shape picker, by its name. */
+export const pickerChoice = (label: string): string =>
+  `[...document.querySelectorAll('.swatch-popover button')].find(b => (b.title || b.dataset.tip || '').startsWith(${JSON.stringify(label)}))`
+/** True if a drawn point is (within half a pixel) at x, y on the board. */
+export const near = (p: [number, number] | undefined, x: number, y: number): boolean => !!p && Math.abs(p[0] - x) < 0.5 && Math.abs(p[1] - y) < 0.5
 export const boardCard = (name: string): string =>
   `[...document.querySelectorAll('.board-card')].find(c => c.querySelector('.board-name').textContent === ${JSON.stringify(name)})`
 
@@ -252,6 +259,11 @@ export class App {
     await this.settle()
   }
 
+  /** Drags from one point to another, by way of the middle. */
+  dragBetween(a: Point, b: Point, options: { button?: 'left' | 'middle'; modifiers?: number } = {}): Promise<void> {
+    return this.drag([a, [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], b], options)
+  }
+
   /** Presses at the first point, moves through the others and lets go at the last. */
   async drag(points: Point[], { button = 'left', modifiers = 0 }: { button?: 'left' | 'middle'; modifiers?: number } = {}): Promise<void> {
     const buttons = button === 'left' ? 1 : 4
@@ -424,9 +436,7 @@ export class App {
   async drawArrow(from: [number, number], to: [number, number]): Promise<string> {
     const before = new Set((await this.arrows()).map((a) => a.id))
     await this.tool('a')
-    const a = await this.screenOf(...from)
-    const b = await this.screenOf(...to)
-    await this.drag([a, [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], b])
+    await this.dragBetween(await this.screenOf(...from), await this.screenOf(...to))
     return (await this.arrows()).find((x) => !before.has(x.id))?.id ?? ''
   }
 
@@ -478,6 +488,31 @@ export class App {
   async type(text: string): Promise<void> {
     await this.js(`document.execCommand('insertText', false, ${JSON.stringify(text)})`)
     await this.settle()
+  }
+
+  /** True while words are being typed in an item. */
+  isEditing(): Promise<boolean> {
+    return this.js(`document.activeElement?.classList.contains('item-editor') ?? false`)
+  }
+
+  /** Waits until words can be typed in an item, and says whether they can. */
+  untilEditing(): Promise<boolean> {
+    return this.until(() => this.isEditing())
+  }
+
+  /** Adds a note centred on a board point (by double-clicking there), types `text`, and returns its id. */
+  async noteAt(x: number, y: number, text: string): Promise<string> {
+    await this.doubleClickAt(await this.screenOf(x, y))
+    await this.untilEditing()
+    if (text) await this.type(text)
+    await this.key('Escape', 'Escape')
+    return (await this.lastItem()).id
+  }
+
+  /** Clicks the middle of an arrow's first stretch of line (with Shift etc. if given). */
+  async clickArrow(id: string, modifiers = 0): Promise<void> {
+    const [a, b] = (await this.arrow(id)).points
+    await this.clickAt(...(await this.screenOf((a[0] + b[0]) / 2, (a[1] + b[1]) / 2)), 'left', modifiers)
   }
 
   /** Picks a tool by its key. */

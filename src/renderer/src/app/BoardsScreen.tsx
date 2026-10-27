@@ -1,6 +1,7 @@
 // The Boards screen: every board in the boards folder, newest first.
 
 import { useEffect } from 'react'
+import { count } from '@/lib/format'
 import { chooseRoot, newBoard, openBoard, refreshBoards, renameBoard, trashBoard } from './actions'
 import { useContextMenu } from './ContextMenu'
 import { Icon } from './Icon'
@@ -10,9 +11,9 @@ import { useApp } from './store'
 function whenEdited(ms: number): string {
   const minutes = Math.round((Date.now() - ms) / 60000)
   if (minutes < 1) return 'just now'
-  if (minutes < 60) return `${minutes} minute${minutes === 1 ? '' : 's'} ago`
+  if (minutes < 60) return `${count(minutes, 'minute')} ago`
   const hours = Math.round(minutes / 60)
-  if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`
+  if (hours < 24) return `${count(hours, 'hour')} ago`
   if (hours < 48) return 'yesterday'
   return new Date(ms).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
 }
@@ -60,7 +61,7 @@ export function BoardsScreen() {
             >
               <span className="board-name">{b.name}</span>
               <span className="board-meta muted">
-                {b.tabs} tab{b.tabs === 1 ? '' : 's'} · edited {whenEdited(b.modified)}
+                {count(b.tabs, 'tab')} · edited {whenEdited(b.modified)}
               </span>
             </button>
           ))}

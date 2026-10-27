@@ -2,6 +2,7 @@
 // one (and every item it doesn't change) untouched.
 
 import type { ArrowEnd, ArrowItem, BoardDoc, BoxItem, BoxShape, Item, NoteItem, Rect, SectionItem, Shape, ShapeType, TextItem } from '@shared/types'
+import { centre, sideFacing, type Point } from '@/lib/geometry'
 
 /** Replaces one tab's items. Returns `doc` itself if they didn't change. */
 export function withItems(doc: BoardDoc, tabId: string, change: (items: Item[]) => Item[]): BoardDoc {
@@ -57,19 +58,16 @@ export function moveItems(doc: BoardDoc, tabId: string, ids: readonly string[], 
   return updateItems(doc, tabId, ids, (i) => moved(i, dx, dy))
 }
 
-/** Moves items to the top of the pile (drawn last), keeping their order among themselves. */
-export function bringToFront(doc: BoardDoc, tabId: string, ids: readonly string[]): BoardDoc {
+/**
+ * Moves items to the top of the pile (drawn last) or the bottom, keeping their order among
+ * themselves.
+ */
+export function restack(doc: BoardDoc, tabId: string, ids: readonly string[], to: 'front' | 'back'): BoardDoc {
   const which = new Set(ids)
   return withItems(doc, tabId, (items) => {
-    const next = [...items.filter((i) => !which.has(i.id)), ...items.filter((i) => which.has(i.id))]
-    return next.every((i, k) => i === items[k]) ? items : next
-  })
-}
-
-export function sendToBack(doc: BoardDoc, tabId: string, ids: readonly string[]): BoardDoc {
-  const which = new Set(ids)
-  return withItems(doc, tabId, (items) => {
-    const next = [...items.filter((i) => which.has(i.id)), ...items.filter((i) => !which.has(i.id))]
+    const moving = items.filter((i) => which.has(i.id))
+    const staying = items.filter((i) => !which.has(i.id))
+    const next = to === 'front' ? [...staying, ...moving] : [...moving, ...staying]
     return next.every((i, k) => i === items[k]) ? items : next
   })
 }
@@ -121,29 +119,6 @@ export function newItemAt(type: ShapeType, id: string, x: number, y: number, sha
   return newItem(type, id, { x: Math.round(x - w / 2), y: Math.round(y - h / 2), w, h }, shape)
 }
 
-/** The smallest rectangle around all the given rectangles, or null if there are none. */
-export function boundsOf(rects: readonly Rect[]): Rect | null {
-  if (!rects.length) return null
-  let left = Infinity
-  let top = Infinity
-  let right = -Infinity
-  let bottom = -Infinity
-  for (const r of rects) {
-    left = Math.min(left, r.x)
-    top = Math.min(top, r.y)
-    right = Math.max(right, r.x + r.w)
-    bottom = Math.max(bottom, r.y + r.h)
-  }
-  return { x: left, y: top, w: right - left, h: bottom - top }
-}
-
-export const overlaps = (a: Rect, b: Rect): boolean => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h
-
-/** A rectangle from two corners, in any order. */
-export function rectFrom(ax: number, ay: number, bx: number, by: number): Rect {
-  return { x: Math.min(ax, bx), y: Math.min(ay, by), w: Math.abs(bx - ax), h: Math.abs(by - ay) }
-}
-
 /** Which sides a resize handle moves, e.g. 'nw' moves the top and left. */
 export type Handle = 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w' | 'nw'
 
@@ -184,19 +159,17 @@ const LINE_UP = 40
  * Where a new item the size of `source` goes when an arrow from it is dropped at `at`: just past
  * that point, facing back towards `source`, and lined up with it when it's nearly in line.
  */
-export function besideRect(source: Rect, at: { x: number; y: number }): Rect {
+export function besideRect(source: Rect, at: Point): Rect {
   const { w, h } = source
-  const cx = source.x + w / 2
-  const cy = source.y + h / 2
-  const dx = at.x - cx
-  const dy = at.y - cy
-  if (Math.abs(dx) * h >= Math.abs(dy) * w) {
+  const c = centre(source)
+  const side = sideFacing(source, at)
+  if (side === 'left' || side === 'right') {
     // Off to one side: the new item's near side meets the drop point.
-    const y = Math.abs(at.y - cy) <= LINE_UP ? source.y : at.y - h / 2
-    return { x: dx >= 0 ? at.x : at.x - w, y, w, h }
+    const y = Math.abs(at.y - c.y) <= LINE_UP ? source.y : at.y - h / 2
+    return { x: side === 'right' ? at.x : at.x - w, y, w, h }
   }
-  const x = Math.abs(at.x - cx) <= LINE_UP ? source.x : at.x - w / 2
-  return { x, y: dy >= 0 ? at.y : at.y - h, w, h }
+  const x = Math.abs(at.x - c.x) <= LINE_UP ? source.x : at.x - w / 2
+  return { x, y: side === 'bottom' ? at.y : at.y - h, w, h }
 }
 
 /** A new, empty item that looks like `source` (same kind, colours, outline), filling `rect`. */

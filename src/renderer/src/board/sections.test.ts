@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import type { ArrowItem, Item } from '@shared/types'
 import { lookupIn, pinsOf } from './arrows'
 import { newArrow, newItem } from './items'
-import { contentsOf, drawingOrder, within, withContents } from './sections'
+import { within } from '@/lib/geometry'
+import { contentsOf, drawingOrder, withContents } from './sections'
 
 const section = newItem('section', 's', { x: 0, y: 0, w: 600, h: 400 })
 const inside = newItem('note', 'in', { x: 50, y: 50, w: 200, h: 200 })

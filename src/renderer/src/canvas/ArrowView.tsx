@@ -2,8 +2,9 @@
 
 import { memo, useRef } from 'react'
 import type { ArrowItem, Shape } from '@shared/types'
-import { arrowPoints, halfway, type Point } from '@/board/arrows'
+import { arrowPoints, halfway } from '@/board/arrows'
 import { cleanHtml } from '@/board/richtext'
+import type { Point } from '@/lib/geometry'
 import { Editor } from './ItemView'
 
 /** How much wider than the line the area that can be clicked is, so thin arrows are easy to pick. */

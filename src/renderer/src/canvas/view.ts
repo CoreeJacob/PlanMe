@@ -2,8 +2,8 @@
 // plus the zoom; `size` is the canvas's width and height on screen.
 
 import type { View } from '@shared/types'
+import type { Point } from '@/lib/geometry'
 
-export type Point = { x: number; y: number }
 export type Size = { width: number; height: number }
 
 export const MIN_ZOOM = 0.1

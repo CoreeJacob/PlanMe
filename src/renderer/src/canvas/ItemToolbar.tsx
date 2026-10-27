@@ -1,40 +1,61 @@
 // The small toolbar that floats above the selection: colours, bold/italic/underline,
 // front/back and delete.
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import type { ArrowItem, Item, View } from '@shared/types'
-import { BORDER_COLORS, FILL_COLORS, INK_COLORS, NOTE_COLORS, type ColorChoice } from '@/app/colors'
 import { Icon } from '@/app/Icon'
 import { SHAPE_CHOICES, shapeChoice } from '@/app/shapes'
 import { boxOf, isArrow, type Lookup } from '@/board/arrows'
-import { boundsOf } from '@/board/items'
 import type { TextStyle } from '@/board/richtext'
+import { boundsOf } from '@/lib/geometry'
 import { allStyled, bringSelectedToFront, deleteSelected, sendSelectedToBack, setOnSelected, toggleStyleOnSelected } from './actions'
+import { palettesFor } from './looks'
 import { toScreen, type Size } from './view'
 
-type ColorKey = 'color' | 'fill' | 'border'
-
-interface Palette {
-  key: ColorKey
+/** A toolbar button that opens a grid of choices (colours, or outlines) below it. */
+function Picker({
+  label,
+  face,
+  choices,
+  current,
+  open,
+  onOpen,
+  onPick,
+  className = ''
+}: {
   label: string
-  choices: ColorChoice[]
-  /** The class that shows a colour, e.g. 'note-' + 'yellow'. */
-  swatch: (name: string) => string
+  face: ReactNode
+  choices: Array<{ value: string; label: string; face: ReactNode }>
   current: string
-}
-
-/** The colour choices that make sense for what's selected (only when it's all one kind). */
-function palettesFor(items: Item[]): Palette[] {
-  const first = items[0]
-  if (!first || !items.every((i) => i.type === first.type)) return []
-  if (first.type === 'note') return [{ key: 'color', label: 'Colour — the note’s colour', choices: NOTE_COLORS, swatch: (n) => `note-${n}`, current: first.color }]
-  if (first.type === 'text') return [{ key: 'color', label: 'Text colour — the colour of the words', choices: INK_COLORS, swatch: (n) => `swatch-ink ink-${n}`, current: first.color }]
-  if (first.type === 'arrow') return [{ key: 'color', label: 'Colour — the arrow’s colour', choices: INK_COLORS, swatch: (n) => `swatch-ink ink-${n}`, current: first.color }]
-  if (first.type === 'section') return [{ key: 'color', label: 'Colour — the section’s tint', choices: NOTE_COLORS, swatch: (n) => `note-${n}`, current: first.color }]
-  return [
-    { key: 'fill', label: 'Fill — the box’s background colour', choices: FILL_COLORS, swatch: (n) => `swatch-fill fill-${n}`, current: first.fill },
-    { key: 'border', label: 'Border — the colour of the box’s edge', choices: BORDER_COLORS, swatch: (n) => `swatch-ink ink-${n}${n === 'none' ? ' none' : ''}`, current: first.border }
-  ]
+  open: boolean
+  onOpen: (open: boolean) => void
+  onPick: (value: string) => void
+  className?: string
+}) {
+  return (
+    <div className="toolbar-group">
+      <button className={`toolbar-btn ${open ? 'active' : ''}`} title={label} onClick={() => onOpen(!open)}>
+        {face}
+      </button>
+      {open && (
+        <div className={`swatch-popover ${className}`} role="menu" aria-label={label.split(' — ')[0]}>
+          {choices.map((c) => (
+            <button
+              key={c.value}
+              className={`swatch-btn ${c.value === current ? 'current' : ''}`}
+              title={c.label}
+              onClick={() => {
+                onPick(c.value)
+                onOpen(false)
+              }}
+            >
+              {c.face}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
 }
 
 const STYLES: Array<{ style: TextStyle; label: string; command: string; key: string }> = [
@@ -88,7 +109,8 @@ const GAP = 10
 const HEIGHT = 40
 
 export function ItemToolbar({ view, size, items, lookup, editing }: { view: View; size: Size; items: Item[]; lookup: Lookup; editing: boolean }) {
-  const [open, setOpen] = useState<ColorKey | 'shape' | null>(null)
+  const [open, setOpen] = useState<string | null>(null)
+  const opener = (name: string) => (on: boolean) => setOpen(on ? name : null)
   const ids = items.map((i) => i.id).join()
   useEffect(() => setOpen(null), [ids])
 
@@ -113,52 +135,28 @@ export function ItemToolbar({ view, size, items, lookup, editing }: { view: View
       onPointerDown={(e) => e.stopPropagation()}
     >
       {palettes.map((p) => (
-        <div key={p.key} className="toolbar-group">
-          <button className={`toolbar-btn ${open === p.key ? 'active' : ''}`} title={p.label} onClick={() => setOpen(open === p.key ? null : p.key)}>
-            <span className={`swatch ${p.swatch(p.current)}`} />
-          </button>
-          {open === p.key && (
-            <div className="swatch-popover" role="menu" aria-label={p.label.split(' — ')[0]}>
-              {p.choices.map((c) => (
-                <button
-                  key={c.name}
-                  className={`swatch-btn ${c.name === p.current ? 'current' : ''}`}
-                  title={c.label}
-                  onClick={() => {
-                    setOnSelected(p.key, c.name)
-                    setOpen(null)
-                  }}
-                >
-                  <span className={`swatch ${p.swatch(c.name)}`} />
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        <Picker
+          key={p.key}
+          label={p.label}
+          face={<span className={`swatch ${p.swatch(p.current)}`} />}
+          choices={p.choices.map((c) => ({ value: c.name, label: c.label, face: <span className={`swatch ${p.swatch(c.name)}`} /> }))}
+          current={p.current}
+          open={open === p.key}
+          onOpen={opener(p.key)}
+          onPick={(value) => setOnSelected(p.key, value)}
+        />
       ))}
       {box && box.type === 'box' && (
-        <div className="toolbar-group">
-          <button className={`toolbar-btn ${open === 'shape' ? 'active' : ''}`} title="Shape — change the outline, keeping the words and colours" onClick={() => setOpen(open === 'shape' ? null : 'shape')}>
-            <Icon name={shapeChoice(box.shape).icon} size={16} />
-          </button>
-          {open === 'shape' && (
-            <div className="swatch-popover shape-popover" role="menu" aria-label="Shape">
-              {SHAPE_CHOICES.map((c) => (
-                <button
-                  key={c.shape}
-                  className={`swatch-btn ${c.shape === box.shape ? 'current' : ''}`}
-                  title={c.label}
-                  onClick={() => {
-                    setOnSelected('shape', c.shape)
-                    setOpen(null)
-                  }}
-                >
-                  <Icon name={c.icon} size={18} />
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        <Picker
+          label="Shape — change the outline, keeping the words and colours"
+          face={<Icon name={shapeChoice(box.shape).icon} size={16} />}
+          choices={SHAPE_CHOICES.map((c) => ({ value: c.shape, label: c.label, face: <Icon name={c.icon} size={18} /> }))}
+          current={box.shape}
+          open={open === 'shape'}
+          onOpen={opener('shape')}
+          onPick={(value) => setOnSelected('shape', value)}
+          className="shape-popover"
+        />
       )}
       {arrow && isArrow(arrow) && <ArrowButtons arrow={arrow} />}
       {palettes.length > 0 && <span className="toolbar-sep" />}

@@ -1,12 +1,11 @@
 // What can be done to items on the tab showing: adding, typing, deleting, copying, colouring…
 // Shared by the keys, the menus, the floating toolbar and the right-click menu.
 
-import { DEFAULT_VIEW, type ArrowEnd, type BoxShape, type Item, type Rect, type Shape, type ShapeType } from '@shared/types'
+import type { ArrowEnd, BoardDoc, BoxShape, Item, Rect, Shape, ShapeType } from '@shared/types'
+import { upgradeItem } from '@shared/upgrade'
 import { arrowsAttached, boxOf, detach, isArrow, lookupIn } from '@/board/arrows'
 import {
   addItems,
-  boundsOf,
-  bringToFront,
   copiesOf,
   itemsOf,
   moveItems,
@@ -14,14 +13,16 @@ import {
   newItem,
   newItemAt,
   newLike,
-  overlaps,
   removeItems,
-  sendToBack,
+  restack,
   updateItems
 } from '@/board/items'
 import { cleanHtml, fromPlainText, isAllStyled, plainText, setWholeStyle, type TextStyle } from '@/board/richtext'
 import { withContents } from '@/board/sections'
 import { useBoard } from '@/board/store'
+import { count, plural } from '@/lib/format'
+import { boundsOf, overlaps } from '@/lib/geometry'
+import { currentItems, currentView } from './current'
 
 const newId = (): string => crypto.randomUUID()
 
@@ -29,7 +30,6 @@ const newId = (): string => crypto.randomUUID()
 export const viewport = { width: 0, height: 0 }
 
 const state = () => useBoard.getState()
-const currentItems = (): Item[] => itemsOf(state().doc, state().tabId)
 export const selectedItems = (): Item[] => {
   const ids = new Set(state().selected)
   return currentItems().filter((i) => ids.has(i.id))
@@ -37,33 +37,40 @@ export const selectedItems = (): Item[] => {
 
 /** The part of the board on screen, in board units. */
 function visibleArea(): Rect {
-  const { views, tabId } = state()
-  const view = views[tabId] ?? DEFAULT_VIEW
+  const view = currentView()
   const w = viewport.width / view.zoom
   const h = viewport.height / view.zoom
   return { x: view.x - w / 2, y: view.y - h / 2, w, h }
 }
 
+/** Changes the tab showing, as one undo step, then selects `select` if given. */
+function change(edit: (doc: BoardDoc, tabId: string) => BoardDoc, select?: string[]): void {
+  const { doc, tabId, commit } = state()
+  commit(edit(doc, tabId))
+  if (select) state().select(select)
+}
+
 // ---------- adding and typing ----------
+
+/** Adds items and starts typing in one of them. Adding and typing are one undo step. */
+function addAndType(added: Item[], typeIn: string): void {
+  const { beginGesture, preview, select, setEditing, tabId } = state()
+  beginGesture()
+  preview(addItems(state().doc, tabId, added))
+  select([typeIn])
+  setEditing(typeIn)
+}
 
 /** Adds an item (at a point, at its usual size, or filling a rectangle) and starts typing in it. */
 export function addItem(type: ShapeType, at: { x: number; y: number } | Rect, shape?: BoxShape): void {
   const id = newId()
-  const item = 'w' in at ? newItem(type, id, at, shape) : newItemAt(type, id, at.x, at.y, shape)
-  const { beginGesture, preview, select, setEditing, tabId } = state()
-  // Adding it and typing its words are one undo step.
-  beginGesture()
-  preview(addItems(state().doc, tabId, [item]))
-  select([id])
-  setEditing(id)
+  addAndType(['w' in at ? newItem(type, id, at, shape) : newItemAt(type, id, at.x, at.y, shape)], id)
 }
 
 /** Adds an arrow between two ends and selects it. */
 export function addArrow(from: ArrowEnd, to: ArrowEnd): void {
   const arrow = newArrow(newId(), from, to)
-  const { doc, tabId, commit, select } = state()
-  commit(addItems(doc, tabId, [arrow]))
-  select([arrow.id])
+  change((doc, tabId) => addItems(doc, tabId, [arrow]), [arrow.id])
 }
 
 /**
@@ -72,12 +79,7 @@ export function addArrow(from: ArrowEnd, to: ArrowEnd): void {
  */
 export function addConnected(source: Shape, from: ArrowEnd, rect: Rect): void {
   const item = newLike(source, newId(), rect)
-  const arrow = newArrow(newId(), from, { item: item.id, x: rect.x, y: rect.y })
-  const { beginGesture, preview, select, setEditing, tabId } = state()
-  beginGesture()
-  preview(addItems(state().doc, tabId, [item, arrow]))
-  select([item.id])
-  setEditing(item.id)
+  addAndType([item, newArrow(newId(), from, { item: item.id, x: rect.x, y: rect.y })], item.id)
 }
 
 /** Starts typing in an item (or an arrow's label). */
@@ -134,9 +136,9 @@ export async function deleteSelected(): Promise<void> {
     const n = contents.length
     const sections = selected.filter((id) => items.find((i) => i.id === id)?.type === 'section').length
     const choice = await window.api.ask({
-      message: `Delete everything in the ${sections === 1 ? 'section' : 'sections'} too?`,
-      detail: `There ${n === 1 ? 'is 1 thing' : `are ${n} things`} inside. If you keep them, they stay where they are.`,
-      buttons: ['Delete Everything', sections === 1 ? 'Just the Section' : 'Just the Sections', 'Cancel']
+      message: `Delete everything in the ${plural(sections, 'section')} too?`,
+      detail: `There ${plural(n, 'is', 'are')} ${count(n, 'thing')} inside. If you keep them, they stay where they are.`,
+      buttons: ['Delete Everything', `Just the ${plural(sections, 'Section')}`, 'Cancel']
     })
     if (choice === 2) return
     if (choice === 0) going = [...selected, ...contents]
@@ -147,9 +149,9 @@ export async function deleteSelected(): Promise<void> {
   if (arrows.length) {
     const n = arrows.length
     const choice = await window.api.ask({
-      message: n === 1 ? 'Delete the arrow joined to this too?' : `Delete the ${n} arrows joined to these too?`,
+      message: n === 1 ? 'Delete the arrow joined to this too?' : `Delete the ${count(n, 'arrow')} joined to these too?`,
       detail: 'If you keep them, their ends stay where they are, joined to nothing.',
-      buttons: [n === 1 ? 'Delete Arrow' : 'Delete Arrows', n === 1 ? 'Keep Arrow' : 'Keep Arrows', 'Cancel']
+      buttons: [`Delete ${plural(n, 'Arrow')}`, `Keep ${plural(n, 'Arrow')}`, 'Cancel']
     })
     if (choice === 2) return
     const attached = new Set(arrows.map((a) => a.id))
@@ -173,33 +175,31 @@ function selectionToCopy(): Item[] {
   const lookup = lookupIn(all)
   const ids = new Set(withContents(state().selected, all, lookup))
   const items = all.filter((i) => ids.has(i.id))
-  const outside = new Set(currentItems().map((i) => i.id).filter((id) => !ids.has(id)))
+  const outside = new Set(all.map((i) => i.id).filter((id) => !ids.has(id)))
   return items.map((i) => (isArrow(i) ? detach(i, outside, lookup) : i))
 }
 
+/** How far a duplicate (or a paste on the same tab) lands from the original. */
+const COPY_STEP = 24
+
 export function duplicateSelected(): void {
-  const copies = copiesOf(selectionToCopy(), 24, 24, newId)
-  if (!copies.length) return
-  const { doc, tabId, commit, select } = state()
-  commit(addItems(doc, tabId, copies))
-  select(copies.map((c) => c.id))
+  const copies = copiesOf(selectionToCopy(), COPY_STEP, COPY_STEP, newId)
+  if (copies.length) change((doc, tabId) => addItems(doc, tabId, copies), copies.map((c) => c.id))
 }
 
 export function nudgeSelected(dx: number, dy: number): void {
-  const { doc, tabId, selected, commit } = state()
-  const items = itemsOf(doc, tabId)
+  const items = currentItems()
   // A section takes what's inside it along.
-  commit(moveItems(doc, tabId, withContents(selected, items, lookupIn(items)), dx, dy))
+  const ids = withContents(state().selected, items, lookupIn(items))
+  change((doc, tabId) => moveItems(doc, tabId, ids, dx, dy))
 }
 
 export function bringSelectedToFront(): void {
-  const { doc, tabId, selected, commit } = state()
-  commit(bringToFront(doc, tabId, selected))
+  change((doc, tabId) => restack(doc, tabId, state().selected, 'front'))
 }
 
 export function sendSelectedToBack(): void {
-  const { doc, tabId, selected, commit } = state()
-  commit(sendToBack(doc, tabId, selected))
+  change((doc, tabId) => restack(doc, tabId, state().selected, 'back'))
 }
 
 // ---------- looks ----------
@@ -209,8 +209,7 @@ export type LookKey = 'color' | 'fill' | 'border' | 'shape' | 'route' | 'heads' 
 
 /** Sets a look (like a note's colour) on every selected item that has it. */
 export function setOnSelected(key: LookKey, value: string | number | boolean): void {
-  const { doc, tabId, selected, commit } = state()
-  commit(updateItems(doc, tabId, selected, (i) => (key in i && (i as never)[key] !== value ? ({ ...i, [key]: value } as Item) : i)))
+  change((doc, tabId) => updateItems(doc, tabId, state().selected, (i) => (key in i && (i as never)[key] !== value ? ({ ...i, [key]: value } as Item) : i)))
 }
 
 /** True if every selected item's words are all in this style. */
@@ -222,11 +221,12 @@ export const allStyled = (style: TextStyle): boolean => {
 /** Bold, italic or underline for all the words of the selected items (on unless they all have it). */
 export function toggleStyleOnSelected(style: TextStyle): void {
   const on = !allStyled(style)
-  const { doc, tabId, selected, commit } = state()
-  commit(updateItems(doc, tabId, selected, (i) => {
-    const text = setWholeStyle(i.text, style, on)
-    return text === i.text ? i : { ...i, text }
-  }))
+  change((doc, tabId) =>
+    updateItems(doc, tabId, state().selected, (i) => {
+      const text = setWholeStyle(i.text, style, on)
+      return text === i.text ? i : { ...i, text }
+    })
+  )
 }
 
 // ---------- copy and paste ----------
@@ -255,7 +255,9 @@ export function copySelected(data: DataTransfer): boolean {
 export function paste(data: DataTransfer): boolean {
   const raw = data.getData(CLIPBOARD_TYPE)
   if (raw) {
-    pasteItems(JSON.parse(raw) as Copied, raw)
+    const copied = JSON.parse(raw) as Copied
+    // It may have been copied before an update.
+    pasteItems({ ...copied, items: copied.items.map(upgradeItem) }, raw)
     return true
   }
   const text = data.getData('text/plain')
@@ -263,9 +265,7 @@ export function paste(data: DataTransfer): boolean {
   const area = visibleArea()
   const id = newId()
   const item = { ...newItemAt('text', id, area.x + area.w / 2, area.y + area.h / 2), text: fromPlainText(text.trim()) }
-  const { doc, tabId, commit, select } = state()
-  commit(addItems(doc, tabId, [item]))
-  select([id])
+  change((doc, tabId) => addItems(doc, tabId, [item]), [id])
   return true
 }
 
@@ -279,14 +279,12 @@ function pasteItems(copied: Copied, key: string): void {
   if (copied.tabId === state().tabId && overlaps(bounds, area)) {
     // Same tab and the originals are in view: each paste lands a step down and to the right.
     pastes = { key, count: pastes.key === key ? pastes.count + 1 : 1 }
-    dx = dy = 24 * pastes.count
+    dx = dy = COPY_STEP * pastes.count
   } else {
     // Elsewhere: paste in the middle of the screen.
     dx = Math.round(area.x + area.w / 2 - (bounds.x + bounds.w / 2))
     dy = Math.round(area.y + area.h / 2 - (bounds.y + bounds.h / 2))
   }
   const copies = copiesOf(copied.items, dx, dy, newId)
-  const { doc, tabId, commit, select } = state()
-  commit(addItems(doc, tabId, copies))
-  select(copies.map((c) => c.id))
+  change((doc, tabId) => addItems(doc, tabId, copies), copies.map((c) => c.id))
 }

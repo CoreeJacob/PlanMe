@@ -3,9 +3,11 @@
 // new-item outlines, and the arrow being drawn.
 
 import type { Item, Rect, Shape, View } from '@shared/types'
-import { arrowPoints, isArrow, pinOut, pinPoint, pinsOf, type Lookup, type Pin, type Point } from '@/board/arrows'
-import { boundsOf, type Handle } from '@/board/items'
+import { arrowPoints, isArrow, pinsOf, type Lookup, type Pin } from '@/board/arrows'
+import type { Handle } from '@/board/items'
+import { boundsOf, type Point } from '@/lib/geometry'
 import type { Guide } from './snap'
+import { dotOnScreen } from './targets'
 import { toScreen, type Size } from './view'
 
 const ALL_HANDLES: Handle[] = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w']
@@ -13,17 +15,6 @@ const ALL_HANDLES: Handle[] = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w']
 const TEXT_HANDLES: Handle[] = ['nw', 'ne', 'e', 'se', 'sw', 'w']
 
 export const handlesFor = (item: Shape): Handle[] => (item.type === 'text' ? TEXT_HANDLES : ALL_HANDLES)
-
-/** How far outside an item's edge its dots sit, in screen pixels (clear of the resize handles). */
-export const DOT_OFFSET = 14
-
-/** Where a dot is drawn on screen: just outside the edge, straight out from it (diagonally at corners). */
-export function dotOnScreen(view: View, size: Size, item: Shape, pin: Pin): Point {
-  const p = toScreen(view, size, pinPoint(item, pin))
-  const out = pinOut(pin)
-  const length = Math.hypot(out.x, out.y) || 1
-  return { x: p.x + (out.x / length) * DOT_OFFSET, y: p.y + (out.y / length) * DOT_OFFSET }
-}
 
 /** A dot an arrow is about to be joined to. */
 export interface ActiveDot {

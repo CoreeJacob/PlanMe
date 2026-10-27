@@ -14,8 +14,28 @@
   --canvas: #f7f7f9;
   --grid-dot: rgba(27, 29, 36, 0.16);
   --shadow: 0 6px 24px rgba(20, 22, 30, 0.14), 0 1px 3px rgba(20, 22, 30, 0.1);
-  --radius: 8px;
   --font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif;
+  /* Sticky note colours (the same in light and dark mode, like paper). */
+  --note-yellow: #ffe57a;
+  --note-orange: #ffc285;
+  --note-pink: #ffb0cb;
+  --note-purple: #d6c2ff;
+  --note-blue: #ace0ff;
+  --note-teal: #a3ecdc;
+  --note-green: #c8ef9f;
+  --note-grey: #e4e6eb;
+  --note-ink: #1f2128;
+  /* Text and border colours. */
+  --ink-default: var(--text);
+  --ink-grey: #868e9c;
+  --ink-red: #e03e3e;
+  --ink-orange: #e8780c;
+  --ink-green: #2f9e44;
+  --ink-blue: #1c7ed6;
+  --ink-purple: #7950f2;
+  /* A box's plain fill. */
+  --box-plain: #ffffff;
+  --select: var(--accent);
   color-scheme: light;
 }
 
@@ -35,6 +55,13 @@
     --canvas: #17181d;
     --grid-dot: rgba(231, 233, 238, 0.14);
     --shadow: 0 8px 28px rgba(0, 0, 0, 0.45), 0 1px 3px rgba(0, 0, 0, 0.4);
+    --ink-grey: #9aa1ae;
+    --ink-red: #ff6b6b;
+    --ink-orange: #ffa94d;
+    --ink-green: #69db7c;
+    --ink-blue: #4dabf7;
+    --ink-purple: #b197fc;
+    --box-plain: #262a33;
     color-scheme: dark;
   }
 }
@@ -691,42 +718,6 @@ button {
 
 /* ---------- items on the board ---------- */
 
-:root {
-  /* Sticky note colours (the same in light and dark mode, like paper). */
-  --note-yellow: #ffe57a;
-  --note-orange: #ffc285;
-  --note-pink: #ffb0cb;
-  --note-purple: #d6c2ff;
-  --note-blue: #ace0ff;
-  --note-teal: #a3ecdc;
-  --note-green: #c8ef9f;
-  --note-grey: #e4e6eb;
-  --note-ink: #1f2128;
-  /* Text and border colours. */
-  --ink-default: var(--text);
-  --ink-grey: #868e9c;
-  --ink-red: #e03e3e;
-  --ink-orange: #e8780c;
-  --ink-green: #2f9e44;
-  --ink-blue: #1c7ed6;
-  --ink-purple: #7950f2;
-  /* A box's plain fill. */
-  --box-plain: #ffffff;
-  --select: var(--accent);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --ink-grey: #9aa1ae;
-    --ink-red: #ff6b6b;
-    --ink-orange: #ffa94d;
-    --ink-green: #69db7c;
-    --ink-blue: #4dabf7;
-    --ink-purple: #b197fc;
-    --box-plain: #262a33;
-  }
-}
-
 .item {
   position: absolute;
   user-select: none;
@@ -837,8 +828,11 @@ button {
 
 /* ---------- sections ---------- */
 
-/* Inside a section is like empty board: only its title and edges take clicks. */
+/* Inside a section is like empty board: only its title and edges take clicks. Its tint comes
+   from its colour class below. */
 .item-section {
+  --section-fill: color-mix(in srgb, var(--section-tint) 8%, transparent);
+  --section-edge: color-mix(in srgb, var(--section-tint) 55%, transparent);
   pointer-events: none;
   border: calc(1.5px / var(--zoom)) solid var(--section-edge);
   border-radius: 12px;
@@ -852,10 +846,6 @@ button {
 .section-blue { --section-tint: #339af0; }
 .section-teal { --section-tint: #20c997; }
 .section-green { --section-tint: #51cf66; }
-.item-section {
-  --section-fill: color-mix(in srgb, var(--section-tint) 8%, transparent);
-  --section-edge: color-mix(in srgb, var(--section-tint) 55%, transparent);
-}
 .section-title {
   position: absolute;
   left: 0;

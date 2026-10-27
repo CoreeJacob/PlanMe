@@ -1,17 +1,4 @@
-import { byTip, check, menuItem, META, SHIFT, tab, tipOf, test, type App } from './support/app'
-
-const editing = (app: App) => app.js<boolean>(`document.activeElement?.classList.contains('item-editor') ?? false`)
-const toolbarButton = (tip: string) => byTip('.item-toolbar button', tip)
-const swatch = (label: string) => `[...document.querySelectorAll('.swatch-popover button')].find(b => (b.title || b.dataset.tip) === ${JSON.stringify(label)})`
-
-/** Adds a note centred on a board point by double-clicking there, types in it, and finishes. Returns its id. */
-async function noteAt(app: App, x: number, y: number, text: string): Promise<string> {
-  await app.doubleClickAt(await app.screenOf(x, y))
-  await app.untilJs(`document.activeElement?.classList.contains('item-editor')`)
-  if (text) await app.type(text)
-  await app.key('Escape', 'Escape')
-  return (await app.lastItem()).id
-}
+import { check, menuItem, META, pickerChoice, SHIFT, tab, tipOf, toolbarButton, test } from './support/app'
 
 test('place notes, text and boxes, type in them, and they are saved', async ({ app }) => {
   await app.newBoard('Game')
@@ -19,13 +6,13 @@ test('place notes, text and boxes, type in them, and they are saved', async ({ a
   // Note tool, click: a note of the usual size, ready to type in.
   await app.tool('n')
   await app.clickAt(...(await app.screenOf(0, 0)))
-  await check('a note appears, ready to type in', await app.until(() => editing(app)))
+  await check('a note appears, ready to type in', await app.untilEditing())
   await app.type('Boss fight')
   await app.key('Escape', 'Escape')
   let note = await app.lastItem()
   await check('the note has the words', note.type === 'note' && note.text === 'Boss fight', note)
   await check('it is the usual size, centred where clicked', note.w === 200 && note.h === 200 && Math.abs(note.x + 100) <= 1 && Math.abs(note.y + 100) <= 1, note)
-  await check('Escape finishes typing and leaves it selected', !(await editing(app)) && (await app.selectedIds()).join() === note.id)
+  await check('Escape finishes typing and leaves it selected', !(await app.isEditing()) && (await app.selectedIds()).join() === note.id)
   await check('back on the Select tool', (await app.js<string>(tipOf(`document.querySelector('.tool-btn.active')`))).startsWith('Select'))
 
   await app.undo()
@@ -34,7 +21,7 @@ test('place notes, text and boxes, type in them, and they are saved', async ({ a
   await check('redo brings both back', (await app.lastItem())?.text === 'Boss fight')
 
   // Double-click empty space for a note.
-  await noteAt(app, 400, 0, 'Second')
+  await app.noteAt(400, 0, 'Second')
   await check('double-click on empty space adds a note', (await app.items()).map((i) => i.text).join() === 'Boss fight,Second')
 
   // Text tool, dragged: the width follows the drag.
@@ -63,7 +50,7 @@ test('place notes, text and boxes, type in them, and they are saved', async ({ a
   // Double-click an item to change its words.
   note = (await app.items())[0]
   await app.doubleClickAt(await app.itemCentre(note.id))
-  await check('double-click an item to type in it', await app.until(() => editing(app)))
+  await check('double-click an item to type in it', await app.untilEditing())
   await app.js(`document.execCommand('selectAll')`)
   await app.type('Final boss')
   await app.key('Escape', 'Escape')
@@ -78,8 +65,8 @@ test('place notes, text and boxes, type in them, and they are saved', async ({ a
 
 test('select, move (lining up), resize, nudge and delete', async ({ app }) => {
   await app.newBoard('Game')
-  const a = await noteAt(app, 0, 0, 'A')
-  const b = await noteAt(app, 350, 60, 'B')
+  const a = await app.noteAt(0, 0, 'A')
+  const b = await app.noteAt(350, 60, 'B')
   const A = await app.item(a)
   let B = await app.item(b)
 
@@ -148,13 +135,13 @@ test('select, move (lining up), resize, nudge and delete', async ({ app }) => {
 
 test('colours, bold, front and back, duplicate, copy and paste', async ({ app }) => {
   await app.newBoard('Game')
-  const a = await noteAt(app, 0, 0, 'Plan')
+  const a = await app.noteAt(0, 0, 'Plan')
   await check('toolbar shows for the selected note', await app.js(`!!document.querySelector('.item-toolbar')`))
 
   // Note colour from the toolbar…
   await app.click(toolbarButton('Colour'))
   await check('colour choices', (await app.js<number>(`document.querySelectorAll('.swatch-popover button').length`)) === 8)
-  await app.click(swatch('Pink'))
+  await app.click(pickerChoice('Pink'))
   await check('the note turns pink', (await app.item(a)).classes.includes('note-pink'), await app.item(a))
   // …and from the right-click menu.
   await app.rightClick(`document.querySelector('[data-item-id="${a}"]')`)
@@ -172,7 +159,7 @@ test('colours, bold, front and back, duplicate, copy and paste', async ({ app })
 
   // Bold for some of the words while typing.
   await app.doubleClickAt(await app.itemCentre(a))
-  await app.until(() => editing(app))
+  await app.untilEditing()
   await app.type(' ahead')
   // Select the word "ahead".
   await app.js(`(() => { const walker = document.createTreeWalker(document.activeElement, NodeFilter.SHOW_TEXT); let n
@@ -187,11 +174,11 @@ test('colours, bold, front and back, duplicate, copy and paste', async ({ app })
   await app.key('Escape', 'Escape')
   const box = (await app.lastItem()).id
   await app.click(toolbarButton('Fill'))
-  await app.click(swatch('Teal'))
+  await app.click(pickerChoice('Teal'))
   await app.click(toolbarButton('Border'))
-  await app.click(swatch('Red'))
+  await app.click(pickerChoice('Red'))
   await app.click(toolbarButton('Shape'))
-  await app.click(`[...document.querySelectorAll('.shape-popover button')].find(b => (b.title || b.dataset.tip) === 'Rounded')`)
+  await app.click(pickerChoice('Rounded'))
   const boxInfo = await app.item(box)
   await check('box fill, border and rounded corners', ['fill-teal', 'border-red', 'shape-rounded'].every((c) => boxInfo.classes.includes(c)), boxInfo)
 
@@ -202,7 +189,7 @@ test('colours, bold, front and back, duplicate, copy and paste', async ({ app })
   await app.key('Escape', 'Escape')
   const text = (await app.lastItem()).id
   await app.click(toolbarButton('Text colour'))
-  await app.click(swatch('Green'))
+  await app.click(pickerChoice('Green'))
   await check('text colour', (await app.item(text)).classes.includes('ink-green'), await app.item(text))
 
   // Front and back.
@@ -250,8 +237,8 @@ test('colours, bold, front and back, duplicate, copy and paste', async ({ app })
 
 test('words shrink to fit notes, and text items scale from a corner', async ({ app }) => {
   await app.newBoard('Game')
-  const short = await noteAt(app, 0, 0, 'Short')
-  const long = await noteAt(app, 300, 0, 'This note has a great many words in it, far more than would fit at the normal size, so they must shrink down to fit.')
+  const short = await app.noteAt(0, 0, 'Short')
+  const long = await app.noteAt(300, 0, 'This note has a great many words in it, far more than would fit at the normal size, so they must shrink down to fit.')
   const s = await app.item(short)
   const l = await app.item(long)
   await check('short words are big', s.fontSize === 32, s)
@@ -287,18 +274,18 @@ test('words shrink to fit notes, and text items scale from a corner', async ({ a
 test('deleting from the toolbar while typing, and switching tabs mid-edit', async ({ app }) => {
   await app.newBoard('Game')
   await app.doubleClickAt(await app.screenOf(0, 0))
-  await app.until(() => editing(app))
+  await app.untilEditing()
   await app.type('Gone soon')
   await app.js(`${toolbarButton('Delete')}.click()`)
   await app.settle()
   await check('the note is deleted', (await app.items()).length === 0)
-  await check('and typing has stopped', !(await editing(app)) && (await app.js(`!document.querySelector('.item-editor')`)))
+  await check('and typing has stopped', !(await app.isEditing()) && (await app.js(`!document.querySelector('.item-editor')`)))
   await app.undo()
   await check('one undo brings it back with its words', (await app.lastItem())?.text === 'Gone soon', await app.items())
 
   // Switching tab while typing keeps the words.
   await app.doubleClickAt(await app.itemCentre((await app.lastItem()).id))
-  await app.until(() => editing(app))
+  await app.untilEditing()
   await app.type(' — kept')
   await app.addTab('Other')
   await app.click(tab('Overview'))
