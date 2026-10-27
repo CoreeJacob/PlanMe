@@ -14,7 +14,10 @@ const ALL_HANDLES: Handle[] = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w']
 /** Text items: corners make the words bigger or smaller; the sides change the width. */
 const TEXT_HANDLES: Handle[] = ['nw', 'ne', 'e', 'se', 'sw', 'w']
 
-export const handlesFor = (item: Shape): Handle[] => (item.type === 'text' ? TEXT_HANDLES : ALL_HANDLES)
+/** To-do lists: their height follows their lines, so only the sides change the width. */
+const WIDTH_HANDLES: Handle[] = ['e', 'w']
+
+export const handlesFor = (item: Shape): Handle[] => (item.type === 'text' ? TEXT_HANDLES : item.type === 'todo' ? WIDTH_HANDLES : ALL_HANDLES)
 
 /** A dot an arrow is about to be joined to. */
 export interface ActiveDot {

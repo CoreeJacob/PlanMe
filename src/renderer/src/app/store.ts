@@ -6,11 +6,11 @@ import type { BoardSummary, BoxShape } from '@shared/types'
 import { readPref, writePref } from '@/lib/prefs'
 
 export type Screen = 'loading' | 'boards' | 'board'
-export type Tool = 'select' | 'hand' | 'note' | 'text' | 'box' | 'arrow' | 'section'
-export type PlacingTool = Extract<Tool, 'note' | 'text' | 'box' | 'section'>
+export type Tool = 'select' | 'hand' | 'note' | 'text' | 'box' | 'arrow' | 'section' | 'todo'
+export type PlacingTool = Extract<Tool, 'note' | 'text' | 'box' | 'section' | 'todo'>
 
 /** Tools that place a new item where you click. */
-export const isPlacingTool = (tool: Tool): tool is PlacingTool => tool === 'note' || tool === 'text' || tool === 'box' || tool === 'section'
+export const isPlacingTool = (tool: Tool): tool is PlacingTool => tool === 'note' || tool === 'text' || tool === 'box' || tool === 'section' || tool === 'todo'
 
 export interface Toast {
   id: number
@@ -39,6 +39,8 @@ interface AppState {
   boxShape: BoxShape
   /** The tab whose name is being edited in the tab bar. */
   editingTab: string | null
+  /** The board's statuses are being edited. */
+  statusEditorOpen: boolean
   toasts: Toast[]
   prompt: PromptRequest | null
 
@@ -47,6 +49,7 @@ interface AppState {
   setTool(tool: Tool): void
   setBoxShape(shape: BoxShape): void
   setEditingTab(id: string | null): void
+  setStatusEditorOpen(open: boolean): void
   toast(message: string, options?: { kind?: Toast['kind']; action?: Toast['action'] }): void
   dismissToast(id: number): void
   /** Asks for a name; resolves with it, or null if cancelled. */
@@ -68,6 +71,7 @@ export const useApp = create<AppState>((set, get) => ({
   tool: 'select',
   boxShape: 'rect',
   editingTab: null,
+  statusEditorOpen: false,
   toasts: [],
   prompt: null,
 
@@ -83,6 +87,8 @@ export const useApp = create<AppState>((set, get) => ({
   setBoxShape: (boxShape) => set({ boxShape }),
 
   setEditingTab: (editingTab) => set({ editingTab }),
+
+  setStatusEditorOpen: (statusEditorOpen) => set({ statusEditorOpen }),
 
   toast: (message, { kind = 'info', action } = {}) => {
     const id = nextToast++
@@ -103,6 +109,12 @@ export const useApp = create<AppState>((set, get) => ({
     set({ prompt: null })
   }
 }))
+
+/** True while a dialog (a name prompt, or the status editor) is up, so the board's shortcuts wait. */
+export const dialogOpen = (): boolean => {
+  const { prompt, statusEditorOpen } = useApp.getState()
+  return !!prompt || statusEditorOpen
+}
 
 /** Runs an action, showing its error as a message instead of failing silently. Returns undefined on error. */
 export async function attempt<T>(fn: () => Promise<T>): Promise<T | undefined> {

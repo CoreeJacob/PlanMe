@@ -2,7 +2,7 @@
 // selection) and copy, cut and paste. Text being typed keeps its own keys and clipboard.
 
 import { useEffect, useRef } from 'react'
-import { useApp } from '@/app/store'
+import { dialogOpen, useApp } from '@/app/store'
 import { useBoard } from '@/board/store'
 import { isTyping } from '@/lib/dom'
 import { copySelected, deleteSelected, nudgeSelected, paste, startEditing } from './actions'
@@ -10,7 +10,7 @@ import { copySelected, deleteSelected, nudgeSelected, paste, startEditing } from
 const NUDGE: Record<string, [number, number]> = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }
 
 /** True while the board isn't taking keys: text is being typed, or a question is up. */
-const keysElsewhere = (): boolean => isTyping() || !!useApp.getState().prompt
+const keysElsewhere = (): boolean => isTyping() || dialogOpen()
 
 /**
  * `onSpace` hears Space going down and up. `cancelDrag` is asked first on Escape, and says

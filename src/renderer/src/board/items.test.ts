@@ -19,7 +19,7 @@ import { cleanHtml, fromPlainText, isAllStyled, plainText, setWholeStyle } from 
 import { NO_SELECTION, useBoard } from './store'
 
 const note = (id: string, x = 0, y = 0, w = 100, h = 100): Shape => newItem('note', id, { x, y, w, h })
-const docWith = (...items: Item[]): BoardDoc => ({ tabs: [{ id: 't', name: 'T', items }, { id: 'u', name: 'U', items: [] }] })
+const docWith = (...items: Item[]): BoardDoc => ({ tabs: [{ id: 't', name: 'T', items }, { id: 'u', name: 'U', items: [] }], statuses: [] })
 const ids = (doc: BoardDoc): string => itemsOf(doc, 't').map((i) => i.id).join()
 
 describe('item changes', () => {

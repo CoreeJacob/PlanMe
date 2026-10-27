@@ -33,3 +33,16 @@ export const INK_COLORS: ColorChoice[] = [
 
 /** Box borders: an ink colour, or none. */
 export const BORDER_COLORS: ColorChoice[] = [...INK_COLORS, { name: 'none', label: 'No border' }]
+
+/** Status colours: strong enough to read as a badge on any note. */
+export const STATUS_COLORS: ColorChoice[] = [
+  { name: 'grey', label: 'Grey' },
+  { name: 'blue', label: 'Blue' },
+  { name: 'green', label: 'Green' },
+  { name: 'red', label: 'Red' },
+  { name: 'orange', label: 'Orange' },
+  { name: 'yellow', label: 'Yellow' },
+  { name: 'purple', label: 'Purple' },
+  { name: 'pink', label: 'Pink' },
+  { name: 'teal', label: 'Teal' }
+]

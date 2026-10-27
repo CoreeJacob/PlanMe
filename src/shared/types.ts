@@ -24,6 +24,8 @@ interface ItemBase extends Rect {
   id: string
   /** The words on it, as simple HTML: only <b>, <i>, <u>, <div> and <br> are kept. */
   text: string
+  /** Its status (the id of one of the board's statuses), if it's being tracked. */
+  status?: string
 }
 
 /** A sticky note. Its text shrinks to fit. Colours are names (see app/colors.ts). */
@@ -60,6 +62,24 @@ export interface SectionItem extends ItemBase {
   color: string
 }
 
+/** One line of a to-do list. */
+export interface TodoEntry {
+  id: string
+  text: string
+  done: boolean
+}
+
+/**
+ * A to-do list: a title (its words) and tick-box lines. Its height follows its lines. Its status
+ * follows its ticks (nothing ticked, some, all) unless `auto` is off, when it's whatever was picked.
+ */
+export interface TodoItem extends ItemBase {
+  type: 'todo'
+  color: string
+  entries: TodoEntry[]
+  auto: boolean
+}
+
 /** One end of an arrow: attached to an item, or loose at a point on the board. */
 export interface ArrowEnd {
   /** The item it's attached to, or null for a loose end. */
@@ -93,8 +113,8 @@ export interface ArrowItem {
 }
 
 /** The items that take up a box on the board (everything but arrows). */
-export type Shape = NoteItem | TextItem | BoxItem | SectionItem
-/** Anything placed on a tab. Later phases add more kinds (to-do lists, images…). */
+export type Shape = NoteItem | TextItem | BoxItem | SectionItem | TodoItem
+/** Anything placed on a tab. Later phases add more kinds (images…). */
 export type Item = Shape | ArrowItem
 export type ShapeType = Shape['type']
 
@@ -104,15 +124,32 @@ export interface Tab {
   items: Item[]
 }
 
-/** Everything undo can step through: the tabs, in order, with what's on them. */
+/**
+ * What a status means, so the app knows which counts as finished (those fade, and gather in the
+ * Done list) and which a to-do list picks for itself: nothing ticked, some ticked, all ticked.
+ */
+export type StatusKind = 'todo' | 'doing' | 'done' | 'other'
+
+/** One of a board's statuses, like "Blocked" in red. Its colour is a name, like items' colours. */
+export interface Status {
+  id: string
+  name: string
+  color: string
+  kind: StatusKind
+}
+
+/** Everything undo can step through: the tabs, in order, with what's on them, and the statuses. */
 export interface BoardDoc {
   tabs: Tab[]
+  statuses: Status[]
 }
 
 /** board.json, inside the board's folder. */
 export interface BoardFile {
   format: number
   tabs: Array<{ id: string; name: string }>
+  /** Missing in boards made before statuses: they get the usual four. */
+  statuses?: Status[]
 }
 
 /** tabs/<id>.json, inside the board's folder. */

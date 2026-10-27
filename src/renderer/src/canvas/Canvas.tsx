@@ -17,6 +17,7 @@ import { isPlacingTool, useApp, type PlacingTool } from '@/app/store'
 import { arrowPoints, boxOf, crossesBox, isArrow, isShape, lookupIn, nearestPin, pinPoint } from '@/board/arrows'
 import { besideRect, itemsOf, moveItems, resizeRect, updateItems, type Handle } from '@/board/items'
 import { drawingOrder, isSection, withContents } from '@/board/sections'
+import { statusOf } from '@/board/statuses'
 import { NO_SELECTION, selectTab, useBoard } from '@/board/store'
 import { boundsOf, overlaps, rectFrom, within, type Point } from '@/lib/geometry'
 import { useElementSize } from '@/lib/useElementSize'
@@ -31,13 +32,15 @@ import {
   selectAll,
   sendSelectedToBack,
   setOnSelected,
+  setStatusOnSelected,
   startEditing,
+  tickEntry,
   viewport
 } from './actions'
 import { ArrowView } from './ArrowView'
 import { ItemToolbar } from './ItemToolbar'
 import { ItemView } from './ItemView'
-import { palettesFor, paletteName } from './looks'
+import { palettesFor, paletteName, statusChoicesFor, statusValue } from './looks'
 import { canJoin, currentView, itemById, onlySelected, setCurrentView, zoomReset, zoomStep } from './current'
 import { useCanvasKeys, useClipboard } from './keys'
 import { Overlay, type ActiveDot } from './Overlay'
@@ -86,6 +89,8 @@ export function Canvas() {
   const view = useBoard((s) => s.views[s.tabId] ?? DEFAULT_VIEW)
   const selectedIds = useBoard((s) => s.selected)
   const editingId = useBoard((s) => s.editingId)
+  const editingPart = useBoard((s) => s.editingPart)
+  const statuses = useBoard((s) => s.doc.statuses)
   const tool = useApp((s) => s.tool)
   const [spaceDown, setSpaceDown] = useState(false)
   const [drag, setDrag] = useState<Drag | null>(null)
@@ -189,7 +194,16 @@ export function Canvas() {
     }
     if (e.button !== 0) return
     // Clicking inside the words being typed moves the caret, as usual.
-    if (target.closest('.item-editor')) return
+    if (target.closest('.item-editor, .todo-input')) return
+    // A to-do list's tick box: tick it (keeping the list open if it's being typed in).
+    const tick = target.closest<HTMLElement>('[data-tick]')
+    const tickIn = tick?.closest<HTMLElement>('[data-item-id]')?.dataset.itemId
+    if (tick && tickIn) {
+      e.preventDefault()
+      if (useBoard.getState().editingId !== tickIn) finishEditing()
+      tickEntry(tickIn, tick.dataset.tick!)
+      return
+    }
     finishEditing()
     e.preventDefault()
     e.currentTarget.setPointerCapture(e.pointerId)
@@ -349,9 +363,12 @@ export function Canvas() {
       } else setGuides(NO_GUIDES)
       const scale = r.w / d.item.w
       board.preview(
-        updateItems(d.base, board.tabId, [d.item.id], (i) =>
-          i.type === 'text' ? { ...i, x: r.x, y: r.y, w: r.w, fontSize: corner ? Math.max(4, i.fontSize * scale) : i.fontSize } : { ...i, ...r }
-        )
+        updateItems(d.base, board.tabId, [d.item.id], (i) => {
+          if (i.type === 'text') return { ...i, x: r.x, y: r.y, w: r.w, fontSize: corner ? Math.max(4, i.fontSize * scale) : i.fontSize }
+          // A to-do list's height follows its lines: only its width changes.
+          if (i.type === 'todo') return { ...i, x: r.x, w: r.w }
+          return { ...i, ...r }
+        })
       )
     }
   }
@@ -392,8 +409,10 @@ export function Canvas() {
     // Handles (for resizing, or an arrow's ends) aren't empty space: no new note there.
     if (!target || target.closest('.item-editor, .zoom-controls, .item-toolbar, [data-handle], [data-end], [data-dot]')) return
     const hit = target.closest<HTMLElement>('[data-item-id]')?.dataset.itemId
-    // Double-click an item to type in it, or empty space for a new sticky note.
-    if (hit) startEditing(hit)
+    // Double-click an item to type in it (in a to-do list, the line or title clicked), or empty
+    // space for a new sticky note.
+    const part = target.closest<HTMLElement>('[data-entry]')?.dataset.entry ?? (target.closest('.todo-head') ? 'title' : null)
+    if (hit) startEditing(hit, part)
     else addItem('note', boardPoint(e))
   }
 
@@ -410,6 +429,7 @@ export function Canvas() {
         { label: 'Add Sticky Note Here', icon: 'note', onSelect: () => addItem('note', at) },
         { label: 'Add Text Here', icon: 'text', onSelect: () => addItem('text', at) },
         { label: 'Add Shape Here', icon: 'box', onSelect: () => addItem('box', at, useApp.getState().boxShape) },
+        { label: 'Add To-do List Here', icon: 'tasks', onSelect: () => addItem('todo', at) },
         { label: 'Add Section Here', icon: 'section', onSelect: () => addItem('section', at) },
         'separator',
         { label: 'Select All', hint: '⌘A', disabled: !items.length, onSelect: selectAll }
@@ -424,9 +444,21 @@ export function Canvas() {
     const entries: MenuEntry[] = []
     const editLabel = isArrow(chosen[0]) ? 'Edit Label' : isSection(chosen[0]) ? 'Edit Title' : 'Edit Text'
     if (chosen.length === 1) entries.push({ label: editLabel, icon: 'rename', hint: '↩', onSelect: () => startEditing(hit) })
-    // The same colour choices as the floating toolbar (Colour, or Fill and Border for shapes…).
+    // The same colour and status choices as the floating toolbar.
     for (const p of palettesFor(chosen)) {
       entries.push({ label: paletteName(p), submenu: p.choices.map((c) => ({ label: c.label, onSelect: () => setOnSelected(p.key, c.name) })) })
+    }
+    const statusChoices = statusChoicesFor(chosen, statuses)
+    if (statusChoices) {
+      entries.push({
+        label: 'Status',
+        icon: 'flag',
+        submenu: [
+          ...statusChoices.map((c) => ({ label: c.label.split(' — ')[0], onSelect: () => setStatusOnSelected(statusValue(c.value)) })),
+          'separator' as const,
+          { label: 'Edit Statuses…', onSelect: () => useApp.getState().setStatusEditorOpen(true) }
+        ]
+      })
     }
     entries.push(
       'separator',
@@ -484,7 +516,13 @@ export function Canvas() {
               editing={item.id === editingId}
             />
           ) : (
-            <ItemView key={item.id} item={item} editing={item.id === editingId} />
+            <ItemView
+              key={item.id}
+              item={item}
+              editing={item.id === editingId}
+              part={item.id === editingId ? editingPart : null}
+              status={statusOf(item, statuses)}
+            />
           )
         )}
       </div>
@@ -504,7 +542,7 @@ export function Canvas() {
         activeDot={activeDot}
       />
 
-      {selectedItems.length > 0 && !busy && <ItemToolbar view={view} size={size} items={selectedItems} lookup={lookup} editing={editingId !== null} />}
+      {selectedItems.length > 0 && !busy && <ItemToolbar view={view} size={size} items={selectedItems} lookup={lookup} editing={editingId !== null} statuses={statuses} />}
 
       {items.length === 0 && (
         <div className="canvas-hint muted">

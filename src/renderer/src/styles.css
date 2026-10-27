@@ -1302,3 +1302,237 @@ button {
   opacity: 1;
   transform: scale(1.35);
 }
+
+/* ---------- to-do lists ---------- */
+
+.item-todo {
+  border-radius: 10px;
+  background: var(--fill);
+  box-shadow: 0 1px 2px rgba(20, 22, 30, 0.12), 0 4px 12px rgba(20, 22, 30, 0.08);
+  color: var(--text);
+}
+/* On a coloured card the words are always dark. */
+.item-todo:not(.fill-white) {
+  color: var(--note-ink);
+}
+.todo-card {
+  padding: 12px 14px 10px;
+  font-size: 15px;
+}
+.todo-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.todo-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 17px;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+.todo-title.untitled {
+  opacity: 0.45;
+}
+.todo-count {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.6;
+}
+.todo-bar {
+  height: 4px;
+  margin: 8px 0 6px;
+  border-radius: 2px;
+  background: color-mix(in srgb, currentColor 12%, transparent);
+  overflow: hidden;
+}
+.todo-bar > div {
+  height: 100%;
+  border-radius: 2px;
+  background: var(--ink-green);
+  transition: width 0.15s ease-out;
+}
+.todo-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 3px 0;
+}
+.todo-box {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  padding: 0;
+  border: 1.5px solid color-mix(in srgb, currentColor 45%, transparent);
+  border-radius: 5px;
+  background: none;
+  cursor: pointer;
+}
+.todo-row.ticked .todo-box {
+  border-color: var(--ink-green);
+  background: var(--ink-green);
+}
+.todo-box svg {
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: #fff;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.todo-text {
+  flex: 1;
+  min-width: 0;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.todo-row.ticked .todo-text {
+  opacity: 0.55;
+  text-decoration: line-through;
+}
+.todo-input {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  outline: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  line-height: 1.35;
+  user-select: text;
+}
+.todo-input::placeholder {
+  color: inherit;
+  opacity: 0.4;
+}
+
+/* ---------- statuses ---------- */
+
+.status-grey { --status: #868e9c; }
+.status-blue { --status: #1c7ed6; }
+.status-green { --status: #2f9e44; }
+.status-red { --status: #e03e3e; }
+.status-orange { --status: #e8780c; }
+.status-yellow { --status: #d9a400; }
+.status-purple { --status: #7950f2; }
+.status-pink { --status: #d6336c; }
+.status-teal { --status: #0ca678; }
+
+/* An item with a status: a coloured edge just outside it, and a badge on its top edge. */
+.item.has-status::after {
+  content: '';
+  position: absolute;
+  inset: -5px;
+  border: 2px solid var(--status);
+  border-radius: 8px;
+  pointer-events: none;
+}
+.item-section.has-status::after {
+  border-radius: 14px;
+}
+.status-badge {
+  position: absolute;
+  top: -11px;
+  right: 10px;
+  z-index: 1;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--status);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 16px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+/* Finished things fade back so the work still to do stands out. */
+.item.is-finished {
+  opacity: 0.55;
+}
+
+.status-pill {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--status);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 16px;
+  white-space: nowrap;
+}
+.status-plain {
+  font-size: 12px;
+  color: var(--muted);
+}
+.status-popover {
+  grid-template-columns: 1fr;
+  min-width: 170px;
+}
+.status-popover .swatch-btn {
+  justify-content: flex-start;
+  width: auto;
+  height: 28px;
+  padding: 0 8px;
+}
+.status-edit {
+  margin-top: 4px;
+  padding: 6px 8px 2px;
+  border: none;
+  border-top: 1px solid var(--border);
+  background: none;
+  color: var(--accent);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+/* ---------- the status editor ---------- */
+
+.modal.status-editor {
+  width: 520px;
+}
+.status-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.status-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.status-row .input {
+  flex: 1;
+}
+.status-row .select,
+.status-colour {
+  height: 32px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+}
+.status-colour {
+  width: 34px;
+  padding: 0;
+  border: 3px solid var(--panel);
+  background: var(--status);
+  color: transparent;
+  box-shadow: 0 0 0 1px var(--border-strong);
+  cursor: pointer;
+}
+.status-colour option {
+  color: var(--text);
+}
+.status-add {
+  align-self: flex-start;
+  font-size: 13px;
+}

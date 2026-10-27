@@ -3,6 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { FORMAT } from '@shared/types'
+import { DEFAULT_STATUSES } from '@shared/statuses'
 import { upgradeItem } from '@shared/upgrade'
 import { cleanName, createBoard, listBoards, openBoard, renameBoard, saveBoard } from './boards'
 
@@ -22,7 +23,7 @@ describe('boards on disk', () => {
   it('creates a board with one empty tab, as files you can see', async () => {
     const dir = await createBoard(root, 'Space Game', 't1')
     expect(dir).toBe(path.join(root, 'Space Game'))
-    expect(await readJson(path.join(dir, 'board.json'))).toEqual({ format: FORMAT, tabs: [{ id: 't1', name: 'Overview' }] })
+    expect(await readJson(path.join(dir, 'board.json'))).toEqual({ format: FORMAT, tabs: [{ id: 't1', name: 'Overview' }], statuses: DEFAULT_STATUSES })
     expect((await readJson(path.join(dir, 'tabs', 't1.json'))).items).toEqual([])
 
     const opened = await openBoard(dir)
@@ -71,6 +72,12 @@ describe('boards on disk', () => {
     opened = await openBoard(dir)
     expect(opened.doc.tabs.map((t) => t.id)).toEqual(['t2'])
     expect(await fs.readdir(path.join(dir, 'tabs'))).toEqual(['t2.json'])
+  })
+
+  it('gives boards made before statuses the usual four', async () => {
+    const dir = await createBoard(root, 'Game', 't1')
+    await fs.writeFile(path.join(dir, 'board.json'), JSON.stringify({ format: FORMAT, tabs: [{ id: 't1', name: 'Overview' }] }))
+    expect((await openBoard(dir)).doc.statuses).toEqual(DEFAULT_STATUSES)
   })
 
   it('treats a missing tab file as an empty tab', async () => {

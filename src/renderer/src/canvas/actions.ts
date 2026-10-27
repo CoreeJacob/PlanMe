@@ -1,7 +1,7 @@
 // What can be done to items on the tab showing: adding, typing, deleting, copying, colouring…
 // Shared by the keys, the menus, the floating toolbar and the right-click menu.
 
-import type { ArrowEnd, BoardDoc, BoxShape, Item, Rect, Shape, ShapeType } from '@shared/types'
+import type { ArrowEnd, BoardDoc, BoxShape, Item, Rect, Shape, ShapeType, Status, TodoItem } from '@shared/types'
 import { upgradeItem } from '@shared/upgrade'
 import { arrowsAttached, boxOf, detach, isArrow, lookupIn } from '@/board/arrows'
 import {
@@ -19,6 +19,7 @@ import {
 } from '@/board/items'
 import { cleanHtml, fromPlainText, isAllStyled, plainText, setWholeStyle, type TextStyle } from '@/board/richtext'
 import { withContents } from '@/board/sections'
+import { withStatuses } from '@/board/statuses'
 import { useBoard } from '@/board/store'
 import { count, plural } from '@/lib/format'
 import { boundsOf, overlaps } from '@/lib/geometry'
@@ -82,13 +83,13 @@ export function addConnected(source: Shape, from: ArrowEnd, rect: Rect): void {
   addAndType([item, newArrow(newId(), from, { item: item.id, x: rect.x, y: rect.y })], item.id)
 }
 
-/** Starts typing in an item (or an arrow's label). */
-export function startEditing(id: string): void {
-  if (state().editingId === id) return
+/** Starts typing in an item (or an arrow's label), or in one part of a to-do list. */
+export function startEditing(id: string, part: string | null = null): void {
+  if (state().editingId === id) return state().setEditing(id, part)
   finishEditing()
   state().select([id])
   state().beginGesture()
-  state().setEditing(id)
+  state().setEditing(id, part)
 }
 
 /** The editor's words changed. */
@@ -98,11 +99,21 @@ export function editText(id: string, html: string): void {
   preview(updateItems(doc, tabId, [id], (i) => (i.text === text ? i : { ...i, text })))
 }
 
-/** Stops typing. A text item left empty isn't worth keeping, so it goes. */
+/**
+ * Stops typing. A text item left empty isn't worth keeping, so it goes. A to-do list loses any
+ * empty lines (but keeps one, to type in later).
+ */
 export function finishEditing(): void {
   const { editingId, doc, tabId } = state()
   if (!editingId) return
   const item = currentItems().find((i) => i.id === editingId)
+  if (item?.type === 'todo') {
+    const kept = item.entries.filter((e) => e.text.trim())
+    if (kept.length !== item.entries.length) {
+      const entries = kept.length ? kept : item.entries.slice(0, 1)
+      state().preview(updateItems(doc, tabId, [item.id], (i) => ({ ...i, entries })))
+    }
+  }
   if (item?.type === 'text' && !plainText(item.text).trim()) {
     // Arrows that were made with it go too (they'd be joined to nothing).
     const items = itemsOf(doc, tabId)
@@ -112,6 +123,52 @@ export function finishEditing(): void {
   }
   state().setEditing(null)
   state().endGesture()
+}
+
+// ---------- to-do lists ----------
+
+/**
+ * Changes a to-do list. While it's being typed in, that's part of the same undo step as the
+ * typing; otherwise (ticking a box, say) it's an undo step of its own.
+ */
+export function editTodo(id: string, edit: (todo: TodoItem) => TodoItem): void {
+  const { doc, tabId, gesture, preview, commit } = state()
+  const next = updateItems(doc, tabId, [id], (i) => (i.type === 'todo' ? edit(i) : i))
+  if (gesture) preview(next)
+  else commit(next)
+}
+
+/** Ticks a line of a to-do list, or unticks it. */
+export function tickEntry(id: string, entry: string): void {
+  editTodo(id, (t) => ({ ...t, entries: t.entries.map((e) => (e.id === entry ? { ...e, done: !e.done } : e)) }))
+}
+
+// ---------- statuses ----------
+
+/**
+ * Gives the selected items a status (a status id), none (null), or, for to-do lists, lets them
+ * work theirs out from their ticks ('auto').
+ */
+export function setStatusOnSelected(value: string | null | 'auto'): void {
+  change((doc, tabId) =>
+    updateItems(doc, tabId, state().selected, (i) => {
+      if (i.type === 'arrow') return i
+      if (value === 'auto') return i.type === 'todo' ? { ...withoutStatus(i), auto: true } : i
+      const picked = value === null ? withoutStatus(i) : { ...i, status: value }
+      return picked.type === 'todo' ? { ...picked, auto: false } : picked
+    })
+  )
+}
+
+/** The item with no status of its own. */
+function withoutStatus<T extends Shape>(item: T): T {
+  const { status: _none, ...rest } = item
+  return rest as T
+}
+
+/** The board's list of statuses changed (from the status editor): one undo step. */
+export function saveStatuses(statuses: Status[]): void {
+  state().commit(withStatuses(state().doc, statuses))
 }
 
 // ---------- selection ----------

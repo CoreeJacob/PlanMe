@@ -10,6 +10,7 @@ const TOOLS: Array<{ tool: Tool; label: string; tip?: string; key: string; icon:
   { tool: 'note', label: 'Note', tip: 'Sticky note — click to place one, or drag to choose its size', key: 'N', icon: 'note' },
   { tool: 'text', label: 'Text', tip: 'Text — click to place, or drag to choose its width', key: 'T', icon: 'text' },
   { tool: 'box', label: 'Shape', tip: 'Shape — a box, oval, diamond and more: click to place one, or drag to choose its size', key: 'B', icon: 'box' },
+  { tool: 'todo', label: 'To-do', tip: 'To-do list — tick-box lines with a progress count: click to place one', key: 'L', icon: 'tasks' },
   { tool: 'arrow', label: 'Arrow', tip: 'Arrow — drag from one item to another to join them', key: 'A', icon: 'arrow' },
   { tool: 'section', label: 'Section', tip: 'Section — drag out a labelled area; whatever’s inside moves with it', key: 'S', icon: 'section' }
 ]

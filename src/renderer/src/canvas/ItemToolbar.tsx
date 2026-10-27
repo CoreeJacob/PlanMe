@@ -2,14 +2,15 @@
 // front/back and delete.
 
 import { useEffect, useState, type ReactNode } from 'react'
-import type { ArrowItem, Item, View } from '@shared/types'
+import type { ArrowItem, Item, Status, View } from '@shared/types'
 import { Icon } from '@/app/Icon'
 import { SHAPE_CHOICES, shapeChoice } from '@/app/shapes'
+import { useApp } from '@/app/store'
 import { boxOf, isArrow, type Lookup } from '@/board/arrows'
 import type { TextStyle } from '@/board/richtext'
 import { boundsOf } from '@/lib/geometry'
-import { allStyled, bringSelectedToFront, deleteSelected, sendSelectedToBack, setOnSelected, toggleStyleOnSelected } from './actions'
-import { palettesFor } from './looks'
+import { allStyled, bringSelectedToFront, deleteSelected, sendSelectedToBack, setOnSelected, setStatusOnSelected, toggleStyleOnSelected } from './actions'
+import { currentStatusChoice, palettesFor, statusChoicesFor, statusValue } from './looks'
 import { toScreen, type Size } from './view'
 
 /** A toolbar button that opens a grid of choices (colours, or outlines) below it. */
@@ -21,7 +22,8 @@ function Picker({
   open,
   onOpen,
   onPick,
-  className = ''
+  className = '',
+  footer
 }: {
   label: string
   face: ReactNode
@@ -31,6 +33,8 @@ function Picker({
   onOpen: (open: boolean) => void
   onPick: (value: string) => void
   className?: string
+  /** Something extra under the choices, like "Edit statuses…". */
+  footer?: ReactNode
 }) {
   return (
     <div className="toolbar-group">
@@ -52,6 +56,7 @@ function Picker({
               {c.face}
             </button>
           ))}
+          {footer}
         </div>
       )}
     </div>
@@ -108,7 +113,16 @@ function ArrowButtons({ arrow }: { arrow: ArrowItem }) {
 const GAP = 10
 const HEIGHT = 40
 
-export function ItemToolbar({ view, size, items, lookup, editing }: { view: View; size: Size; items: Item[]; lookup: Lookup; editing: boolean }) {
+interface Props {
+  view: View
+  size: Size
+  items: Item[]
+  lookup: Lookup
+  editing: boolean
+  statuses: Status[]
+}
+
+export function ItemToolbar({ view, size, items, lookup, editing, statuses }: Props) {
   const [open, setOpen] = useState<string | null>(null)
   const opener = (name: string) => (on: boolean) => setOpen(on ? name : null)
   const ids = items.map((i) => i.id).join()
@@ -125,6 +139,9 @@ export function ItemToolbar({ view, size, items, lookup, editing }: { view: View
   const palettes = palettesFor(items)
   const box = items.every((i) => i.type === 'box') ? items[0] : null
   const arrow = items.every(isArrow) ? items[0] : null
+  const statusChoices = statusChoicesFor(items, statuses)
+  const currentStatus = currentStatusChoice(items)
+  const shownStatus = statuses.find((s) => s.id === currentStatus)
 
   return (
     <div
@@ -159,6 +176,27 @@ export function ItemToolbar({ view, size, items, lookup, editing }: { view: View
         />
       )}
       {arrow && isArrow(arrow) && <ArrowButtons arrow={arrow} />}
+      {statusChoices && (
+        <Picker
+          label="Status — for tracking it: To do, Doing, Done…"
+          face={shownStatus ? <span className={`status-pill status-${shownStatus.color}`}>{shownStatus.name}</span> : <Icon name="flag" size={16} />}
+          choices={statusChoices.map((c) => ({
+            value: c.value,
+            label: c.label,
+            face: c.status ? <span className={`status-pill status-${c.status.color}`}>{c.status.name}</span> : <span className="status-plain">{c.label.split(' — ')[0]}</span>
+          }))}
+          current={currentStatus}
+          open={open === 'status'}
+          onOpen={opener('status')}
+          onPick={(value) => setStatusOnSelected(statusValue(value))}
+          className="status-popover"
+          footer={
+            <button className="status-edit" onClick={() => (setOpen(null), useApp.getState().setStatusEditorOpen(true))}>
+              Edit statuses…
+            </button>
+          }
+        />
+      )}
       {palettes.length > 0 && <span className="toolbar-sep" />}
       {STYLES.map((s) => (
         <button

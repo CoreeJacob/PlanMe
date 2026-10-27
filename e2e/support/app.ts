@@ -393,7 +393,7 @@ export class App {
   /** The items on the tab showing, bottom of the pile first, as drawn. */
   items(): Promise<ItemInfo[]> {
     return this.js(`[...document.querySelectorAll('.item')].map(e => { const words = e.querySelector('.item-words'); return {
-      id: e.dataset.itemId, type: e.className.match(/item-(note|text|box|section)/)[1], classes: e.className,
+      id: e.dataset.itemId, type: e.className.match(/item-(note|text|box|section|todo)/)[1], classes: e.className,
       x: parseFloat(e.style.left), y: parseFloat(e.style.top), w: parseFloat(e.style.width), h: e.offsetHeight,
       text: words ? words.innerText.replace(/\\n$/, '') : '', html: words ? words.innerHTML : '', fontSize: words ? parseFloat(getComputedStyle(words).fontSize) : 0 } })`)
   }
@@ -557,7 +557,7 @@ export interface ArrowInfo {
 
 export interface ItemInfo {
   id: string
-  type: 'note' | 'text' | 'box' | 'section'
+  type: 'note' | 'text' | 'box' | 'section' | 'todo'
   classes: string
   x: number
   y: number

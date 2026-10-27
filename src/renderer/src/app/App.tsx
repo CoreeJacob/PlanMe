@@ -10,8 +10,9 @@ import { BoardScreen } from './BoardScreen'
 import { BoardsScreen } from './BoardsScreen'
 import { PromptDialog, Toasts } from './Overlays'
 import { toolForKey } from './SidePanel'
+import { StatusEditor } from './StatusEditor'
 import { Tooltips } from './Tooltips'
-import { useApp } from './store'
+import { dialogOpen, useApp } from './store'
 
 /** What each menu bar command does while a board is open. */
 function runBoardCommand(command: MenuCommand): void {
@@ -72,14 +73,14 @@ export function App() {
     () =>
       window.api.onMenuCommand((command) => {
         if (command === 'undo' || command === 'redo' || command === 'selectAll') {
-          if (isTyping() || useApp.getState().prompt) return void document.execCommand(command)
+          if (isTyping() || dialogOpen()) return void document.execCommand(command)
         } else if (isTyping()) {
           // Other board commands (⌘D, ⌘]…) wait until typing is finished.
           return
         }
         if (command === 'newBoard') return void newBoard()
         if (command === 'boards') return void goToBoards()
-        if (useApp.getState().prompt) return
+        if (dialogOpen()) return
         if (useApp.getState().screen === 'board') runBoardCommand(command)
       }),
     []
@@ -88,7 +89,7 @@ export function App() {
   // Single-key tool shortcuts (V, H…), except while typing.
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
-      if (useApp.getState().screen !== 'board' || isTyping() || useApp.getState().prompt) return
+      if (useApp.getState().screen !== 'board' || isTyping() || dialogOpen()) return
       const tool = toolForKey(e)
       if (tool) {
         e.preventDefault()
@@ -109,6 +110,7 @@ export function App() {
       {screen === 'boards' && <BoardsScreen />}
       {screen === 'board' && <BoardScreen />}
       <PromptDialog />
+      <StatusEditor />
       <Toasts />
       <Tooltips />
     </div>

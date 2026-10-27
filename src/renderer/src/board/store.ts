@@ -5,7 +5,7 @@ import type { BoardDoc, OpenedBoard, View } from '@shared/types'
 import { readPref, writePref } from '@/lib/prefs'
 import { EMPTY_HISTORY, record, redo, undo, type History, type Step } from './history'
 
-const NO_DOC: BoardDoc = { tabs: [] }
+const NO_DOC: BoardDoc = { tabs: [], statuses: [] }
 const NO_VIEWS: Record<string, View> = {}
 
 // Which tab each board was last showing, so it reopens there. A convenience kept by the app,
@@ -33,6 +33,8 @@ interface BoardState {
   selected: string[]
   /** The item whose words are being typed. */
   editingId: string | null
+  /** Which part of it: a to-do list's title ('title') or one of its lines (the line's id). */
+  editingPart: string | null
   /** The board as it was when the current drag or typing began, or null between them. */
   gesture: Step | null
 
@@ -47,7 +49,7 @@ interface BoardState {
   redo(): void
 
   select(ids: string[]): void
-  setEditing(id: string | null): void
+  setEditing(id: string | null, part?: string | null): void
   /**
    * A drag or a stretch of typing: `preview` shows each change as it happens, and `endGesture`
    * makes them all one undo step. `cancelGesture` puts things back as they were.
@@ -71,7 +73,7 @@ export const useBoard = create<BoardState>((set, get) => {
     set({ doc: step.doc, tabId, history, editingId: null, selected: tabId === get().tabId && selected.length ? selected : NO_SELECTION })
   }
   const current = (): Step => ({ doc: get().doc, tabId: get().tabId })
-  const cleared = { selected: NO_SELECTION, editingId: null, gesture: null }
+  const cleared = { selected: NO_SELECTION, editingId: null, editingPart: null, gesture: null }
 
   return {
     board: null,
@@ -125,7 +127,7 @@ export const useBoard = create<BoardState>((set, get) => {
       if (!same) set({ selected: ids.length ? ids : NO_SELECTION })
     },
 
-    setEditing: (editingId) => set({ editingId }),
+    setEditing: (editingId, part = null) => set({ editingId, editingPart: editingId ? part : null }),
 
     beginGesture: () => {
       if (!get().gesture) set({ gesture: current() })

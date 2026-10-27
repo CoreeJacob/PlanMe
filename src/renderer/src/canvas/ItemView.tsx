@@ -1,12 +1,13 @@
 // One item on the canvas, drawn in board units (the canvas scales the whole board at once).
 
 import { memo, useLayoutEffect, useRef } from 'react'
-import type { Item, Shape } from '@shared/types'
+import type { Item, Shape, Status } from '@shared/types'
 import { updateItems } from '@/board/items'
 import { cleanHtml } from '@/board/richtext'
 import { useBoard } from '@/board/store'
 import { editText, finishEditing } from './actions'
 import { Outline } from './Outline'
+import { TodoView } from './TodoView'
 
 /** The largest text size for a note or box: bigger items get bigger words. */
 const maxFontSize = (item: Shape): number => Math.min(item.w, item.h) * (item.type === 'note' ? 0.16 : 0.18)
@@ -36,10 +37,20 @@ function itemClasses(item: Shape): string {
   if (item.type === 'note') return `note-${item.color}`
   if (item.type === 'box') return `shape-${item.shape} fill-${item.fill} border-${item.border}`
   if (item.type === 'section') return `section-${item.color}`
+  if (item.type === 'todo') return `fill-${item.color}`
   return `ink-${item.color}`
 }
 
-export const ItemView = memo(function ItemView({ item, editing }: { item: Shape; editing: boolean }) {
+interface Props {
+  item: Shape
+  editing: boolean
+  /** For a to-do list being typed in: the title or line the caret is in. */
+  part?: string | null
+  /** The status it shows, if any. */
+  status?: Status
+}
+
+export const ItemView = memo(function ItemView({ item, editing, part = null, status }: Props) {
   const area = useRef<HTMLDivElement>(null)
   const text = useRef<HTMLDivElement>(null)
   const fits = item.type === 'note' || item.type === 'box'
@@ -49,10 +60,12 @@ export const ItemView = memo(function ItemView({ item, editing }: { item: Shape;
     if (fits && area.current && text.current) fitText(area.current, text.current, maxFontSize(item))
   }, [fits, item, editing])
 
-  // Text items: the height follows the words. Keep the stored height in step (not an undo step).
+  // Text items and to-do lists: the height follows what's in them. Keep the stored height in step
+  // (not an undo step).
   const outer = useRef<HTMLDivElement>(null)
+  const growsDown = item.type === 'text' || item.type === 'todo'
   useLayoutEffect(() => {
-    if (item.type !== 'text' || !outer.current) return
+    if (!growsDown || !outer.current) return
     const h = outer.current.offsetHeight
     if (Math.abs(h - item.h) > 0.5) {
       const { doc, tabId, fixLayout } = useBoard.getState()
@@ -60,36 +73,50 @@ export const ItemView = memo(function ItemView({ item, editing }: { item: Shape;
     }
   })
 
-  const style =
-    item.type === 'text'
-      ? { left: item.x, top: item.y, width: item.w, fontSize: item.fontSize }
-      : { left: item.x, top: item.y, width: item.w, height: item.h }
+  const style = growsDown
+    ? { left: item.x, top: item.y, width: item.w, fontSize: item.type === 'text' ? item.fontSize : undefined }
+    : { left: item.x, top: item.y, width: item.w, height: item.h }
+  const classes = [
+    'item',
+    `item-${item.type}`,
+    itemClasses(item),
+    editing && 'editing',
+    status && `has-status status-${status.color}`,
+    status?.kind === 'done' && 'is-finished'
+  ]
+    .filter(Boolean)
+    .join(' ')
+  const badge = status && <div className="status-badge">{status.name}</div>
 
   const words = editing ? <Editor item={item} textRef={text} /> : <div ref={text} className="item-words" dangerouslySetInnerHTML={{ __html: cleanHtml(item.text) }} />
 
   if (item.type === 'section') {
     return (
-      <div className={`item item-section ${itemClasses(item)}${editing ? ' editing' : ''}`} data-item-id={item.id} style={style}>
+      <div className={classes} data-item-id={item.id} style={style}>
         {/* Only the title and the edges take clicks: inside, it's like empty board. */}
         <div className={`section-title ${item.text || editing ? '' : 'untitled'}`}>{item.text || editing ? words : 'Untitled section'}</div>
         <div className="section-edge top" />
         <div className="section-edge right" />
         <div className="section-edge bottom" />
         <div className="section-edge left" />
+        {badge}
       </div>
     )
   }
 
   return (
-    <div ref={outer} className={`item item-${item.type} ${itemClasses(item)}${editing ? ' editing' : ''}`} data-item-id={item.id} style={style}>
+    <div ref={outer} className={classes} data-item-id={item.id} style={style}>
       {item.type === 'box' && <Outline shape={item.shape} w={item.w} h={item.h} />}
-      {fits ? (
+      {item.type === 'todo' ? (
+        <TodoView item={item} editing={editing} part={part} />
+      ) : fits ? (
         <div ref={area} className="item-area">
           {words}
         </div>
       ) : (
         words
       )}
+      {badge}
     </div>
   )
 })

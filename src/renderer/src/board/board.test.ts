@@ -4,7 +4,7 @@ import { changes } from './changes'
 import { addTab, isUntouched, moveTab, neighbourTab, nextTabName, removeTab, renameTab } from './doc'
 import { EMPTY_HISTORY, LIMIT, record, redo, undo } from './history'
 
-const doc = (...names: string[]): BoardDoc => ({ tabs: names.map((name) => ({ id: name.toLowerCase(), name, items: [] })) })
+const doc = (...names: string[]): BoardDoc => ({ tabs: names.map((name) => ({ id: name.toLowerCase(), name, items: [] })), statuses: [] })
 const names = (d: BoardDoc): string => d.tabs.map((t) => t.name).join(',')
 
 describe('tab changes', () => {
@@ -89,9 +89,17 @@ describe('what to save', () => {
     const before = doc('A', 'B')
     const after = renameTab(before, 'a', 'Z')
     const request = changes({ doc: before, views: {} }, { doc: after, views: {} })!
-    expect(request.board).toEqual({ format: FORMAT, tabs: [{ id: 'a', name: 'Z' }, { id: 'b', name: 'B' }] })
+    expect(request.board).toEqual({ format: FORMAT, tabs: [{ id: 'a', name: 'Z' }, { id: 'b', name: 'B' }], statuses: [] })
     expect(request.tabs.map((t) => t.id)).toEqual(['a'])
     expect(request.removed).toEqual([])
+  })
+
+  it('writes board.json when the statuses change', () => {
+    const before = doc('A')
+    const statuses = [{ id: 's', name: 'Waiting', color: 'orange', kind: 'other' as const }]
+    const request = changes({ doc: before, views: {} }, { doc: { ...before, statuses }, views: {} })!
+    expect(request.board?.statuses).toBe(statuses)
+    expect(request.tabs).toEqual([])
   })
 
   it('writes a tab file (not the tab list) when only the view moved', () => {

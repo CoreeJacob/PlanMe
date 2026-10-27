@@ -1,7 +1,7 @@
 // Changes to the items on a tab. Like doc.ts, each returns a new BoardDoc and leaves the old
 // one (and every item it doesn't change) untouched.
 
-import type { ArrowEnd, ArrowItem, BoardDoc, BoxItem, BoxShape, Item, NoteItem, Rect, SectionItem, Shape, ShapeType, TextItem } from '@shared/types'
+import type { ArrowEnd, ArrowItem, BoardDoc, BoxItem, BoxShape, Item, NoteItem, Rect, SectionItem, Shape, ShapeType, TextItem, TodoEntry, TodoItem } from '@shared/types'
 import { centre, sideFacing, type Point } from '@/lib/geometry'
 
 /** Replaces one tab's items. Returns `doc` itself if they didn't change. */
@@ -94,7 +94,8 @@ export const DEFAULT_SIZE: Record<ShapeType, { w: number; h: number }> = {
   note: { w: 200, h: 200 },
   text: { w: 240, h: 30 },
   box: { w: 200, h: 120 },
-  section: { w: 600, h: 400 }
+  section: { w: 600, h: 400 },
+  todo: { w: 260, h: 120 }
 }
 export const MIN_SIZE = 20
 export const DEFAULT_FONT_SIZE = 20
@@ -105,6 +106,7 @@ export function newItem(type: ShapeType, id: string, rect: Rect, shape: BoxShape
   if (type === 'note') return { ...base, type, color: 'yellow' } satisfies NoteItem
   if (type === 'text') return { ...base, type, color: 'default', fontSize: DEFAULT_FONT_SIZE } satisfies TextItem
   if (type === 'section') return { ...base, type, color: 'grey' } satisfies SectionItem
+  if (type === 'todo') return { ...base, type, color: 'white', entries: [newEntry()], auto: true } satisfies TodoItem
   return { ...base, type, shape, fill: 'white', border: 'default' } satisfies BoxItem
 }
 
@@ -172,7 +174,15 @@ export function besideRect(source: Rect, at: Point): Rect {
   return { x, y: side === 'bottom' ? at.y : at.y - h, w, h }
 }
 
-/** A new, empty item that looks like `source` (same kind, colours, outline), filling `rect`. */
+/**
+ * A new, empty item that looks like `source` (same kind, colours, outline), filling `rect`. It
+ * starts without a status, and a to-do list starts with one empty line.
+ */
 export function newLike(source: Shape, id: string, rect: Rect): Shape {
-  return { ...source, id, text: '', x: rect.x, y: rect.y, w: rect.w, h: rect.h }
+  const { status: _notCopied, ...look } = source
+  const fresh = { ...look, id, text: '', x: rect.x, y: rect.y, w: rect.w, h: rect.h } as Shape
+  return fresh.type === 'todo' ? { ...fresh, entries: [newEntry()], auto: true } : fresh
 }
+
+/** An empty line for a to-do list. */
+export const newEntry = (): TodoEntry => ({ id: crypto.randomUUID(), text: '', done: false })

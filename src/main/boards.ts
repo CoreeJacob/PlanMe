@@ -19,6 +19,7 @@ import {
   type TabFile,
   type View
 } from '@shared/types'
+import { DEFAULT_STATUSES } from '@shared/statuses'
 import { upgradeItem } from '@shared/upgrade'
 import { exists, writeFileAtomic } from './files'
 
@@ -85,7 +86,8 @@ export async function createBoard(root: string, name: string, tabId: string): Pr
   const dir = await freeFolder(root, cleanName(name))
   const tab: TabFile = { format: FORMAT, id: tabId, view: DEFAULT_VIEW, items: [] }
   await writeFileAtomic(tabPath(dir, tabId), json(tab))
-  await writeFileAtomic(path.join(dir, BOARD_FILE), json({ format: FORMAT, tabs: [{ id: tabId, name: FIRST_TAB }] } satisfies BoardFile))
+  const board: BoardFile = { format: FORMAT, tabs: [{ id: tabId, name: FIRST_TAB }], statuses: DEFAULT_STATUSES }
+  await writeFileAtomic(path.join(dir, BOARD_FILE), json(board))
   return dir
 }
 
@@ -108,7 +110,7 @@ export async function openBoard(dir: string): Promise<OpenedBoard> {
     }
     tabs.push({ id, name, items })
   }
-  return { name: path.basename(dir), path: dir, doc: { tabs }, views }
+  return { name: path.basename(dir), path: dir, doc: { tabs, statuses: board.statuses ?? DEFAULT_STATUSES }, views }
 }
 
 /**
