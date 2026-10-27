@@ -146,3 +146,45 @@ test('right-click colours for any kind of item, and pasting a copy made before s
   const pasted = await app.lastItem()
   await check('an old copy is brought up to date when pasted', pasted.text === 'Old copy' && pasted.classes.includes('shape-rounded'), pasted)
 })
+
+test('an untitled section’s title is easy to reach, and the toolbar stays clear of it', async ({ app }) => {
+  await app.newBoard('Game')
+  await app.tool('s')
+  await app.dragBetween(await app.screenOf(-300, -100), await app.screenOf(300, 200))
+  await app.untilEditing()
+  await app.key('Escape', 'Escape') // left untitled
+  const section = (await app.items()).find((i) => i.type === 'section')!.id
+  const title = `document.querySelector('[data-item-id="${section}"] .section-title')`
+  await app.key('Escape', 'Escape')
+  await app.clickAt(...(await app.centre(title)))
+  await check('clicking the title selects the section', (await app.selectedIds()).join() === section, await app.selectedIds())
+  const gap = await app.js<number>(`(() => { const t = ${title}.getBoundingClientRect(); const bar = document.querySelector('.item-toolbar').getBoundingClientRect(); return t.top - bar.bottom })()`)
+  await check('the toolbar sits above the title, not over it', gap >= 0, gap)
+
+  // Double-click near the right-hand end of the strip above the section: still its title, not a new note.
+  const strip = await app.js<[number, number]>(`(() => { const t = ${title}.getBoundingClientRect(); return [Math.round(t.right - 20), Math.round(t.bottom - 3)] })()`)
+  const count = (await app.items()).length
+  await app.doubleClickAt(strip)
+  await check('double-clicking anywhere along the top strip edits the title', (await app.untilEditing()) && (await app.items()).length === count)
+  await app.type('Act 1')
+  await app.key('Escape', 'Escape')
+  await check('titled', (await app.item(section)).text === 'Act 1', await app.item(section))
+})
+
+test('the right-click menu closes when you go back to the board', async ({ app }) => {
+  await app.newBoard('Game')
+  await app.tool('b')
+  await app.clickAt(...(await app.screenOf(0, 0)))
+  await app.key('Escape', 'Escape')
+  const box = (await app.lastItem()).id
+  await app.rightClick(`document.querySelector('[data-item-id="${box}"]')`)
+  await check('the menu is open', (await app.menuLabels()).length > 0)
+  await app.doubleClickAt(await app.itemCentre(box))
+  await check('double-clicking the box closes it, and you can type', (await app.untilEditing()) && (await app.menuLabels()).length === 0, await app.menuLabels())
+  await app.type('Visible')
+  await app.key('Escape', 'Escape')
+  await check('typed', (await app.item(box)).text === 'Visible')
+  await app.rightClick(`document.querySelector('[data-item-id="${box}"]')`)
+  await app.clickAt(...(await app.screenOf(400, 300)))
+  await check('a click on empty board closes it too', (await app.menuLabels()).length === 0)
+})

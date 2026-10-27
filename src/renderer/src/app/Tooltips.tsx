@@ -60,14 +60,14 @@ export function Tooltips() {
     }
 
     document.addEventListener('mouseover', onOver)
-    document.addEventListener('mousedown', hide)
+    document.addEventListener('pointerdown', hide, true)
     document.addEventListener('keydown', hide)
     document.addEventListener('wheel', hide, { passive: true })
     window.addEventListener('blur', hide)
     return () => {
       clearTimeout(timer)
       document.removeEventListener('mouseover', onOver)
-      document.removeEventListener('mousedown', hide)
+      document.removeEventListener('pointerdown', hide, true)
       document.removeEventListener('keydown', hide)
       document.removeEventListener('wheel', hide)
       window.removeEventListener('blur', hide)

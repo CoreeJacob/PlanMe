@@ -113,6 +113,9 @@ function ArrowButtons({ arrow }: { arrow: ArrowItem }) {
 const GAP = 10
 const HEIGHT = 40
 
+/** How tall a section's title is on screen (see .section-title: it stays readable when zoomed out). */
+const sectionTitleHeight = (zoom: number): number => (15 / Math.max(zoom, 0.5)) * 1.3 * zoom + 4 * zoom + 4
+
 interface Props {
   view: View
   size: Size
@@ -132,8 +135,10 @@ export function ItemToolbar({ view, size, items, lookup, editing, statuses }: Pr
   if (!bounds) return null
   const topLeft = toScreen(view, size, bounds)
   const width = bounds.w * view.zoom
-  // Above the selection, or below it when there's no room above.
-  const above = topLeft.y - GAP - HEIGHT
+  // Above the selection (and clear of a section's title, which sits above its top edge), or below
+  // it when there's no room above.
+  const titleRoom = items.some((i) => i.type === 'section') ? sectionTitleHeight(view.zoom) : 0
+  const above = topLeft.y - titleRoom - GAP - HEIGHT
   const top = above >= 8 ? above : topLeft.y + bounds.h * view.zoom + GAP
   const centre = topLeft.x + width / 2
   const palettes = palettesFor(items)

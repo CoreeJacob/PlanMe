@@ -850,9 +850,10 @@ button {
   position: absolute;
   left: 0;
   bottom: 100%;
-  max-width: 100%;
-  margin-bottom: calc(4px / var(--zoom));
-  padding: 2px 4px;
+  /* As wide as the section, so the whole strip above it is the title to click. */
+  width: 100%;
+  /* No gap below: the strip runs down to the section's edge, so there's nowhere to miss. */
+  padding: 2px 4px calc(6px / var(--zoom));
   border-radius: 4px;
   font-size: calc(15px / max(var(--zoom), 0.5));
   font-weight: 600;

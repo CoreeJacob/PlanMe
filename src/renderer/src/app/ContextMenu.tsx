@@ -55,13 +55,15 @@ export function ContextMenu({ menu, onClose }: { menu: MenuRequest; onClose: () 
 
   useEffect(() => {
     const close = (e: Event): void => {
-      if (e.type === 'mousedown' && ref.current?.contains(e.target as Node)) return
+      if (e.type === 'pointerdown' && ref.current?.contains(e.target as Node)) return
       if (e instanceof KeyboardEvent && e.key !== 'Escape') return
       onClose()
     }
     // Wait a tick so the click that opened the menu doesn't close it.
     const timer = setTimeout(() => {
-      document.addEventListener('mousedown', close, true)
+      // Pointer presses, not mouse ones: the canvas holds back the mouse kind (so drags stay
+      // smooth), and the menu must still close when the board is clicked.
+      document.addEventListener('pointerdown', close, true)
       document.addEventListener('keydown', close, true)
       document.addEventListener('scroll', close, true)
       window.addEventListener('blur', close)
@@ -69,7 +71,7 @@ export function ContextMenu({ menu, onClose }: { menu: MenuRequest; onClose: () 
     })
     return () => {
       clearTimeout(timer)
-      document.removeEventListener('mousedown', close, true)
+      document.removeEventListener('pointerdown', close, true)
       document.removeEventListener('keydown', close, true)
       document.removeEventListener('scroll', close, true)
       window.removeEventListener('blur', close)
