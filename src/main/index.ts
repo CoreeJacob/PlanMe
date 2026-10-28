@@ -162,6 +162,7 @@ function buildMenu(): void {
           { label: 'Select All', accelerator: 'CmdOrCtrl+A', click: send('selectAll') },
           { label: 'Duplicate', accelerator: 'CmdOrCtrl+D', click: send('duplicate') },
           { label: 'Link to…', accelerator: 'CmdOrCtrl+K', click: send('link') },
+          { label: 'Lock or Unlock', accelerator: 'Shift+CmdOrCtrl+L', click: send('lock') },
           { type: 'separator' },
           { label: 'Find…', accelerator: 'CmdOrCtrl+F', click: send('find') },
           { type: 'separator' },
@@ -175,6 +176,9 @@ function buildMenu(): void {
           { label: 'Zoom In', accelerator: 'CmdOrCtrl+=', click: send('zoomIn') },
           { label: 'Zoom Out', accelerator: 'CmdOrCtrl+-', click: send('zoomOut') },
           { label: 'Actual Size', accelerator: 'CmdOrCtrl+0', click: send('zoomReset') },
+          // ⇧1 and ⇧2 are shown here but handled by the board, so they never stop "!" and "@" being typed.
+          { label: 'Zoom to Fit', accelerator: 'Shift+1', registerAccelerator: false, click: send('zoomFit') },
+          { label: 'Zoom to Selection', accelerator: 'Shift+2', registerAccelerator: false, click: send('zoomSelection') },
           { type: 'separator' },
           { label: 'Show/Hide Side Panel', accelerator: 'CmdOrCtrl+\\', click: send('togglePanel') },
           { label: 'Next Tab', accelerator: 'Ctrl+Tab', click: send('nextTab') },

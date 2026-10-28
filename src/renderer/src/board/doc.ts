@@ -2,6 +2,7 @@
 // can keep earlier versions cheaply (unchanged tabs are shared, not copied).
 
 import type { BoardDoc, Tab } from '@shared/types'
+import { copiesOf } from './items'
 
 export const tabIndex = (doc: BoardDoc, id: string): number => doc.tabs.findIndex((t) => t.id === id)
 
@@ -25,6 +26,30 @@ export function renameTab(doc: BoardDoc, id: string, name: string): BoardDoc {
   const tab = doc.tabs.find((t) => t.id === id)
   if (!tab || !trimmed || tab.name === trimmed) return doc
   return { ...doc, tabs: doc.tabs.map((t) => (t.id === id ? { ...t, name: trimmed } : t)) }
+}
+
+/** "Level 1 copy", or "Level 1 copy 2"… if that's taken. */
+export function copyName(doc: BoardDoc, name: string): string {
+  const names = new Set(doc.tabs.map((t) => t.name))
+  let copy = `${name} copy`
+  for (let n = 2; names.has(copy); n++) copy = `${name} copy ${n}`
+  return copy
+}
+
+/**
+ * Adds a copy of a tab just after it, with everything on it: arrows stay joined, and links
+ * between its items go to the copies. (Links to other tabs, or items on them, stay as they were.)
+ */
+export function duplicateTab(doc: BoardDoc, id: string, copy: Pick<Tab, 'id' | 'name'>, newId: () => string): BoardDoc {
+  const tab = doc.tabs.find((t) => t.id === id)
+  if (!tab) return doc
+  const ids = new Map(tab.items.map((i) => [i.id, newId()]))
+  const items = copiesOf(tab.items, 0, 0, newId, ids).map((i) =>
+    i.type !== 'arrow' && i.link?.type === 'item' && ids.has(i.link.item) ? { ...i, link: { type: 'item' as const, item: ids.get(i.link.item)! } } : i
+  )
+  const tabs = doc.tabs.slice()
+  tabs.splice(tabIndex(doc, id) + 1, 0, { ...copy, items })
+  return { ...doc, tabs }
 }
 
 /** Removes a tab. The last tab can't be removed (a board always has one). */

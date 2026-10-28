@@ -580,7 +580,9 @@ export class App {
     const dir = this.boardDir(board)
     const saved = await this.until(async () => {
       const b = await readJson(path.join(dir, 'board.json')).catch(() => null)
-      const tab = b && (await readJson(path.join(dir, 'tabs', `${b.tabs[tabIndex].id}.json`)).catch(() => null))
+      // (The tab may not be saved yet.)
+      const id = b?.tabs[tabIndex]?.id
+      const tab = id && (await readJson(path.join(dir, 'tabs', `${id}.json`)).catch(() => null))
       return tab?.items?.length === count ? tab.items : null
     })
     return saved ?? []

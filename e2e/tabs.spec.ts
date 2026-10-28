@@ -23,7 +23,7 @@ test('add, rename, reorder and delete tabs, with undo, and it all saves', async 
   await check('drag a tab to move it', accepted && (await app.tabNames()).join() === 'Story,Plan,Levels', await app.tabNames())
 
   await app.rightClick(tab('Levels'))
-  await check('tab menu', (await app.menuLabels()).join() === 'Rename,Move Left,Move Right (off),Delete Tab', await app.menuLabels())
+  await check('tab menu', (await app.menuLabels()).join() === 'Rename,Duplicate Tab,Move Left,Move Right (off),Delete Tab', await app.menuLabels())
   await app.pickMenu('Move Left')
   await check('Move Left', (await app.tabNames()).join() === 'Story,Levels,Plan', await app.tabNames())
 

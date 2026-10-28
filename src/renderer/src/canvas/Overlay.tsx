@@ -1,5 +1,5 @@
 // Drawn over the board in screen pixels, so lines and handles stay the same size at any zoom:
-// selection outlines and resize handles, arrow end handles, the drag-to-select box, guides,
+// selection outlines and resize handles (for one item, or a box round several), arrow end handles, the drag-to-select box, guides,
 // new-item outlines, and the arrow being drawn.
 
 import type { Item, Rect, Shape, View } from '@shared/types'
@@ -66,6 +66,9 @@ export function Overlay({ view, size, selected, lookup, editingId, marquee, ghos
   const arrows = selected.filter(isArrow)
   const single = selected.length === 1 ? selected[0] : null
   const group = shapes.length > 1 ? boundsOf(shapes) : null
+  // Several things resize together by the box round the unlocked ones.
+  const free = shapes.filter((s) => !s.locked)
+  const scalable = free.length > 1 && !editingId ? boundsOf(free) : null
 
   return (
     <div className="overlay">
@@ -80,14 +83,21 @@ export function Overlay({ view, size, selected, lookup, editingId, marquee, ghos
       ))}
       {group && <div className="selection-outline group" style={screen(group)} />}
       {target && <div className="attach-target" style={screen(target)} />}
-      {single && !isArrow(single) && single.id !== editingId && (
+      {single && !isArrow(single) && !single.locked && single.id !== editingId && (
         <div className="handles" style={screen(single)}>
           {handlesFor(single).map((h) => (
             <div key={h} className={`handle handle-${h}`} data-handle={h} />
           ))}
         </div>
       )}
-      {single && isArrow(single) &&
+      {scalable && (
+        <div className="handles group" style={screen(scalable)}>
+          {ALL_HANDLES.map((h) => (
+            <div key={h} className={`handle handle-${h}`} data-group-handle={h} />
+          ))}
+        </div>
+      )}
+      {single && isArrow(single) && !single.locked &&
         (() => {
           const points = arrowPoints(single, lookup)
           return (['from', 'to'] as const).map((end) => {

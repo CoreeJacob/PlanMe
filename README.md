@@ -52,12 +52,16 @@ Changes are saved a moment after you make them, and straight away when the windo
 | Drag | Move; items line up with each other (hold ⌘ to stop that) |
 | ⠿ grip (on hover) | Shows at the top-left of whatever the pointer is over (anywhere inside a section): drag it to move the item, or a section with what's in it |
 | Shift while resizing | Keep the shape |
+| Several selected | Drag a handle on the box round them to resize them together (corners keep the shape; Shift stretches). The Align button on the toolbar (or right-click → Align) lines them up by edges or middles, or spreads 3 or more out evenly; if a locked one is among them, the others line up with it |
+| ⇧⌘L, or right-click → Lock | Lock (or unlock) the selection: a padlock shows, and it can't be moved, resized or deleted. Its words, colours and status can still change. Clicking it selects it; dragging from it, or across it, selects other things instead, and Select All skips it |
 | Arrows (Shift for 10) | Nudge |
 | ⌫ | Delete |
 | ⌘C ⌘X ⌘V, ⌘D | Copy, cut, paste, duplicate |
 | ⌘] ⌘[ | Bring to front, send to back |
 | ⌘= ⌘− ⌘0 | Zoom in, out, actual size |
+| ⇧1, ⇧2 | Zoom to fit everything on the tab (or the corner button), zoom to the selection. Never closer than 100% |
 | ⌘T | New tab |
+| Right-click a tab → Duplicate Tab | A copy of it with everything on it (arrows still joined; links between its items go to the copies) |
 | Ctrl-Tab, Ctrl-Shift-Tab | Next / previous tab |
 | ⌘\ | Show or hide the side panel |
 | ⌘Z, ⇧⌘Z | Undo, redo |

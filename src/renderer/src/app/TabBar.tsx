@@ -4,7 +4,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { isUntouched } from '@/board/doc'
 import { useBoard } from '@/board/store'
-import { deleteTab, moveTabTo, newTab, renameTabTo } from './actions'
+import { deleteTab, duplicateTabNow, moveTabTo, newTab, renameTabTo } from './actions'
 import { useContextMenu } from './ContextMenu'
 import { Icon } from './Icon'
 import { useApp } from './store'
@@ -64,6 +64,7 @@ export function TabBar() {
               setTab(tab.id)
               menu.show(e.clientX, e.clientY, [
                 { label: 'Rename', icon: 'rename', onSelect: () => setEditing(tab.id) },
+                { label: 'Duplicate Tab', icon: 'copy', onSelect: () => duplicateTabNow(tab.id) },
                 { label: 'Move Left', icon: 'left', disabled: i === 0, onSelect: () => moveTabTo(tab.id, i - 1) },
                 { label: 'Move Right', icon: 'right', disabled: i === tabs.length - 1, onSelect: () => moveTabTo(tab.id, i + 1) },
                 'separator',

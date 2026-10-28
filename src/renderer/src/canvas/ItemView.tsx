@@ -113,6 +113,12 @@ export const ItemView = memo(function ItemView({ item, editing, part = null, sta
     </button>
   )
 
+  const lockBadge = item.locked && (
+    <span className="lock-badge" title="Locked — it can’t be moved, resized or deleted (right-click to unlock)">
+      <Icon name="lock" size={11} />
+    </span>
+  )
+
   const words = editing ? <Editor item={item} textRef={text} /> : <div ref={text} className="item-words" dangerouslySetInnerHTML={{ __html: cleanHtml(item.text) }} />
 
   if (item.type === 'section') {
@@ -126,6 +132,7 @@ export const ItemView = memo(function ItemView({ item, editing, part = null, sta
         <div className="section-edge left" />
         {badge}
         {linkBadge}
+        {lockBadge}
       </div>
     )
   }
@@ -146,6 +153,7 @@ export const ItemView = memo(function ItemView({ item, editing, part = null, sta
       )}
       {badge}
       {linkBadge}
+      {lockBadge}
     </div>
   )
 })

@@ -1,16 +1,27 @@
-// The small toolbar that floats above the selection: colours, bold/italic/underline,
-// front/back and delete.
+// The small toolbar that floats above the selection: colours, bold/italic/underline, lining
+// things up, front/back, lock and delete.
 
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import type { ArrowItem, Item, Status, View } from '@shared/types'
 import { Icon } from '@/app/Icon'
 import { SHAPE_CHOICES, shapeChoice } from '@/app/shapes'
 import { useApp } from '@/app/store'
-import { boxOf, isArrow, type Lookup } from '@/board/arrows'
+import { boxOf, isArrow, isShape, type Lookup } from '@/board/arrows'
+import { isLocked } from '@/board/items'
 import type { TextStyle } from '@/board/richtext'
 import { boundsOf } from '@/lib/geometry'
-import { allStyled, bringSelectedToFront, deleteSelected, sendSelectedToBack, setOnSelected, setStatusOnSelected, toggleStyleOnSelected } from './actions'
-import { currentStatusChoice, palettesFor, statusChoicesFor, statusValue } from './looks'
+import {
+  allStyled,
+  arrangeSelected,
+  bringSelectedToFront,
+  deleteSelected,
+  sendSelectedToBack,
+  setOnSelected,
+  setStatusOnSelected,
+  toggleLockOnSelected,
+  toggleStyleOnSelected
+} from './actions'
+import { ALIGN_CHOICES, currentStatusChoice, palettesFor, SPREAD_CHOICES, statusChoicesFor, statusValue } from './looks'
 import { sectionTitleHeight } from './targets'
 import { toScreen, type Size } from './view'
 
@@ -147,7 +158,11 @@ export function ItemToolbar({ view, size, items, lookup, editing, statuses }: Pr
   const top = above >= 8 ? above : topLeft.y + bounds.h * view.zoom + GAP
   const centre = topLeft.x + width / 2
   const palettes = palettesFor(items)
-  const box = items.every((i) => i.type === 'box') ? items[0] : null
+  const allLocked = items.every(isLocked)
+  // Locked things keep their outline, like their size and place.
+  const box = items.every((i) => i.type === 'box' && !i.locked) ? items[0] : null
+  const shapes = items.filter(isShape).length
+  const arranging = shapes > 1 ? [...ALIGN_CHOICES, ...(shapes > 2 ? SPREAD_CHOICES : [])] : []
   const arrow = items.every(isArrow) ? items[0] : null
   const statusChoices = statusChoicesFor(items, statuses)
   const currentStatus = currentStatusChoice(items)
@@ -208,6 +223,18 @@ export function ItemToolbar({ view, size, items, lookup, editing, statuses }: Pr
           }
         />
       )}
+      {arranging.length > 0 && (
+        <Picker
+          label="Align — line them up, or spread them out evenly"
+          face={<Icon name="alignLeft" size={16} />}
+          choices={arranging.map((c) => ({ value: c.value, label: c.label, face: <Icon name={c.icon} size={18} /> }))}
+          current=""
+          open={open === 'align'}
+          onOpen={opener('align')}
+          onPick={(value) => arrangeSelected(value as (typeof arranging)[number]['value'])}
+          className="align-popover"
+        />
+      )}
       {palettes.length > 0 && <span className="toolbar-sep" />}
       {STYLES.map((s) => (
         <button
@@ -226,7 +253,14 @@ export function ItemToolbar({ view, size, items, lookup, editing, statuses }: Pr
       <button className="toolbar-btn" title="Send to back — behind everything else (⌘[)" onClick={sendSelectedToBack}>
         <Icon name="toBack" size={16} />
       </button>
-      <button className="toolbar-btn danger" title="Delete (⌫)" onClick={deleteSelected}>
+      <button
+        className={`toolbar-btn ${allLocked ? 'active' : ''}`}
+        title={allLocked ? 'Unlock — let it be moved, resized and deleted again (⇧⌘L)' : 'Lock — so it can’t be moved, resized or deleted by accident (⇧⌘L)'}
+        onClick={toggleLockOnSelected}
+      >
+        <Icon name={allLocked ? 'lock' : 'unlock'} size={16} />
+      </button>
+      <button className="toolbar-btn danger" title="Delete (⌫)" disabled={allLocked} onClick={deleteSelected}>
         <Icon name="trash" size={16} />
       </button>
     </div>

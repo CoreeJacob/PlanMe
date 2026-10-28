@@ -21,6 +21,15 @@ export function withContents(ids: readonly string[], items: readonly Item[], loo
   return [...out]
 }
 
+/**
+ * What moves when `ids` are moved: the unlocked ones, plus whatever's inside unlocked sections
+ * among them. Locked things stay put.
+ */
+export function movable(ids: readonly string[], items: readonly Item[], lookup: Lookup): string[] {
+  const locked = new Set(items.filter((i) => i.locked).map((i) => i.id))
+  return withContents(ids.filter((id) => !locked.has(id)), items, lookup).filter((id) => !locked.has(id))
+}
+
 /** Sections first (they're always behind everything), then everything else, each in their own order. */
 export function drawingOrder(items: readonly Item[]): Item[] {
   const sections = items.filter(isSection)

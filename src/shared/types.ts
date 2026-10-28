@@ -30,6 +30,8 @@ interface ItemBase extends Rect {
   statusAt?: number
   /** Where its link badge goes, if it has one. */
   link?: Link
+  /** Locked: it can't be moved, resized or deleted (its words, colours and status can still change). */
+  locked?: boolean
 }
 
 /** A link from an item: to another tab, to an item (on any tab), or to a web page. */
@@ -153,6 +155,8 @@ export interface ArrowItem {
   color: string
   /** Line thickness in board units. */
   width: number
+  /** Locked: its ends can't be moved, and it can't be deleted. */
+  locked?: boolean
 }
 
 /** The items that take up a box on the board (everything but arrows). */
@@ -252,6 +256,9 @@ export type MenuCommand =
   | 'sendToBack'
   | 'find'
   | 'link'
+  | 'lock'
+  | 'zoomFit'
+  | 'zoomSelection'
 
 export interface PlanMeApi {
   getStartup(): Promise<Startup>

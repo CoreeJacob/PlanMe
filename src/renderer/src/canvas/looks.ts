@@ -1,6 +1,8 @@
 // The colour choices for what's selected, shared by the floating toolbar and the right-click menu.
 
 import type { Item, Status } from '@shared/types'
+import type { IconName } from '@/app/Icon'
+import type { Alignment, Spread } from '@/board/arrange'
 import { BORDER_COLORS, FILL_COLORS, INK_COLORS, NOTE_COLORS, type ColorChoice } from '@/app/colors'
 
 export interface Palette {
@@ -64,3 +66,19 @@ export function currentStatusChoice(items: readonly Item[]): string {
 
 /** Picks a status choice ('' for none, 'auto', or a status id). */
 export const statusValue = (choice: string): string | null => (choice === '' ? null : choice)
+
+/** Ways to line things up, for the toolbar's Align button and the right-click menu. */
+export const ALIGN_CHOICES: Array<{ value: Alignment; label: string; icon: IconName }> = [
+  { value: 'left', label: 'Left edges — line up their left sides', icon: 'alignLeft' },
+  { value: 'centre', label: 'Centres — line them up down the middle', icon: 'alignCentre' },
+  { value: 'right', label: 'Right edges — line up their right sides', icon: 'alignRight' },
+  { value: 'top', label: 'Tops — line up their top edges', icon: 'alignTop' },
+  { value: 'middle', label: 'Middles — line them up across the middle', icon: 'alignMiddle' },
+  { value: 'bottom', label: 'Bottoms — line up their bottom edges', icon: 'alignBottom' }
+]
+
+/** Spreading out evenly: needs three or more things. */
+export const SPREAD_CHOICES: Array<{ value: Spread; label: string; icon: IconName }> = [
+  { value: 'across', label: 'Spread across — the same gap between each, left to right', icon: 'spreadAcross' },
+  { value: 'down', label: 'Spread down — the same gap between each, top to bottom', icon: 'spreadDown' }
+]

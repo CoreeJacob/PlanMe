@@ -1,7 +1,7 @@
 // Things the menus and buttons do: opening and switching boards, and working with tabs.
 
-import type { OpenedBoard } from '@shared/types'
-import { addTab, isUntouched, moveTab, neighbourTab, nextTabName, removeTab, renameTab, tabIndex } from '@/board/doc'
+import { DEFAULT_VIEW, type OpenedBoard } from '@shared/types'
+import { addTab, copyName, duplicateTab, isUntouched, moveTab, neighbourTab, nextTabName, removeTab, renameTab, tabIndex } from '@/board/doc'
 import { flushSave } from '@/board/saver'
 import { useBoard } from '@/board/store'
 import { count } from '@/lib/format'
@@ -71,6 +71,16 @@ export function newTab(): string {
   const id = crypto.randomUUID()
   commit(addTab(doc, { id, name: nextTabName(doc) }, tabIndex(doc, tabId) + 1), id)
   return id
+}
+
+/** Copies a tab, with everything on it, just after it, and shows the copy (looking where the original was). One undo step. */
+export function duplicateTabNow(id: string): void {
+  const { doc, views, commit, setView } = useBoard.getState()
+  const tab = doc.tabs.find((t) => t.id === id)
+  if (!tab) return
+  const copy = crypto.randomUUID()
+  commit(duplicateTab(doc, id, { id: copy, name: copyName(doc, tab.name) }, () => crypto.randomUUID()), copy)
+  setView(copy, views[id] ?? DEFAULT_VIEW)
 }
 
 export function renameTabTo(id: string, name: string): void {

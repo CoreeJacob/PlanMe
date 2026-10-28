@@ -1,12 +1,13 @@
 // The tab showing: its items and where it's looking, read fresh from the store. Event handlers run
 // between renders, so they use these rather than what the last render saw.
 
-import { DEFAULT_VIEW, type Item, type Shape, type View } from '@shared/types'
-import { isShape } from '@/board/arrows'
+import { DEFAULT_VIEW, type Item, type Rect, type Shape, type View } from '@shared/types'
+import { boxOf, isShape, lookupIn } from '@/board/arrows'
 import { itemsOf } from '@/board/items'
 import { isSection } from '@/board/sections'
 import { useBoard } from '@/board/store'
-import { stepZoom } from './view'
+import { boundsOf } from '@/lib/geometry'
+import { clampZoom, stepZoom } from './view'
 
 /** The canvas's size on screen, kept up to date by the Canvas (for placing pasted things). */
 export const viewport = { width: 0, height: 0 }
@@ -45,4 +46,31 @@ export function zoomStep(dir: 1 | -1): void {
 
 export function zoomReset(): void {
   setCurrentView({ ...currentView(), zoom: 1 })
+}
+
+/** Space (screen pixels) left round things zoomed to. */
+const FIT_MARGIN = 64
+
+/** Shows `area` as big as fits on screen, but no closer than 100%. Nothing (an empty tab): the middle, at 100%. */
+function zoomToShow(area: Rect | null): void {
+  if (!area) return setCurrentView(DEFAULT_VIEW)
+  const fit = Math.min((viewport.width - 2 * FIT_MARGIN) / Math.max(1, area.w), (viewport.height - 2 * FIT_MARGIN) / Math.max(1, area.h))
+  setCurrentView({ x: area.x + area.w / 2, y: area.y + area.h / 2, zoom: clampZoom(Math.min(1, fit)) })
+}
+
+const boundsOfItems = (items: Item[]): Rect | null => {
+  const lookup = lookupIn(currentItems())
+  return boundsOf(items.map((i) => boxOf(i, lookup)))
+}
+
+/** ⇧1: everything on the tab. */
+export function zoomToFit(): void {
+  zoomToShow(boundsOfItems(currentItems()))
+}
+
+/** ⇧2: the selection (or everything, if nothing's selected). */
+export function zoomToSelection(): void {
+  const ids = new Set(useBoard.getState().selected)
+  const chosen = currentItems().filter((i) => ids.has(i.id))
+  zoomToShow(boundsOfItems(chosen.length ? chosen : currentItems()))
 }

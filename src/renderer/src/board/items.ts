@@ -60,6 +60,15 @@ export function updateItems(doc: BoardDoc, tabId: string, ids: readonly string[]
   })
 }
 
+export const isLocked = (item: Item): boolean => !!item.locked
+
+/** The item, unlocked. */
+export function unlocked<T extends Item>(item: T): T {
+  if (!item.locked) return item
+  const { locked: _was, ...rest } = item
+  return rest as T
+}
+
 /** An arrow end moved by (dx, dy) if it's loose. Attached ends go wherever their item goes. */
 const moveEnd = (end: ArrowEnd, dx: number, dy: number): ArrowEnd => (end.item ? end : { ...end, x: end.x + dx, y: end.y + dy })
 
@@ -94,8 +103,13 @@ export function restack(doc: BoardDoc, tabId: string, ids: readonly string[], to
  * an end attached to something not copied is left loose (pass items through `detach` first to
  * keep where it was).
  */
-export function copiesOf(items: readonly Item[], dx: number, dy: number, newId: () => string): Item[] {
-  const ids = new Map(items.map((i) => [i.id, newId()]))
+export function copiesOf(
+  items: readonly Item[],
+  dx: number,
+  dy: number,
+  newId: () => string,
+  ids: ReadonlyMap<string, string> = new Map(items.map((i) => [i.id, newId()]))
+): Item[] {
   const copyEnd = (end: ArrowEnd): ArrowEnd =>
     end.item && ids.has(end.item) ? { ...end, item: ids.get(end.item)!, x: end.x + dx, y: end.y + dy } : { item: null, x: end.x + dx, y: end.y + dy }
   return items.map((i) => {
@@ -218,7 +232,7 @@ export function besideRect(source: Rect, at: Point): Rect {
 export function newLike(source: Shape, id: string, rect: Rect): Shape {
   // Building out from a picture makes a note beside it (a second copy of the picture wouldn't help).
   if (source.type === 'image') return newItem('note', id, rect)
-  const { status: _notCopied, ...look } = source
+  const { status: _status, link: _link, locked: _locked, ...look } = source
   const fresh = { ...look, id, text: '', x: rect.x, y: rect.y, w: rect.w, h: rect.h } as Shape
   return fresh.type === 'todo' ? { ...fresh, entries: [newEntry()], auto: true } : fresh
 }

@@ -41,11 +41,12 @@ export function gripTarget(p: Point, zoom: number): string | null {
   const near = (s: Shape, by: number): boolean => p.x >= s.x - by && p.x <= s.x + s.w + by && p.y >= s.y - by && p.y <= s.y + s.h + by
   for (let k = items.length - 1; k >= 0; k--) {
     const s = items[k]
-    if (s.type !== 'arrow' && s.type !== 'section' && near(s, reach)) return s.id
+    // Locked things can't be moved, so they have no grip.
+    if (s.type !== 'arrow' && s.type !== 'section' && !s.locked && near(s, reach)) return s.id
   }
   for (let k = items.length - 1; k >= 0; k--) {
     const s = items[k]
-    if (s.type === 'section' && near(s, reach)) return s.id
+    if (s.type === 'section' && !s.locked && near(s, reach)) return s.id
   }
   return null
 }

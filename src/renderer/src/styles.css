@@ -2143,3 +2143,35 @@ button {
   margin: 2px 4px;
   font-size: 12px;
 }
+
+/* ---------- lock, align, resizing several ---------- */
+
+/* On the bottom edge, at the left: this one can't be moved, resized or deleted. */
+.lock-badge {
+  position: absolute;
+  bottom: -9px;
+  left: 10px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
+  background: var(--panel);
+  color: var(--muted);
+  pointer-events: auto;
+}
+.align-popover {
+  grid-template-columns: repeat(3, 34px);
+}
+.align-popover .swatch-btn {
+  width: 34px;
+  height: 34px;
+  color: var(--text);
+}
+.toolbar-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}

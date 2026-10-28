@@ -5,10 +5,12 @@ import { DEFAULT_VIEW, type ArrowEnd, type BoardDoc, type BoxShape, type Item, t
 import { upgradeItem } from '@shared/upgrade'
 import { attempt, useApp } from '@/app/store'
 import { arrowsAttached, boxOf, detach, isArrow, isShape, lookupIn } from '@/board/arrows'
+import { arrange, type Alignment, type Spread } from '@/board/arrange'
 import {
   addItems,
   copiesOf,
   type BlankType,
+  isLocked,
   itemsOf,
   moveItems,
   newArrow,
@@ -17,11 +19,12 @@ import {
   newLike,
   removeItems,
   restack,
+  unlocked,
   updateItems
 } from '@/board/items'
 import { linkKey, linkTarget } from '@/board/links'
 import { cleanHtml, fromPlainText, isAllStyled, plainText, setWholeStyle, type TextStyle } from '@/board/richtext'
-import { withContents } from '@/board/sections'
+import { movable, withContents } from '@/board/sections'
 import { autoKind, withStatuses } from '@/board/statuses'
 import { useBoard } from '@/board/store'
 import { count, plural } from '@/lib/format'
@@ -259,8 +262,23 @@ export function goBack(): void {
 
 // ---------- selection ----------
 
+/** Selects everything on the tab except locked things (like dragging across the whole tab). */
 export function selectAll(): void {
-  state().select(currentItems().map((i) => i.id))
+  state().select(currentItems().filter((i) => !isLocked(i)).map((i) => i.id))
+}
+
+/** Locks the selected items, or unlocks them if they're all locked already. One undo step. */
+export function toggleLockOnSelected(): void {
+  const chosen = selectedItems()
+  if (!chosen.length) return
+  finishEditing()
+  const lock = !chosen.every(isLocked)
+  change((doc, tabId) => updateItems(doc, tabId, state().selected, (i) => (lock ? (i.locked ? i : { ...i, locked: true }) : unlocked(i))))
+}
+
+/** Lines up the selected things, or spreads them out evenly. One undo step. */
+export function arrangeSelected(how: Alignment | Spread): void {
+  change((doc, tabId) => arrange(doc, tabId, state().selected, how))
 }
 
 /**
@@ -269,12 +287,19 @@ export function selectAll(): void {
  */
 export async function deleteSelected(): Promise<void> {
   finishEditing()
-  const { doc, tabId, selected } = state()
-  if (!selected.length) return
+  const { doc, tabId, selected: chosen } = state()
+  if (!chosen.length) return
   const items = itemsOf(doc, tabId)
   const lookup = lookupIn(items)
+  // Locked things stay.
+  const locked = new Set(items.filter(isLocked).map((i) => i.id))
+  const selected = chosen.filter((id) => !locked.has(id))
+  if (selected.length < chosen.length) {
+    useApp.getState().toast(selected.length ? 'Locked things were kept — unlock them to delete them' : 'It’s locked — unlock it to delete it')
+    if (!selected.length) return
+  }
   let going = selected
-  const contents = withContents(selected, items, lookup).filter((id) => !selected.includes(id))
+  const contents = withContents(selected, items, lookup).filter((id) => !selected.includes(id) && !locked.has(id))
   if (contents.length) {
     const n = contents.length
     const sections = selected.filter((id) => items.find((i) => i.id === id)?.type === 'section').length
@@ -297,11 +322,10 @@ export async function deleteSelected(): Promise<void> {
       buttons: [`Delete ${plural(n, 'Arrow')}`, `Keep ${plural(n, 'Arrow')}`, 'Cancel']
     })
     if (choice === 2) return
-    const attached = new Set(arrows.map((a) => a.id))
-    next =
-      choice === 0
-        ? removeItems(next, tabId, [...attached])
-        : updateItems(next, tabId, [...attached], (a) => (isArrow(a) ? detach(a, ids, lookup) : a))
+    // Locked arrows stay either way, let go at that end.
+    const kept = new Set(arrows.filter((a) => choice === 1 || a.locked).map((a) => a.id))
+    next = removeItems(next, tabId, arrows.filter((a) => !kept.has(a.id)).map((a) => a.id))
+    next = updateItems(next, tabId, [...kept], (a) => (isArrow(a) ? detach(a, ids, lookup) : a))
   }
   // The board may have changed while the question was up.
   if (state().doc !== doc) return
@@ -326,14 +350,15 @@ function selectionToCopy(): Item[] {
 const COPY_STEP = 24
 
 export function duplicateSelected(): void {
-  const copies = copiesOf(selectionToCopy(), COPY_STEP, COPY_STEP, newId)
+  // Copies aren't locked, so they can be moved off the original.
+  const copies = copiesOf(selectionToCopy(), COPY_STEP, COPY_STEP, newId).map(unlocked)
   if (copies.length) change((doc, tabId) => addItems(doc, tabId, copies), copies.map((c) => c.id))
 }
 
 export function nudgeSelected(dx: number, dy: number): void {
   const items = currentItems()
-  // A section takes what's inside it along.
-  const ids = withContents(state().selected, items, lookupIn(items))
+  // A section takes what's inside it along; locked things stay put.
+  const ids = movable(state().selected, items, lookupIn(items))
   change((doc, tabId) => moveItems(doc, tabId, ids, dx, dy))
 }
 
@@ -444,6 +469,6 @@ async function pasteItems(copied: Copied, key: string): Promise<void> {
     dx = Math.round(area.x + area.w / 2 - (bounds.x + bounds.w / 2))
     dy = Math.round(area.y + area.h / 2 - (bounds.y + bounds.h / 2))
   }
-  const copies = copiesOf(copied.items, dx, dy, newId)
+  const copies = copiesOf(copied.items, dx, dy, newId).map(unlocked)
   change((doc, tabId) => addItems(doc, tabId, copies), copies.map((c) => c.id))
 }

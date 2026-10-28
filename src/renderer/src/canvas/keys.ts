@@ -1,11 +1,12 @@
-// The canvas's keys (Space to move around; Escape, Delete, Return and the arrow keys for the
-// selection) and copy, cut and paste. Text being typed keeps its own keys and clipboard.
+// The canvas's keys (Space to move around; ⇧1 and ⇧2 to zoom to fit; Escape, Delete, Return and
+// the arrow keys for the selection) and copy, cut and paste. Text being typed keeps its own keys and clipboard.
 
 import { useEffect, useRef } from 'react'
 import { dialogOpen, useApp } from '@/app/store'
 import { useBoard } from '@/board/store'
 import { isTyping } from '@/lib/dom'
 import { copySelected, deleteSelected, nudgeSelected, paste, startEditing } from './actions'
+import { zoomToFit, zoomToSelection } from './current'
 
 const NUDGE: Record<string, [number, number]> = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }
 
@@ -39,6 +40,11 @@ export function useCanvasKeys(onSpace: (down: boolean) => void, cancelDrag: () =
       } else if (e.key === 'Enter' && selected.length === 1) {
         e.preventDefault()
         startEditing(selected[0])
+      } else if (e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey && (e.code === 'Digit1' || e.code === 'Digit2')) {
+        // ⇧1: zoom to fit everything; ⇧2: zoom to the selection.
+        e.preventDefault()
+        if (e.code === 'Digit1') zoomToFit()
+        else zoomToSelection()
       } else if (NUDGE[e.key] && selected.length && !e.metaKey) {
         e.preventDefault()
         const step = e.shiftKey ? 10 : 1

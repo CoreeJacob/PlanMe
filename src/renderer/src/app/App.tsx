@@ -2,8 +2,8 @@ import { useEffect } from 'react'
 import type { MenuCommand } from '@shared/types'
 import { flushSave, startSaving } from '@/board/saver'
 import { useBoard } from '@/board/store'
-import { bringSelectedToFront, duplicateSelected, linkSelected, selectAll, sendSelectedToBack } from '@/canvas/actions'
-import { zoomReset, zoomStep } from '@/canvas/current'
+import { bringSelectedToFront, duplicateSelected, linkSelected, selectAll, sendSelectedToBack, toggleLockOnSelected } from '@/canvas/actions'
+import { zoomReset, zoomStep, zoomToFit, zoomToSelection } from '@/canvas/current'
 import { isTyping } from '@/lib/dom'
 import { cycleTab, goToBoards, newBoard, newTab } from './actions'
 import { BoardScreen } from './BoardScreen'
@@ -36,6 +36,12 @@ function runBoardCommand(command: MenuCommand): void {
       return zoomStep(-1)
     case 'zoomReset':
       return zoomReset()
+    case 'zoomFit':
+      return zoomToFit()
+    case 'zoomSelection':
+      return zoomToSelection()
+    case 'lock':
+      return toggleLockOnSelected()
     case 'togglePanel':
       return app.setPanelOpen(!app.panelOpen)
     case 'selectAll':

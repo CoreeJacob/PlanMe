@@ -17,9 +17,10 @@ import { isPlacingTool, useApp, type PlacingTool } from '@/app/store'
 import { IMAGE_DRAG } from '@/app/ImagesPanel'
 import { useDimFilter } from '@/app/TasksPanel'
 import { arrowPoints, boxOf, crossesBox, isArrow, isShape, lookupIn, nearestPin, pinPoint } from '@/board/arrows'
-import { besideRect, itemsOf, moveItems, resizeRect, updateItems, type Handle } from '@/board/items'
+import { scaleItems } from '@/board/arrange'
+import { besideRect, isLocked, itemsOf, moveItems, resizeRect, updateItems, type Handle } from '@/board/items'
 import { linkTarget, linkTip } from '@/board/links'
-import { drawingOrder, isSection, withContents } from '@/board/sections'
+import { drawingOrder, isSection, movable } from '@/board/sections'
 import { statusOf } from '@/board/statuses'
 import { NO_SELECTION, selectTab, useBoard } from '@/board/store'
 import { boundsOf, overlaps, rectFrom, within, type Point } from '@/lib/geometry'
@@ -28,6 +29,7 @@ import {
   addArrow,
   addConnected,
   addItem,
+  arrangeSelected,
   bringSelectedToFront,
   deleteSelected,
   duplicateSelected,
@@ -40,14 +42,15 @@ import {
   setOnSelected,
   setStatusOnSelected,
   startEditing,
-  tickEntry
+  tickEntry,
+  toggleLockOnSelected
 } from './actions'
 import { ArrowView } from './ArrowView'
 import { addImageFiles, chooseImages, placeImages } from './images'
 import { ItemToolbar } from './ItemToolbar'
 import { ItemView } from './ItemView'
-import { currentStatusChoice, palettesFor, paletteName, statusChoicesFor, statusValue } from './looks'
-import { canJoin, currentView, itemById, onlySelected, setCurrentView, viewport, zoomReset, zoomStep } from './current'
+import { ALIGN_CHOICES, currentStatusChoice, palettesFor, paletteName, SPREAD_CHOICES, statusChoicesFor, statusValue } from './looks'
+import { canJoin, currentView, itemById, onlySelected, setCurrentView, viewport, zoomReset, zoomStep, zoomToFit, zoomToSelection } from './current'
 import { useCanvasKeys, useClipboard } from './keys'
 import { Overlay, type ActiveDot } from './Overlay'
 import { snapMove, snapResize, type Guide } from './snap'
@@ -75,9 +78,12 @@ type Drag =
        */
       grab?: { offset: Point; startScreen: Point; moving: boolean }
     }
-  | { kind: 'select'; start: Point; keep: string[] }
+  /** `from`: started on a locked item, so it only becomes a drag once the pointer has moved away from where it was pressed (screen point). */
+  | { kind: 'select'; start: Point; keep: string[]; from?: Point }
   | { kind: 'move'; start: Point; startScreen: Point; base: BoardDoc; ids: string[]; moving: boolean }
   | { kind: 'resize'; start: Point; base: BoardDoc; item: Shape; handle: Handle }
+  /** Resizing several things together, by a handle on the box round them all. */
+  | { kind: 'groupResize'; start: Point; base: BoardDoc; box: Rect; ids: string[]; handle: Handle }
 
 const NO_ITEMS: Item[] = []
 const NO_SHAPES: Shape[] = []
@@ -198,7 +204,7 @@ export function Canvas() {
   /** Escape during a drag puts things back as they were. */
   const cancelDrag = (): void => {
     const d = dragRef.current
-    if (d?.kind === 'move' || d?.kind === 'resize' || d?.kind === 'arrowEnd') useBoard.getState().cancelGesture()
+    if (d?.kind === 'move' || d?.kind === 'resize' || d?.kind === 'groupResize' || d?.kind === 'arrowEnd') useBoard.getState().cancelGesture()
     endDrag()
   }
 
@@ -284,6 +290,16 @@ export function Canvas() {
       setDrag({ kind: 'resize', start, base: board.doc, item: only, handle })
       return
     }
+    // A handle on the box round several selected things: resize them together.
+    const groupHandle = target.closest<HTMLElement>('[data-group-handle]')?.dataset.groupHandle as Handle | undefined
+    if (groupHandle) {
+      const items = itemsOf(board.doc, board.tabId)
+      const box = boundsOf(items.filter((i): i is Shape => isShape(i) && !i.locked && board.selected.includes(i.id)))
+      if (box) {
+        setDrag({ kind: 'groupResize', start, base: board.doc, box, ids: movable(board.selected, items, lookupIn(items)), handle: groupHandle })
+        return
+      }
+    }
 
     // An item's move grip, or the item itself.
     const hit = target.closest<HTMLElement>('[data-grip]')?.dataset.grip ?? target.closest<HTMLElement>('[data-item-id]')?.dataset.itemId
@@ -295,6 +311,12 @@ export function Canvas() {
       } else if (!board.selected.includes(hit)) {
         board.select([hit])
       }
+      // A locked item doesn't move: dragging from it selects things across the board instead, as
+      // if it were empty space (and a click just selects it).
+      if (itemById(hit)?.locked) {
+        if (!e.shiftKey) setDrag({ kind: 'select', start, keep: NO_SELECTION, from: { x: e.clientX, y: e.clientY } })
+        return
+      }
       // An arrow on its own with one loose end, picked up by its line: pull that end along, so it
       // can be joined to an item like dragging its end handle.
       const picked = onlySelected()
@@ -304,9 +326,9 @@ export function Canvas() {
         setDrag({ kind: 'arrowEnd', base: board.doc, arrow: picked, end, grab: { offset, startScreen: { x: e.clientX, y: e.clientY }, moving: false } })
         return
       }
-      // A section takes whatever's inside it along.
+      // A section takes whatever's inside it along; locked things stay put.
       const items = itemsOf(board.doc, board.tabId)
-      const ids = withContents(useBoard.getState().selected, items, lookupIn(items))
+      const ids = movable(useBoard.getState().selected, items, lookupIn(items))
       setDrag({ kind: 'move', start, startScreen: { x: e.clientX, y: e.clientY }, base: board.doc, ids, moving: false })
       return
     }
@@ -363,12 +385,16 @@ export function Canvas() {
       const end = endUnderPointer(pointer, at, other)
       board.preview(updateItems(d.base, board.tabId, [d.arrow.id], (a) => ({ ...a, [d.end]: end })))
     } else if (d.kind === 'select') {
+      if (d.from) {
+        if (Math.hypot(e.clientX - d.from.x, e.clientY - d.from.y) < DRAG_START) return
+        setDrag({ ...d, from: undefined })
+      }
       const r = rectFrom(d.start.x, d.start.y, p.x, p.y)
       setMarquee(r)
       const all = itemsOf(board.doc, board.tabId)
       const lookup = lookupIn(all)
-      // Anything the box touches, except sections, which it must go all the way round.
-      const crossed = all.filter((i) => (isSection(i) ? within(i, r) : overlaps(boxOf(i, lookup), r))).map((i) => i.id)
+      // Anything the box touches, except sections, which it must go all the way round, and locked things.
+      const crossed = all.filter((i) => !i.locked && (isSection(i) ? within(i, r) : overlaps(boxOf(i, lookup), r))).map((i) => i.id)
       board.select([...d.keep, ...crossed.filter((id) => !d.keep.includes(id))])
     } else if (d.kind === 'move') {
       if (!d.moving) {
@@ -389,6 +415,11 @@ export function Canvas() {
         setGuides(snap.guides)
       } else setGuides(NO_GUIDES)
       board.preview(moveItems(d.base, board.tabId, d.ids, dx, dy))
+    } else if (d.kind === 'groupResize') {
+      // Corners keep the shape (Shift stretches); sides stretch.
+      const keepShape = d.handle.length === 2 && !e.shiftKey
+      const to = resizeRect(d.box, d.handle, p.x - d.start.x, p.y - d.start.y, keepShape)
+      board.preview(scaleItems(d.base, board.tabId, d.ids, d.box, to, keepShape))
     } else if (d.kind === 'resize') {
       const isText = d.item.type === 'text'
       const corner = d.handle.length === 2
@@ -441,7 +472,7 @@ export function Canvas() {
         addArrow(d.from, d.to)
       }
       useApp.getState().setTool('select')
-    } else if (d.kind === 'move' || d.kind === 'resize' || d.kind === 'arrowEnd') {
+    } else if (d.kind === 'move' || d.kind === 'resize' || d.kind === 'groupResize' || d.kind === 'arrowEnd') {
       useBoard.getState().endGesture()
     }
     endDrag()
@@ -491,7 +522,8 @@ export function Canvas() {
         { label: 'Add Section Here', icon: 'section', onSelect: () => addItem('section', at) },
         { label: 'Add Image Here…', icon: 'image', onSelect: () => void chooseImages(at) },
         'separator',
-        { label: 'Select All', hint: '⌘A', disabled: !items.length, onSelect: selectAll }
+        { label: 'Select All', hint: '⌘A', disabled: !items.length, onSelect: selectAll },
+        { label: 'Zoom to Fit', icon: 'fit', hint: '⇧1', disabled: !items.length, onSelect: zoomToFit }
       ])
       return
     }
@@ -519,13 +551,22 @@ export function Canvas() {
       entries.push({ label: only?.link ? 'Change Link…' : 'Link to…', icon: 'link', hint: '⌘K', onSelect: linkSelected })
       if (linkable.some((i) => i.link)) entries.push({ label: 'Remove Link', onSelect: () => setLink(linkable.map((i) => i.id), null) })
     }
+    const shapes = chosen.filter(isShape)
+    const allLocked = chosen.every(isLocked)
+    entries.push('separator')
+    if (shapes.length > 1) {
+      const arranging = [...ALIGN_CHOICES, ...(shapes.length > 2 ? SPREAD_CHOICES : [])]
+      entries.push({ label: 'Align', icon: 'alignLeft', submenu: arranging.map((c) => ({ label: c.label.split(' — ')[0], icon: c.icon, onSelect: () => arrangeSelected(c.value) })) })
+    }
     entries.push(
+      { label: allLocked ? 'Unlock' : 'Lock', icon: allLocked ? 'unlock' : 'lock', hint: '⇧⌘L', onSelect: toggleLockOnSelected },
+      { label: 'Zoom to Selection', icon: 'fit', hint: '⇧2', onSelect: zoomToSelection },
       'separator',
       { label: 'Bring to Front', icon: 'toFront', hint: '⌘]', onSelect: bringSelectedToFront },
       { label: 'Send to Back', icon: 'toBack', hint: '⌘[', onSelect: sendSelectedToBack },
       { label: 'Duplicate', icon: 'copy', hint: '⌘D', onSelect: duplicateSelected },
       'separator',
-      { label: 'Delete', icon: 'trash', hint: '⌫', danger: true, onSelect: deleteSelected }
+      { label: 'Delete', icon: 'trash', hint: '⌫', danger: true, disabled: allLocked, onSelect: deleteSelected }
     )
     menu.show(e.clientX, e.clientY, entries)
   }
@@ -655,6 +696,9 @@ export function Canvas() {
         </button>
         <button className="icon-btn" title="Zoom in (⌘=)" onClick={() => zoomStep(1)}>
           <Icon name="plus" size={16} />
+        </button>
+        <button className="icon-btn" title="Zoom to fit — see everything on this tab (⇧1)" onClick={zoomToFit}>
+          <Icon name="fit" size={16} />
         </button>
       </div>
       {/* The menu sits inside the canvas, so keep its clicks from reaching the canvas too. */}
