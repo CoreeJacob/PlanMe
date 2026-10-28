@@ -17,6 +17,7 @@ Each board is a folder in `~/Documents/PlanMe` (you can change this on the Board
 My Game/
   board.json       the tabs, in order, with their names
   tabs/<id>.json   what's on each tab, and where it was last looked at
+  images/          pictures added to the board (copies; very large ones shrunk to 4000 pixels)
 ```
 
 The app's own settings (which folder, which board was open) are in `~/Library/Application Support/PlanMe/settings.json`.
@@ -33,10 +34,12 @@ Changes are saved a moment after you make them, and straight away when the windo
 | V / H | Select / Hand tool |
 | N / T / B / S | Sticky note / Text / Shape / Section tool (click to place, or drag to size). The Shape tool offers rectangle, rounded, oval, diamond, parallelogram and cylinder |
 | L | To-do list: Return adds a line, Backspace on an empty line removes it, ↑ ↓ move between lines; click a box to tick it |
+| I | Image tool: click where it goes and pick pictures. Or drop pictures from Finder, or paste one. Corners keep the shape; Shift stretches |
 | A | Arrow tool: drag from one item to another (or to empty space) |
 | Drag a dot | The dots round an item (shown when the pointer is near): draw an arrow from there. Drop on a dot to pin the arrow to it, or on an item's middle to let it pick the facing side |
 | Double-click an arrow | Label it |
 | Status (toolbar or right-click) | To do, Doing, Done, Blocked… per board; “Edit statuses…” to change the list. Finished ones fade |
+| Tasks (side panel) | Everything with a status, from every tab. Filter by status, “Dim the rest of the board”, click a task to go to it. Finished ones are in the folded Done list (they stay on the board) |
 | Double-click | Empty space: a new sticky note. An item: type in it |
 | Return, Escape | Start typing in the selected item, finish typing |
 | ⌘B ⌘I ⌘U | Bold, italic, underline (while typing) |

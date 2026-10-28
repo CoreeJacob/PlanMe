@@ -393,7 +393,7 @@ export class App {
   /** The items on the tab showing, bottom of the pile first, as drawn. */
   items(): Promise<ItemInfo[]> {
     return this.js(`[...document.querySelectorAll('.item')].map(e => { const words = e.querySelector('.item-words'); return {
-      id: e.dataset.itemId, type: e.className.match(/item-(note|text|box|section|todo)/)[1], classes: e.className,
+      id: e.dataset.itemId, type: e.className.match(/item-(note|text|box|section|todo|image)/)[1], classes: e.className,
       x: parseFloat(e.style.left), y: parseFloat(e.style.top), w: parseFloat(e.style.width), h: e.offsetHeight,
       text: words ? words.innerText.replace(/\\n$/, '') : '', html: words ? words.innerHTML : '', fontSize: words ? parseFloat(getComputedStyle(words).fontSize) : 0 } })`)
   }
@@ -458,6 +458,42 @@ export class App {
     await this.settle()
   }
 
+  /** Makes the next file-picker dialogs answer with these lists of files (an empty list is Cancel). */
+  async answerOpenDialogs(...answers: string[][]): Promise<void> {
+    await this.main(({ dialog }, list) => {
+      dialog.showOpenDialog = (async () => {
+        const filePaths = list.shift() ?? []
+        return { canceled: !filePaths.length, filePaths }
+      }) as typeof dialog.showOpenDialog
+    }, answers)
+  }
+
+  /** A snippet making a page File from PNG bytes. */
+  private fileSnippet(name: string, bytes: Buffer): string {
+    return `new File([Uint8Array.from(atob(${JSON.stringify(bytes.toString('base64'))}), (c) => c.charCodeAt(0))], ${JSON.stringify(name)}, { type: 'image/png' })`
+  }
+
+  /** Pastes a picture, as if a screenshot were on the clipboard. */
+  async pastePicture(name: string, bytes: Buffer): Promise<void> {
+    await this.js(`(() => { const dt = new DataTransfer(); dt.items.add(${this.fileSnippet(name, bytes)})
+      ;(document.activeElement ?? document.body).dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true })); return 1 })()`)
+    await this.settle()
+  }
+
+  /** Drops a picture on the board at a window point, as if dragged in from another app. */
+  async dropPicture(name: string, bytes: Buffer, [x, y]: Point): Promise<void> {
+    await this.js(`(() => { const dt = new DataTransfer(); dt.items.add(${this.fileSnippet(name, bytes)})
+      const canvas = document.querySelector('.canvas')
+      canvas.dispatchEvent(new DragEvent('dragover', { dataTransfer: dt, clientX: ${x}, clientY: ${y}, bubbles: true, cancelable: true }))
+      canvas.dispatchEvent(new DragEvent('drop', { dataTransfer: dt, clientX: ${x}, clientY: ${y}, bubbles: true, cancelable: true })); return 1 })()`)
+    await this.settle()
+  }
+
+  /** Waits for a picture on the board to have loaded, and gives its size as loaded (0 if it didn't). */
+  pictureLoaded(id: string): Promise<number> {
+    return this.untilJs(`document.querySelector('[data-item-id="${id}"] img')?.naturalWidth ?? 0`)
+  }
+
   /** Makes the next Mac question dialogs answer with these button numbers, recording what they asked. */
   async answerQuestions(...answers: number[]): Promise<void> {
     await this.main(({ dialog }, list) => {
@@ -515,6 +551,12 @@ export class App {
     await this.clickAt(...(await this.screenOf((a[0] + b[0]) / 2, (a[1] + b[1]) / 2)), 'left', modifiers)
   }
 
+  /** Gives the selected items a status from the floating toolbar ('No status', 'Automatic' or a status's name). */
+  async setStatus(name: string): Promise<void> {
+    await this.click(toolbarButton('Status'))
+    await this.click(pickerChoice(name))
+  }
+
   /** Picks a tool by its key. */
   tool(letter: string): Promise<void> {
     return this.key(letter, 'Key' + letter.toUpperCase())
@@ -557,7 +599,7 @@ export interface ArrowInfo {
 
 export interface ItemInfo {
   id: string
-  type: 'note' | 'text' | 'box' | 'section' | 'todo'
+  type: 'note' | 'text' | 'box' | 'section' | 'todo' | 'image'
   classes: string
   x: number
   y: number

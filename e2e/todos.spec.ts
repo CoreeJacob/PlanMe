@@ -8,10 +8,6 @@ const progress = (app: App, id: string) => app.js<string>(`document.querySelecto
 const badge = (app: App, id: string) => app.js<string | null>(`document.querySelector('[data-item-id="${id}"] .status-badge')?.textContent ?? null`)
 const typingIn = (app: App) => app.js<string | undefined>(`document.activeElement?.dataset.part`)
 const tick = (app: App, id: string, k: number) => app.click(`document.querySelectorAll('[data-item-id="${id}"] .todo-box')[${k}]`)
-const setStatus = async (app: App, name: string) => {
-  await app.click(toolbarButton('Status'))
-  await app.click(pickerChoice(name))
-}
 
 test('to-do lists: type lines, tick them, and their status follows (unless you pick one)', async ({ app }) => {
   await app.newBoard('Game')
@@ -44,11 +40,11 @@ test('to-do lists: type lines, tick them, and their status follows (unless you p
 
   // Pick a status yourself: it sticks, whatever the ticks. "Automatic" hands it back.
   await app.click(`document.querySelector('[data-item-id="${list}"] .todo-title')`)
-  await setStatus(app, 'Blocked')
+  await app.setStatus('Blocked')
   await tick(app, list, 2)
   await check('a picked status stays, even when all are ticked', (await badge(app, list)) === 'Blocked', await badge(app, list))
   await app.click(`document.querySelector('[data-item-id="${list}"] .todo-title')`)
-  await setStatus(app, 'Automatic')
+  await app.setStatus('Automatic')
   await check('Automatic goes back to following the ticks', (await badge(app, list)) === 'Done', await badge(app, list))
 
   // Double-click a line to change it; ↑ and ↓ move between lines; Backspace on an empty line removes it.
@@ -77,7 +73,7 @@ test('to-do lists: type lines, tick them, and their status follows (unless you p
 test('statuses: pick one, finished ones fade, and edit the board’s list', async ({ app }) => {
   await app.newBoard('Game')
   const boss = await app.noteAt(0, 0, 'Boss fight')
-  await setStatus(app, 'Blocked')
+  await app.setStatus('Blocked')
   await check('a badge shows the status', (await badge(app, boss)) === 'Blocked' && (await app.item(boss)).classes.includes('status-red'))
   const shop = await app.noteAt(300, 0, 'Shop')
   await app.rightClick(`document.querySelector('[data-item-id="${shop}"]')`)
@@ -86,10 +82,10 @@ test('statuses: pick one, finished ones fade, and edit the board’s list', asyn
   await app.pickMenu('Done')
   await check('the right-click menu sets it too, and finished things fade', (await badge(app, shop)) === 'Done' && (await app.item(shop)).classes.includes('is-finished'))
   const town = await app.noteAt(600, 0, 'Town')
-  await setStatus(app, 'Doing')
-  await setStatus(app, 'No status')
+  await app.setStatus('Doing')
+  await app.setStatus('No status')
   await check('No status takes it off', (await badge(app, town)) === null)
-  await setStatus(app, 'Doing')
+  await app.setStatus('Doing')
 
   // Edit the list: rename Blocked, add one, delete Doing (which Town uses).
   await app.click(toolbarButton('Status'))

@@ -25,6 +25,7 @@ const PATHS = {
   parallelogram: 'M8 6h13l-5 12H3z',
   cylinder: 'M4 6c0-1.7 3.6-3 8-3s8 1.3 8 3v12c0 1.7-3.6 3-8 3s-8-1.3-8-3zM4 6c0 1.7 3.6 3 8 3s8-1.3 8-3',
   section: 'M3 8h18v12H3zM3 8V4h8v4',
+  image: 'M4 5h16v14H4zM4 16l4.5-4.5 4 4 3-3L20 17M15.5 9.5h.01',
   flag: 'M6 21V4M6 4h11l-2.5 4 2.5 4H6',
   up: 'M12 19V5M6 11l6-6 6 6',
   down: 'M12 5v14M6 13l6 6 6-6',

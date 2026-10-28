@@ -38,9 +38,11 @@ interface Props {
   from: Shape | undefined
   to: Shape | undefined
   editing: boolean
+  /** Faded back, while the board is filtered to a status (arrows never have one). */
+  dimmed?: boolean
 }
 
-export const ArrowView = memo(function ArrowView({ arrow, from, to, editing }: Props) {
+export const ArrowView = memo(function ArrowView({ arrow, from, to, editing, dimmed }: Props) {
   const label = useRef<HTMLDivElement>(null)
   const points = arrowPoints(arrow, (id) => (id === from?.id ? from : id === to?.id ? to : undefined))
   const startHead = arrow.heads === 'both'
@@ -51,14 +53,14 @@ export const ArrowView = memo(function ArrowView({ arrow, from, to, editing }: P
 
   return (
     <>
-      <svg className={`arrow ink-${arrow.color}`} data-item-id={arrow.id} aria-label="Arrow">
+      <svg className={`arrow ink-${arrow.color}${dimmed ? ' dimmed' : ''}`} data-item-id={arrow.id} aria-label="Arrow">
         <polyline className="arrow-hit" points={points.map((p) => `${p.x},${p.y}`).join(' ')} strokeWidth={arrow.width + HIT_WIDTH} />
         <polyline className="arrow-line" points={line} strokeWidth={arrow.width} strokeDasharray={arrow.dashed ? `${arrow.width * 4} ${arrow.width * 3}` : undefined} />
         {endHead && <polygon className="arrow-head" points={head(points[points.length - 2], points[points.length - 1], arrow.width)} />}
         {startHead && <polygon className="arrow-head" points={head(points[1], points[0], arrow.width)} />}
       </svg>
       {hasLabel && (
-        <div className={`arrow-label ink-${arrow.color}`} data-item-id={arrow.id} style={{ left: mid.x, top: mid.y }}>
+        <div className={`arrow-label ink-${arrow.color}${dimmed ? ' dimmed' : ''}`} data-item-id={arrow.id} style={{ left: mid.x, top: mid.y }}>
           {editing ? (
             <Editor item={arrow} textRef={label} />
           ) : (

@@ -8,6 +8,9 @@ import { isSection } from '@/board/sections'
 import { useBoard } from '@/board/store'
 import { stepZoom } from './view'
 
+/** The canvas's size on screen, kept up to date by the Canvas (for placing pasted things). */
+export const viewport = { width: 0, height: 0 }
+
 export const currentItems = (): Item[] => {
   const { doc, tabId } = useBoard.getState()
   return itemsOf(doc, tabId)

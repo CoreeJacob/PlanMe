@@ -26,6 +26,8 @@ interface ItemBase extends Rect {
   text: string
   /** Its status (the id of one of the board's statuses), if it's being tracked. */
   status?: string
+  /** When its status last changed (ms since 1970), so the Done list can show the newest first. */
+  statusAt?: number
 }
 
 /** A sticky note. Its text shrinks to fit. Colours are names (see app/colors.ts). */
@@ -80,6 +82,23 @@ export interface TodoItem extends ItemBase {
   auto: boolean
 }
 
+/** A picture. The file lives in the board's images folder; `src` is its path inside the board's folder. */
+export interface ImageItem extends ItemBase {
+  type: 'image'
+  src: string
+  /** The file's name, for lists (like the Tasks panel) when it has no words. */
+  name: string
+}
+
+/** The kinds of picture file that can be added. */
+export const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg'] as const
+
+/** An image just copied into a board: where it is inside the board's folder, and its name. */
+export interface ImportedImage {
+  src: string
+  name: string
+}
+
 /** One end of an arrow: attached to an item, or loose at a point on the board. */
 export interface ArrowEnd {
   /** The item it's attached to, or null for a loose end. */
@@ -113,7 +132,7 @@ export interface ArrowItem {
 }
 
 /** The items that take up a box on the board (everything but arrows). */
-export type Shape = NoteItem | TextItem | BoxItem | SectionItem | TodoItem
+export type Shape = NoteItem | TextItem | BoxItem | SectionItem | TodoItem | ImageItem
 /** Anything placed on a tab. Later phases add more kinds (images…). */
 export type Item = Shape | ArrowItem
 export type ShapeType = Shape['type']
@@ -222,6 +241,16 @@ export interface PlanMeApi {
   saveBoard(path: string, request: SaveRequest): Promise<void>
   /** Asks a question in a Mac dialog and resolves with the index of the button chosen. The last button is Cancel. */
   ask(question: { message: string; detail?: string; buttons: string[] }): Promise<number>
+  /** Copies image files (from Finder) into a board's images folder. */
+  importImages(board: string, paths: string[]): Promise<ImportedImage[]>
+  /** Saves an image's bytes (pasted, or dropped from somewhere without a file) into a board's images folder. */
+  importImageData(board: string, name: string, data: Uint8Array): Promise<ImportedImage>
+  /** Copies an image from one board's folder into another's (pasting between boards). */
+  copyImage(from: string, src: string, to: string): Promise<ImportedImage>
+  /** Asks which image files to add; null if cancelled. */
+  chooseImages(): Promise<string[] | null>
+  /** The file on disk a dropped file came from ('' if it isn't one). */
+  pathForFile(file: File): string
   /** Remembers which board to reopen next launch (null: start on the Boards screen). */
   setLastBoard(path: string | null): Promise<void>
   onMenuCommand(callback: (command: MenuCommand) => void): () => void

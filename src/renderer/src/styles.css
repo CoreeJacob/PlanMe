@@ -1537,3 +1537,196 @@ button {
   align-self: flex-start;
   font-size: 13px;
 }
+
+/* ---------- the Tasks panel ---------- */
+
+.tasks-section {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.task-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: none;
+  color: var(--muted);
+  font-size: 11px;
+  cursor: pointer;
+}
+.chip:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+.chip.active {
+  border-color: var(--status, var(--accent));
+  background: color-mix(in srgb, var(--status, var(--accent)) 14%, transparent);
+  color: var(--text);
+  font-weight: 600;
+}
+.chip-count {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.7;
+}
+.dim-switch {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: -2px 0 8px;
+  font-size: 12px;
+  color: var(--muted);
+  cursor: pointer;
+}
+.task-group + .task-group {
+  margin-top: 8px;
+}
+.task-tab {
+  margin: 0 0 2px 2px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.task-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  min-height: 28px;
+  padding: 3px 6px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+.task-row:hover {
+  background: var(--panel-2);
+}
+.task-dot {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--status);
+}
+.task-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.task-progress,
+.task-meta {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.task-meta {
+  max-width: 70px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The Done list: folded away at the bottom; open, it takes up to half the panel. */
+.done-section {
+  flex-shrink: 0;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  border-top: 1px solid var(--border);
+  border-bottom: none;
+}
+.done-section.open {
+  display: flex;
+  flex-direction: column;
+  max-height: 45%;
+}
+.done-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 4px 0;
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.done-toggle svg {
+  transition: transform 0.12s ease-out;
+}
+.done-toggle[aria-expanded='true'] svg {
+  transform: rotate(90deg);
+}
+.done-list {
+  margin-top: 4px;
+  overflow-y: auto;
+}
+.done-list .task-row {
+  opacity: 0.65;
+}
+.done-list .task-label {
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, currentColor 40%, transparent);
+}
+
+/* On the board: things that don't match the filter fade right back; one just jumped to flashes. */
+.item.dimmed,
+.arrow.dimmed,
+.arrow-label.dimmed {
+  opacity: 0.15;
+}
+.item.flashing {
+  animation: flash 0.4s ease-in-out 3;
+}
+@keyframes flash {
+  50% {
+    filter: drop-shadow(0 0 calc(10px / var(--zoom)) var(--accent));
+    transform: scale(1.03);
+  }
+}
+
+/* ---------- pictures ---------- */
+
+.item-image {
+  border-radius: 2px;
+}
+.item-picture {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  pointer-events: none;
+  user-select: none;
+}
+.image-missing {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  padding: 8px;
+  border: 1.5px dashed var(--border-strong);
+  border-radius: 4px;
+  background: var(--panel-2);
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+  overflow-wrap: anywhere;
+}

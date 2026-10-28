@@ -33,6 +33,8 @@ export function palettesFor(items: readonly Item[]): Palette[] {
       return [{ key: 'color', label: 'Colour — the section’s tint', choices: NOTE_COLORS, swatch: noteSwatch, current: first.color }]
     case 'todo':
       return [{ key: 'color', label: 'Colour — the card’s colour', choices: CARD_COLORS, swatch: (n) => `swatch-fill fill-${n}`, current: first.color }]
+    case 'image':
+      return []
     case 'box':
       return [
         { key: 'fill', label: 'Fill — the box’s background colour', choices: FILL_COLORS, swatch: (n) => `swatch-fill fill-${n}`, current: first.fill },

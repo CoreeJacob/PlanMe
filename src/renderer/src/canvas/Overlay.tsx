@@ -16,8 +16,15 @@ const TEXT_HANDLES: Handle[] = ['nw', 'ne', 'e', 'se', 'sw', 'w']
 
 /** To-do lists: their height follows their lines, so only the sides change the width. */
 const WIDTH_HANDLES: Handle[] = ['e', 'w']
+/** Pictures: corners, which keep their shape (Shift to stretch). */
+const CORNER_HANDLES: Handle[] = ['nw', 'ne', 'se', 'sw']
 
-export const handlesFor = (item: Shape): Handle[] => (item.type === 'text' ? TEXT_HANDLES : item.type === 'todo' ? WIDTH_HANDLES : ALL_HANDLES)
+export function handlesFor(item: Shape): Handle[] {
+  if (item.type === 'text') return TEXT_HANDLES
+  if (item.type === 'todo') return WIDTH_HANDLES
+  if (item.type === 'image') return CORNER_HANDLES
+  return ALL_HANDLES
+}
 
 /** A dot an arrow is about to be joined to. */
 export interface ActiveDot {

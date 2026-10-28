@@ -1,7 +1,7 @@
 // The small toolbar that floats above the selection: colours, bold/italic/underline,
 // front/back and delete.
 
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import type { ArrowItem, Item, Status, View } from '@shared/types'
 import { Icon } from '@/app/Icon'
 import { SHAPE_CHOICES, shapeChoice } from '@/app/shapes'
@@ -127,6 +127,13 @@ interface Props {
 
 export function ItemToolbar({ view, size, items, lookup, editing, statuses }: Props) {
   const [open, setOpen] = useState<string | null>(null)
+  // The toolbar's own width, so it can stay wholly on screen near the window's edges.
+  const bar = useRef<HTMLDivElement>(null)
+  const [barWidth, setBarWidth] = useState(0)
+  useLayoutEffect(() => {
+    const w = bar.current?.offsetWidth ?? 0
+    if (w !== barWidth) setBarWidth(w)
+  })
   const opener = (name: string) => (on: boolean) => setOpen(on ? name : null)
   const ids = items.map((i) => i.id).join()
   useEffect(() => setOpen(null), [ids])
@@ -150,8 +157,9 @@ export function ItemToolbar({ view, size, items, lookup, editing, statuses }: Pr
 
   return (
     <div
+      ref={bar}
       className="item-toolbar"
-      style={{ top, left: Math.max(8, Math.min(size.width - 8, centre)) }}
+      style={{ top, left: Math.max(8 + barWidth / 2, Math.min(size.width - 8 - barWidth / 2, centre)) }}
       // Keep the typing caret where it is while clicking the toolbar.
       onMouseDown={(e) => e.preventDefault()}
       onPointerDown={(e) => e.stopPropagation()}

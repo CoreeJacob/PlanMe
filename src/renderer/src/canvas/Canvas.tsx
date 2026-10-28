@@ -14,6 +14,7 @@ import { DEFAULT_VIEW, type ArrowEnd, type ArrowItem, type BoardDoc, type Item, 
 import { useContextMenu, type MenuEntry } from '@/app/ContextMenu'
 import { Icon } from '@/app/Icon'
 import { isPlacingTool, useApp, type PlacingTool } from '@/app/store'
+import { useDimFilter } from '@/app/TasksPanel'
 import { arrowPoints, boxOf, crossesBox, isArrow, isShape, lookupIn, nearestPin, pinPoint } from '@/board/arrows'
 import { besideRect, itemsOf, moveItems, resizeRect, updateItems, type Handle } from '@/board/items'
 import { drawingOrder, isSection, withContents } from '@/board/sections'
@@ -34,14 +35,14 @@ import {
   setOnSelected,
   setStatusOnSelected,
   startEditing,
-  tickEntry,
-  viewport
+  tickEntry
 } from './actions'
 import { ArrowView } from './ArrowView'
+import { addImageFiles, chooseImages } from './images'
 import { ItemToolbar } from './ItemToolbar'
 import { ItemView } from './ItemView'
 import { palettesFor, paletteName, statusChoicesFor, statusValue } from './looks'
-import { canJoin, currentView, itemById, onlySelected, setCurrentView, zoomReset, zoomStep } from './current'
+import { canJoin, currentView, itemById, onlySelected, setCurrentView, viewport, zoomReset, zoomStep } from './current'
 import { useCanvasKeys, useClipboard } from './keys'
 import { Overlay, type ActiveDot } from './Overlay'
 import { snapMove, snapResize, type Guide } from './snap'
@@ -91,6 +92,8 @@ export function Canvas() {
   const editingId = useBoard((s) => s.editingId)
   const editingPart = useBoard((s) => s.editingPart)
   const statuses = useBoard((s) => s.doc.statuses)
+  const dimFilter = useDimFilter()
+  const flashId = useApp((s) => s.flashId)
   const tool = useApp((s) => s.tool)
   const [spaceDown, setSpaceDown] = useState(false)
   const [drag, setDrag] = useState<Drag | null>(null)
@@ -291,7 +294,7 @@ export function Canvas() {
     const zoom = currentView().zoom
     const board = useBoard.getState()
 
-    if (d.kind === 'place') {
+    if (d.kind === 'place' && d.type !== 'image') {
       setDrag({ ...d, now: p })
       const r = rectFrom(d.start.x, d.start.y, p.x, p.y)
       setGhost(r.w * zoom > DRAG_START || r.h * zoom > DRAG_START ? r : null)
@@ -352,8 +355,9 @@ export function Canvas() {
     } else if (d.kind === 'resize') {
       const isText = d.item.type === 'text'
       const corner = d.handle.length === 2
-      // Text corners scale the words, so they keep the shape; Shift keeps it for anything.
-      const keepShape = (isText && corner) || e.shiftKey
+      // Text corners scale the words, so they keep the shape; Shift keeps it for anything, except
+      // a picture, which keeps its shape unless Shift is held to stretch it.
+      const keepShape = d.item.type === 'image' ? !e.shiftKey : (isText && corner) || e.shiftKey
       let r = resizeRect(d.item, d.handle, p.x - d.start.x, p.y - d.start.y, keepShape)
       if (!keepShape && !e.metaKey) {
         const others = itemsOf(d.base, board.tabId).filter((i): i is Shape => isShape(i) && i.id !== d.item.id)
@@ -377,12 +381,17 @@ export function Canvas() {
     const d = dragRef.current
     if (!d) return
     if (d.kind === 'place') {
-      const r = rectFrom(d.start.x, d.start.y, d.now.x, d.now.y)
-      const zoom = currentView().zoom
-      const dragged = r.w * zoom > DRAG_START || r.h * zoom > DRAG_START
-      // A text item's height follows its words, so only the dragged width counts.
-      addItem(d.type, dragged ? (d.type === 'text' ? { ...r, h: 30 } : r) : d.start, useApp.getState().boxShape)
       useApp.getState().setTool('select')
+      if (d.type === 'image') {
+        // The Image tool: pick pictures to place where the board was clicked.
+        void chooseImages(d.start)
+      } else {
+        const r = rectFrom(d.start.x, d.start.y, d.now.x, d.now.y)
+        const zoom = currentView().zoom
+        const dragged = r.w * zoom > DRAG_START || r.h * zoom > DRAG_START
+        // A text item's height follows its words, so only the dragged width counts.
+        addItem(d.type, dragged ? (d.type === 'text' ? { ...r, h: 30 } : r) : d.start, useApp.getState().boxShape)
+      }
     } else if (d.kind === 'arrow' && e.type !== 'pointercancel') {
       const zoom = currentView().zoom
       const dragged = Math.hypot(d.now.x - d.start.x, d.now.y - d.start.y) * zoom > DRAG_START * 4
@@ -431,6 +440,7 @@ export function Canvas() {
         { label: 'Add Shape Here', icon: 'box', onSelect: () => addItem('box', at, useApp.getState().boxShape) },
         { label: 'Add To-do List Here', icon: 'tasks', onSelect: () => addItem('todo', at) },
         { label: 'Add Section Here', icon: 'section', onSelect: () => addItem('section', at) },
+        { label: 'Add Image Here…', icon: 'image', onSelect: () => void chooseImages(at) },
         'separator',
         { label: 'Select All', hint: '⌘A', disabled: !items.length, onSelect: selectAll }
       ])
@@ -503,6 +513,17 @@ export function Canvas() {
       onPointerLeave={() => !dragRef.current && setHovered(null)}
       onDoubleClick={onDoubleClick}
       onContextMenu={onContextMenu}
+      // Pictures dropped from Finder (or another app) land where they're dropped.
+      onDragOver={(e) => {
+        if (!e.dataTransfer.types.includes('Files')) return
+        e.preventDefault()
+        e.dataTransfer.dropEffect = 'copy'
+      }}
+      onDrop={(e) => {
+        if (!e.dataTransfer.files.length) return
+        e.preventDefault()
+        void addImageFiles([...e.dataTransfer.files], boardPoint(e))
+      }}
       onAuxClick={(e) => e.preventDefault()}
     >
       <div className="world" style={{ transform: `translate(${origin.x}px, ${origin.y}px) scale(${view.zoom})`, ['--zoom' as string]: view.zoom }}>
@@ -510,6 +531,7 @@ export function Canvas() {
           isArrow(item) ? (
             <ArrowView
               key={item.id}
+              dimmed={!!dimFilter}
               arrow={item}
               from={item.from.item ? lookup(item.from.item) : undefined}
               to={item.to.item ? lookup(item.to.item) : undefined}
@@ -522,6 +544,8 @@ export function Canvas() {
               editing={item.id === editingId}
               part={item.id === editingId ? editingPart : null}
               status={statusOf(item, statuses)}
+              dimmed={!!dimFilter && statusOf(item, statuses)?.id !== dimFilter}
+              flashing={item.id === flashId}
             />
           )
         )}

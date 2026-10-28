@@ -1,7 +1,24 @@
 // Changes to the items on a tab. Like doc.ts, each returns a new BoardDoc and leaves the old
 // one (and every item it doesn't change) untouched.
 
-import type { ArrowEnd, ArrowItem, BoardDoc, BoxItem, BoxShape, Item, NoteItem, Rect, SectionItem, Shape, ShapeType, TextItem, TodoEntry, TodoItem } from '@shared/types'
+import type {
+  ArrowEnd,
+  ArrowItem,
+  BoardDoc,
+  BoxItem,
+  BoxShape,
+  ImageItem,
+  ImportedImage,
+  Item,
+  NoteItem,
+  Rect,
+  SectionItem,
+  Shape,
+  ShapeType,
+  TextItem,
+  TodoEntry,
+  TodoItem
+} from '@shared/types'
 import { centre, sideFacing, type Point } from '@/lib/geometry'
 
 /** Replaces one tab's items. Returns `doc` itself if they didn't change. */
@@ -90,7 +107,10 @@ export function copiesOf(items: readonly Item[], dx: number, dy: number, newId: 
 
 // ---------- shapes and sizes ----------
 
-export const DEFAULT_SIZE: Record<ShapeType, { w: number; h: number }> = {
+/** The kinds of item that start empty (an image always starts with its picture). */
+export type BlankType = Exclude<ShapeType, 'image'>
+
+export const DEFAULT_SIZE: Record<BlankType, { w: number; h: number }> = {
   note: { w: 200, h: 200 },
   text: { w: 240, h: 30 },
   box: { w: 200, h: 120 },
@@ -101,7 +121,7 @@ export const MIN_SIZE = 20
 export const DEFAULT_FONT_SIZE = 20
 
 /** A new, empty item filling `rect`. A box gets the outline `shape`. */
-export function newItem(type: ShapeType, id: string, rect: Rect, shape: BoxShape = 'rect'): Shape {
+export function newItem(type: BlankType, id: string, rect: Rect, shape: BoxShape = 'rect'): Shape {
   const base = { id, text: '', x: rect.x, y: rect.y, w: Math.max(MIN_SIZE, rect.w), h: Math.max(MIN_SIZE, rect.h) }
   if (type === 'note') return { ...base, type, color: 'yellow' } satisfies NoteItem
   if (type === 'text') return { ...base, type, color: 'default', fontSize: DEFAULT_FONT_SIZE } satisfies TextItem
@@ -110,13 +130,30 @@ export function newItem(type: ShapeType, id: string, rect: Rect, shape: BoxShape
   return { ...base, type, shape, fill: 'white', border: 'default' } satisfies BoxItem
 }
 
+/** A new image item showing a picture copied into the board. */
+export function newImage(id: string, rect: Rect, picture: ImportedImage): ImageItem {
+  return { id, type: 'image', text: '', x: rect.x, y: rect.y, w: rect.w, h: rect.h, src: picture.src, name: picture.name }
+}
+
+/** The biggest a new image is placed, on its longest side, in board units. */
+const IMAGE_BOX = 600
+
+/**
+ * The size a new image is placed at: its own size, unless that's more than IMAGE_BOX on its
+ * longest side or more than half of what's on screen, when it's scaled down to fit (keeping its shape).
+ */
+export function fitImage(width: number, height: number, screen: { w: number; h: number }): { w: number; h: number } {
+  const scale = Math.min(1, IMAGE_BOX / Math.max(width, height), screen.w / 2 / width, screen.h / 2 / height)
+  return { w: Math.max(MIN_SIZE, Math.round(width * scale)), h: Math.max(MIN_SIZE, Math.round(height * scale)) }
+}
+
 /** A new arrow between two ends, with the usual look. */
 export function newArrow(id: string, from: ArrowEnd, to: ArrowEnd): ArrowItem {
   return { id, type: 'arrow', text: '', from, to, route: 'straight', heads: 'end', dashed: false, color: 'default', width: 2 }
 }
 
 /** An item of the default size centred on a point. */
-export function newItemAt(type: ShapeType, id: string, x: number, y: number, shape?: BoxShape): Shape {
+export function newItemAt(type: BlankType, id: string, x: number, y: number, shape?: BoxShape): Shape {
   const { w, h } = DEFAULT_SIZE[type]
   return newItem(type, id, { x: Math.round(x - w / 2), y: Math.round(y - h / 2), w, h }, shape)
 }
@@ -179,6 +216,8 @@ export function besideRect(source: Rect, at: Point): Rect {
  * starts without a status, and a to-do list starts with one empty line.
  */
 export function newLike(source: Shape, id: string, rect: Rect): Shape {
+  // Building out from a picture makes a note beside it (a second copy of the picture wouldn't help).
+  if (source.type === 'image') return newItem('note', id, rect)
   const { status: _notCopied, ...look } = source
   const fresh = { ...look, id, text: '', x: rect.x, y: rect.y, w: rect.w, h: rect.h } as Shape
   return fresh.type === 'todo' ? { ...fresh, entries: [newEntry()], auto: true } : fresh

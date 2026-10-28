@@ -1,8 +1,9 @@
-// The panel on the left: tools at the top, and (from phase 4) every task on the board below.
+// The panel on the left: tools at the top, and every task on the board below.
 
 import { Icon, type IconName } from './Icon'
 import { SHAPE_CHOICES, shapeChoice } from './shapes'
 import { useApp, type Tool } from './store'
+import { TasksPanel } from './TasksPanel'
 
 const TOOLS: Array<{ tool: Tool; label: string; tip?: string; key: string; icon: IconName }> = [
   { tool: 'select', label: 'Select', tip: 'Select — click to select, drag to move, double-click to type', key: 'V', icon: 'select' },
@@ -11,6 +12,7 @@ const TOOLS: Array<{ tool: Tool; label: string; tip?: string; key: string; icon:
   { tool: 'text', label: 'Text', tip: 'Text — click to place, or drag to choose its width', key: 'T', icon: 'text' },
   { tool: 'box', label: 'Shape', tip: 'Shape — a box, oval, diamond and more: click to place one, or drag to choose its size', key: 'B', icon: 'box' },
   { tool: 'todo', label: 'To-do', tip: 'To-do list — tick-box lines with a progress count: click to place one', key: 'L', icon: 'tasks' },
+  { tool: 'image', label: 'Image', tip: 'Image — click where it should go and pick a picture (or drop pictures from Finder)', key: 'I', icon: 'image' },
   { tool: 'arrow', label: 'Arrow', tip: 'Arrow — drag from one item to another to join them', key: 'A', icon: 'arrow' },
   { tool: 'section', label: 'Section', tip: 'Section — drag out a labelled area; whatever’s inside moves with it', key: 'S', icon: 'section' }
 ]
@@ -54,12 +56,7 @@ export function SidePanel() {
           </div>
         )}
       </section>
-      <section className="panel-section grow">
-        <h2 className="panel-heading">
-          <Icon name="tasks" size={14} /> Tasks
-        </h2>
-        <p className="panel-empty muted">Anything you give a status will be listed here, from every tab.</p>
-      </section>
+      <TasksPanel />
     </aside>
   )
 }

@@ -1,10 +1,25 @@
 import { randomUUID } from 'node:crypto'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
-import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from 'electron'
-import type { MenuCommand, SaveRequest, Startup } from '@shared/types'
+import { pathToFileURL } from 'node:url'
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, net, protocol, shell } from 'electron'
+import { IMAGE_EXTENSIONS, type MenuCommand, type SaveRequest, type Startup } from '@shared/types'
 import { createBoard, isBoard, listBoards, openBoard, renameBoard, saveBoard } from './boards'
+import { importImage, imagePath, MAX_SIDE, saveImage, type Shrink } from './images'
 import { SettingsStore, type Settings } from './settings'
+
+// A board's images are shown as board://image/<path in the board>?board=<the board's folder>.
+protocol.registerSchemesAsPrivileged([{ scheme: 'board', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } }])
+
+/** Saves very large PNG and JPEG pictures shrunk to MAX_SIDE on their longest side; anything else as it was. */
+const shrink: Shrink = (bytes, ext) => {
+  if (!['png', 'jpg', 'jpeg'].includes(ext)) return bytes
+  const picture = nativeImage.createFromBuffer(Buffer.from(bytes))
+  const { width, height } = picture.getSize()
+  if (picture.isEmpty() || Math.max(width, height) <= MAX_SIDE) return bytes
+  const smaller = width >= height ? picture.resize({ width: MAX_SIDE, quality: 'best' }) : picture.resize({ height: MAX_SIDE, quality: 'best' })
+  return ext === 'png' ? smaller.toPNG() : smaller.toJPEG(90)
+}
 
 // Lets a test run use its own settings (and so its own boards) instead of yours.
 const testData = process.env['PLANME_USER_DATA']
@@ -67,6 +82,9 @@ function createWindow(): void {
   window.on('closed', () => {
     if (mainWindow === window) mainWindow = null
   })
+  // Dropping a file anywhere the board doesn't take it mustn't open the file in place of the app.
+  window.webContents.on('will-navigate', (event) => event.preventDefault())
+
   // Open external links in the browser, never inside the app.
   window.webContents.setWindowOpenHandler(({ url }) => {
     void shell.openExternal(url)
@@ -175,13 +193,41 @@ function registerIpc(): void {
   })
   handle('boards:save', (dir: string, request: SaveRequest) => saveBoard(dir, request))
   handle('boards:setLast', (dir: string | null) => updateSettings({ lastBoard: dir }))
+  handle('images:import', async (board: string, paths: string[]) => {
+    const imported = []
+    for (const p of paths) imported.push(await importImage(board, p, shrink))
+    return imported
+  })
+  handle('images:importData', (board: string, name: string, data: Uint8Array) => saveImage(board, name, data, shrink))
+  handle('images:copy', async (from: string, src: string, to: string) => importImage(to, imagePath(from, src), shrink))
+  handle('images:choose', async () => {
+    const result = await dialog.showOpenDialog(mainWindow!, {
+      title: 'Add Images',
+      properties: ['openFile', 'multiSelections'],
+      filters: [{ name: 'Images', extensions: [...IMAGE_EXTENSIONS] }]
+    })
+    return result.canceled || !result.filePaths.length ? null : result.filePaths
+  })
   handle('app:ask', async ({ message, detail, buttons }: { message: string; detail?: string; buttons: string[] }) => {
     const result = await dialog.showMessageBox(mainWindow!, { type: 'question', message, detail, buttons, defaultId: 0, cancelId: buttons.length - 1 })
     return result.response
   })
 }
 
+function registerProtocol(): void {
+  protocol.handle('board', async (request) => {
+    const url = new URL(request.url)
+    try {
+      const file = imagePath(url.searchParams.get('board') ?? '', decodeURIComponent(url.pathname.replace(/^\/+/, '')))
+      return await net.fetch(pathToFileURL(file).toString())
+    } catch {
+      return new Response('Not found', { status: 404 })
+    }
+  })
+}
+
 app.whenReady().then(() => {
+  registerProtocol()
   registerIpc()
   buildMenu()
   createWindow()

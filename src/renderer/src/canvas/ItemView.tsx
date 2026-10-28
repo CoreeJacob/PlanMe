@@ -1,11 +1,12 @@
 // One item on the canvas, drawn in board units (the canvas scales the whole board at once).
 
-import { memo, useLayoutEffect, useRef } from 'react'
-import type { Item, Shape, Status } from '@shared/types'
+import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import type { ImageItem, Item, Shape, Status } from '@shared/types'
 import { updateItems } from '@/board/items'
 import { cleanHtml } from '@/board/richtext'
 import { useBoard } from '@/board/store'
 import { editText, finishEditing } from './actions'
+import { imageUrl } from './images'
 import { Outline } from './Outline'
 import { TodoView } from './TodoView'
 
@@ -38,6 +39,7 @@ function itemClasses(item: Shape): string {
   if (item.type === 'box') return `shape-${item.shape} fill-${item.fill} border-${item.border}`
   if (item.type === 'section') return `section-${item.color}`
   if (item.type === 'todo') return `fill-${item.color}`
+  if (item.type === 'image') return ''
   return `ink-${item.color}`
 }
 
@@ -48,9 +50,13 @@ interface Props {
   part?: string | null
   /** The status it shows, if any. */
   status?: Status
+  /** Faded back, while the board is filtered to a status it doesn't have. */
+  dimmed?: boolean
+  /** Just gone to from the Tasks panel. */
+  flashing?: boolean
 }
 
-export const ItemView = memo(function ItemView({ item, editing, part = null, status }: Props) {
+export const ItemView = memo(function ItemView({ item, editing, part = null, status, dimmed, flashing }: Props) {
   const area = useRef<HTMLDivElement>(null)
   const text = useRef<HTMLDivElement>(null)
   const fits = item.type === 'note' || item.type === 'box'
@@ -82,7 +88,9 @@ export const ItemView = memo(function ItemView({ item, editing, part = null, sta
     itemClasses(item),
     editing && 'editing',
     status && `has-status status-${status.color}`,
-    status?.kind === 'done' && 'is-finished'
+    status?.kind === 'done' && 'is-finished',
+    dimmed && 'dimmed',
+    flashing && 'flashing'
   ]
     .filter(Boolean)
     .join(' ')
@@ -107,7 +115,9 @@ export const ItemView = memo(function ItemView({ item, editing, part = null, sta
   return (
     <div ref={outer} className={classes} data-item-id={item.id} style={style}>
       {item.type === 'box' && <Outline shape={item.shape} w={item.w} h={item.h} />}
-      {item.type === 'todo' ? (
+      {item.type === 'image' ? (
+        <Picture item={item} />
+      ) : item.type === 'todo' ? (
         <TodoView item={item} editing={editing} part={part} />
       ) : fits ? (
         <div ref={area} className="item-area">
@@ -120,6 +130,14 @@ export const ItemView = memo(function ItemView({ item, editing, part = null, sta
     </div>
   )
 })
+
+/** A picture, or a placeholder saying so if its file has gone. */
+function Picture({ item }: { item: ImageItem }) {
+  const [missing, setMissing] = useState(false)
+  useEffect(() => setMissing(false), [item.src])
+  if (missing) return <div className="image-missing">Picture missing: {item.name}</div>
+  return <img className="item-picture" src={imageUrl(item.src)} alt={item.name} draggable={false} onError={() => setMissing(true)} />
+}
 
 /** Typing in an item (or an arrow's label). The words are set once when it opens; after that the browser owns them. */
 export function Editor({ item, textRef }: { item: Pick<Item, 'id' | 'text'>; textRef: React.RefObject<HTMLDivElement | null> }) {

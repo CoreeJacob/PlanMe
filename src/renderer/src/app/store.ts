@@ -6,11 +6,12 @@ import type { BoardSummary, BoxShape } from '@shared/types'
 import { readPref, writePref } from '@/lib/prefs'
 
 export type Screen = 'loading' | 'boards' | 'board'
-export type Tool = 'select' | 'hand' | 'note' | 'text' | 'box' | 'arrow' | 'section' | 'todo'
-export type PlacingTool = Extract<Tool, 'note' | 'text' | 'box' | 'section' | 'todo'>
+export type Tool = 'select' | 'hand' | 'note' | 'text' | 'box' | 'arrow' | 'section' | 'todo' | 'image'
+export type PlacingTool = Extract<Tool, 'note' | 'text' | 'box' | 'section' | 'todo' | 'image'>
 
 /** Tools that place a new item where you click. */
-export const isPlacingTool = (tool: Tool): tool is PlacingTool => tool === 'note' || tool === 'text' || tool === 'box' || tool === 'section' || tool === 'todo'
+export const isPlacingTool = (tool: Tool): tool is PlacingTool =>
+  tool === 'note' || tool === 'text' || tool === 'box' || tool === 'section' || tool === 'todo' || tool === 'image'
 
 export interface Toast {
   id: number
@@ -41,6 +42,14 @@ interface AppState {
   editingTab: string | null
   /** The board's statuses are being edited. */
   statusEditorOpen: boolean
+  /** The Tasks panel shows only this status (an id), or everything. */
+  taskFilter: string | null
+  /** While filtering, fade everything on the board that doesn't match. */
+  dimRest: boolean
+  /** The Done list at the bottom of the Tasks panel is open. */
+  doneOpen: boolean
+  /** An item just jumped to from the Tasks panel, which flashes briefly. */
+  flashId: string | null
   toasts: Toast[]
   prompt: PromptRequest | null
 
@@ -50,6 +59,10 @@ interface AppState {
   setBoxShape(shape: BoxShape): void
   setEditingTab(id: string | null): void
   setStatusEditorOpen(open: boolean): void
+  setTaskFilter(filter: string | null): void
+  setDimRest(dim: boolean): void
+  setDoneOpen(open: boolean): void
+  flash(id: string): void
   toast(message: string, options?: { kind?: Toast['kind']; action?: Toast['action'] }): void
   dismissToast(id: number): void
   /** Asks for a name; resolves with it, or null if cancelled. */
@@ -58,7 +71,9 @@ interface AppState {
 }
 
 const PANEL_KEY = 'planme.panelOpen'
-
+const DONE_KEY = 'planme.doneOpen'
+/** How long an item jumped to from the Tasks panel flashes. */
+const FLASH_MS = 1600
 
 let nextToast = 1
 let nextPrompt = 1
@@ -72,6 +87,10 @@ export const useApp = create<AppState>((set, get) => ({
   boxShape: 'rect',
   editingTab: null,
   statusEditorOpen: false,
+  taskFilter: null,
+  dimRest: false,
+  doneOpen: readPref(DONE_KEY) === 'true',
+  flashId: null,
   toasts: [],
   prompt: null,
 
@@ -89,6 +108,20 @@ export const useApp = create<AppState>((set, get) => ({
   setEditingTab: (editingTab) => set({ editingTab }),
 
   setStatusEditorOpen: (statusEditorOpen) => set({ statusEditorOpen }),
+
+  setTaskFilter: (taskFilter) => set({ taskFilter }),
+
+  setDimRest: (dimRest) => set({ dimRest }),
+
+  setDoneOpen: (doneOpen) => {
+    set({ doneOpen })
+    writePref(DONE_KEY, String(doneOpen))
+  },
+
+  flash: (id) => {
+    set({ flashId: id })
+    setTimeout(() => get().flashId === id && set({ flashId: null }), FLASH_MS)
+  },
 
   toast: (message, { kind = 'info', action } = {}) => {
     const id = nextToast++

@@ -291,3 +291,14 @@ test('deleting from the toolbar while typing, and switching tabs mid-edit', asyn
   await app.click(tab('Overview'))
   await check('switching tabs while typing keeps the words', (await app.lastItem())?.text === 'Gone soon — kept', await app.items())
 })
+
+test('the floating toolbar stays on screen for things near the window’s edges', async ({ app }) => {
+  await app.newBoard('Game')
+  const width = await app.js<number>(`document.querySelector('.canvas').getBoundingClientRect().width`)
+  const right = await app.noteAt(width / 2 - 60, 0, 'Edge')
+  const inside = () => app.js<boolean>(`(() => { const c = document.querySelector('.canvas').getBoundingClientRect(); const t = document.querySelector('.item-toolbar').getBoundingClientRect(); return t.left >= c.left && t.right <= c.right })()`)
+  await check('near the right edge, the whole toolbar is on screen', await app.until(inside), await app.item(right))
+  await app.key('Escape', 'Escape')
+  await app.noteAt(-width / 2 + 60, 0, 'Other edge')
+  await check('near the left edge too', await app.until(inside))
+})

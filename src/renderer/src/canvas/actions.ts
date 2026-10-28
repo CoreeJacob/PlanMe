@@ -1,12 +1,14 @@
 // What can be done to items on the tab showing: adding, typing, deleting, copying, colouring…
 // Shared by the keys, the menus, the floating toolbar and the right-click menu.
 
-import type { ArrowEnd, BoardDoc, BoxShape, Item, Rect, Shape, ShapeType, Status, TodoItem } from '@shared/types'
+import { DEFAULT_VIEW, type ArrowEnd, type BoardDoc, type BoxShape, type Item, type Rect, type Shape, type Status, type TodoItem } from '@shared/types'
 import { upgradeItem } from '@shared/upgrade'
+import { attempt, useApp } from '@/app/store'
 import { arrowsAttached, boxOf, detach, isArrow, lookupIn } from '@/board/arrows'
 import {
   addItems,
   copiesOf,
+  type BlankType,
   itemsOf,
   moveItems,
   newArrow,
@@ -19,16 +21,14 @@ import {
 } from '@/board/items'
 import { cleanHtml, fromPlainText, isAllStyled, plainText, setWholeStyle, type TextStyle } from '@/board/richtext'
 import { withContents } from '@/board/sections'
-import { withStatuses } from '@/board/statuses'
+import { autoKind, withStatuses } from '@/board/statuses'
 import { useBoard } from '@/board/store'
 import { count, plural } from '@/lib/format'
 import { boundsOf, overlaps } from '@/lib/geometry'
-import { currentItems, currentView } from './current'
+import { currentItems, currentView, viewport } from './current'
+import { addImageFiles, hasPictures } from './images'
 
 const newId = (): string => crypto.randomUUID()
-
-/** The canvas's size on screen, kept up to date by the Canvas (for placing pasted items). */
-export const viewport = { width: 0, height: 0 }
 
 const state = () => useBoard.getState()
 export const selectedItems = (): Item[] => {
@@ -63,7 +63,7 @@ function addAndType(added: Item[], typeIn: string): void {
 }
 
 /** Adds an item (at a point, at its usual size, or filling a rectangle) and starts typing in it. */
-export function addItem(type: ShapeType, at: { x: number; y: number } | Rect, shape?: BoxShape): void {
+export function addItem(type: BlankType, at: { x: number; y: number } | Rect, shape?: BoxShape): void {
   const id = newId()
   addAndType(['w' in at ? newItem(type, id, at, shape) : newItemAt(type, id, at.x, at.y, shape)], id)
 }
@@ -86,6 +86,8 @@ export function addConnected(source: Shape, from: ArrowEnd, rect: Rect): void {
 /** Starts typing in an item (or an arrow's label), or in one part of a to-do list. */
 export function startEditing(id: string, part: string | null = null): void {
   if (state().editingId === id) return state().setEditing(id, part)
+  // A picture has no words to type: just select it.
+  if (currentItems().find((i) => i.id === id)?.type === 'image') return state().select([id])
   finishEditing()
   state().select([id])
   state().beginGesture()
@@ -133,7 +135,12 @@ export function finishEditing(): void {
  */
 export function editTodo(id: string, edit: (todo: TodoItem) => TodoItem): void {
   const { doc, tabId, gesture, preview, commit } = state()
-  const next = updateItems(doc, tabId, [id], (i) => (i.type === 'todo' ? edit(i) : i))
+  const next = updateItems(doc, tabId, [id], (i) => {
+    if (i.type !== 'todo') return i
+    const edited = edit(i)
+    // Its ticks changed its status: note when, for the Done list.
+    return edited.auto && autoKind(edited) !== autoKind(i) ? { ...edited, statusAt: Date.now() } : edited
+  })
   if (gesture) preview(next)
   else commit(next)
 }
@@ -153,8 +160,9 @@ export function setStatusOnSelected(value: string | null | 'auto'): void {
   change((doc, tabId) =>
     updateItems(doc, tabId, state().selected, (i) => {
       if (i.type === 'arrow') return i
-      if (value === 'auto') return i.type === 'todo' ? { ...withoutStatus(i), auto: true } : i
-      const picked = value === null ? withoutStatus(i) : { ...i, status: value }
+      const statusAt = Date.now()
+      if (value === 'auto') return i.type === 'todo' ? { ...withoutStatus(i), auto: true, statusAt } : i
+      const picked = value === null ? withoutStatus(i) : { ...i, status: value, statusAt }
       return picked.type === 'todo' ? { ...picked, auto: false } : picked
     })
   )
@@ -169,6 +177,21 @@ function withoutStatus<T extends Shape>(item: T): T {
 /** The board's list of statuses changed (from the status editor): one undo step. */
 export function saveStatuses(statuses: Status[]): void {
   state().commit(withStatuses(state().doc, statuses))
+}
+
+// ---------- going to things ----------
+
+/** Shows an item (from the Tasks panel): its tab, centred on screen, selected, and flashing briefly. */
+export function goToItem(tabId: string, id: string): void {
+  finishEditing()
+  const board = state()
+  board.setTab(tabId)
+  const item = itemsOf(state().doc, tabId).find((i) => i.id === id)
+  if (!item || item.type === 'arrow') return
+  const zoom = (state().views[tabId] ?? DEFAULT_VIEW).zoom
+  state().setView(tabId, { x: item.x + item.w / 2, y: item.y + item.h / 2, zoom })
+  state().select([id])
+  useApp.getState().flash(id)
 }
 
 // ---------- selection ----------
@@ -291,6 +314,8 @@ export function toggleStyleOnSelected(style: TextStyle): void {
 const CLIPBOARD_TYPE = 'application/x-planme-items'
 
 interface Copied {
+  /** The board it was copied from: pictures pasted into another board bring their files along. */
+  board?: string
   tabId: string
   items: Item[]
 }
@@ -302,7 +327,7 @@ let pastes = { key: '', count: 0 }
 export function copySelected(data: DataTransfer): boolean {
   const items = selectionToCopy()
   if (!items.length) return false
-  const copied: Copied = { tabId: state().tabId, items }
+  const copied: Copied = { board: state().board?.path, tabId: state().tabId, items }
   data.setData(CLIPBOARD_TYPE, JSON.stringify(copied))
   data.setData('text/plain', items.map((i) => plainText(i.text)).filter(Boolean).join('\n\n'))
   return true
@@ -314,19 +339,33 @@ export function paste(data: DataTransfer): boolean {
   if (raw) {
     const copied = JSON.parse(raw) as Copied
     // It may have been copied before an update.
-    pasteItems({ ...copied, items: copied.items.map(upgradeItem) }, raw)
+    void attempt(() => pasteItems({ ...copied, items: copied.items.map(upgradeItem) }, raw))
+    return true
+  }
+  const area = visibleArea()
+  // Pictures (a screenshot, say) go in the middle of the screen.
+  if (data.files.length && hasPictures([...data.files])) {
+    void addImageFiles([...data.files], { x: area.x + area.w / 2, y: area.y + area.h / 2 })
     return true
   }
   const text = data.getData('text/plain')
   if (!text.trim()) return false
-  const area = visibleArea()
   const id = newId()
   const item = { ...newItemAt('text', id, area.x + area.w / 2, area.y + area.h / 2), text: fromPlainText(text.trim()) }
   change((doc, tabId) => addItems(doc, tabId, [item]), [id])
   return true
 }
 
-function pasteItems(copied: Copied, key: string): void {
+async function pasteItems(copied: Copied, key: string): Promise<void> {
+  // Pictures from another board: copy their files into this one first.
+  const here = state().board?.path
+  if (copied.board && here && copied.board !== here) {
+    const from = copied.board
+    copied = {
+      ...copied,
+      items: await Promise.all(copied.items.map(async (i) => (i.type === 'image' ? { ...i, ...(await window.api.copyImage(from, i.src, here)) } : i)))
+    }
+  }
   const lookup = lookupIn(copied.items)
   const bounds = boundsOf(copied.items.map((i) => boxOf(i, lookup)))
   if (!bounds) return

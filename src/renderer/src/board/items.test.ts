@@ -4,6 +4,7 @@ import {
   addItems,
   besideRect,
   copiesOf,
+  fitImage,
   itemsOf,
   moveItems,
   newItem,
@@ -181,5 +182,19 @@ describe('building outwards from a dot', () => {
   it('copies the look but not the words', () => {
     const box = { ...newItem('box', 'b', source, 'diamond'), text: 'Has key?', fill: 'pink' }
     expect(newLike(box, 'n', { x: 5, y: 6, w: 200, h: 100 })).toEqual({ ...box, id: 'n', text: '', x: 5, y: 6 })
+  })
+})
+
+describe('placing pictures', () => {
+  const screen = { w: 2000, h: 2000 }
+  it('keeps small pictures their own size', () => {
+    expect(fitImage(120, 80, screen)).toEqual({ w: 120, h: 80 })
+  })
+  it('fits big ones within 600 on their longest side, keeping their shape', () => {
+    expect(fitImage(1200, 600, screen)).toEqual({ w: 600, h: 300 })
+    expect(fitImage(400, 1600, screen)).toEqual({ w: 150, h: 600 })
+  })
+  it('never more than half of what’s on screen', () => {
+    expect(fitImage(500, 500, { w: 600, h: 2000 })).toEqual({ w: 300, h: 300 })
   })
 })
