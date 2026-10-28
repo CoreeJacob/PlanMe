@@ -202,6 +202,9 @@ button {
   justify-content: space-between;
   padding: 40px 40px 20px;
 }
+.boards-header .boards-backups {
+  margin: 0 8px 0 auto;
+}
 .boards-header h1 {
   margin: 0;
   font-size: 24px;
@@ -2174,4 +2177,132 @@ button {
 .toolbar-btn:disabled {
   opacity: 0.35;
   cursor: default;
+}
+
+/* ---------- keyboard shortcuts sheet ---------- */
+
+.modal.shortcuts-sheet {
+  width: min(760px, calc(100vw - 48px));
+  max-height: calc(100vh - 120px);
+}
+.modal-backdrop:has(.shortcuts-sheet) {
+  padding-top: 60px;
+}
+.shortcut-groups {
+  columns: 2;
+  column-gap: 28px;
+  overflow-y: auto;
+}
+.shortcut-group {
+  break-inside: avoid;
+  margin-bottom: 16px;
+}
+.shortcut-group h3 {
+  margin: 0 0 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.shortcut-group dl {
+  margin: 0;
+}
+.shortcut-row {
+  display: flex;
+  gap: 12px;
+  padding: 3px 0;
+  font-size: 12.5px;
+}
+.shortcut-row dt {
+  flex: 0 0 132px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.shortcut-row dd {
+  margin: 0;
+  color: var(--muted);
+}
+
+/* ---------- backups ---------- */
+
+.modal.backups-dialog {
+  width: 560px;
+}
+.backups-body {
+  display: flex;
+  gap: 12px;
+  height: 280px;
+}
+.backups-boards {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 180px;
+  flex-shrink: 0;
+  overflow-y: auto;
+  padding-right: 10px;
+  border-right: 1px solid var(--border);
+}
+.backups-board {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.backups-board:hover {
+  background: var(--panel-2);
+}
+.backups-board.active {
+  background: var(--accent-soft);
+  font-weight: 600;
+}
+.backups-board-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.backups-gone {
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--danger);
+}
+.backups-list {
+  flex: 1;
+  overflow-y: auto;
+}
+.backup-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 4px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.backup-when {
+  flex: 1;
+}
+.backup-tabs {
+  font-size: 12px;
+}
+.backup-restore {
+  height: 26px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+.backups-empty {
+  font-size: 13px;
+}
+.backups-reveal {
+  margin-right: auto;
 }

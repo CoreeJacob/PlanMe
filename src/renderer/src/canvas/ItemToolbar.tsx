@@ -1,7 +1,7 @@
 // The small toolbar that floats above the selection: colours, bold/italic/underline, lining
 // things up, front/back, lock and delete.
 
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import type { ArrowItem, Item, Status, View } from '@shared/types'
 import { Icon } from '@/app/Icon'
 import { SHAPE_CHOICES, shapeChoice } from '@/app/shapes'
@@ -81,6 +81,27 @@ const STYLES: Array<{ style: TextStyle; label: string; command: string; key: str
   { style: 'u', label: 'Underline — for all the words, or just the ones picked while typing', command: 'underline', key: '⌘U' }
 ]
 
+const NO_STYLES: Record<TextStyle, boolean> = { b: false, i: false, u: false }
+
+/** While typing: which of bold, italic and underline are on where the caret is (and a way to look again). */
+function useCaretStyles(editing: boolean): [Record<TextStyle, boolean>, () => void] {
+  const [styles, setStyles] = useState(NO_STYLES)
+  const read = useCallback(() => {
+    const next = { b: document.queryCommandState('bold'), i: document.queryCommandState('italic'), u: document.queryCommandState('underline') }
+    setStyles((s) => (s.b === next.b && s.i === next.i && s.u === next.u ? s : next))
+  }, [])
+  useEffect(() => {
+    if (!editing) return
+    read()
+    // The caret moving, or typing (⌘B with nothing picked changes what comes next, not the selection).
+    for (const type of ['selectionchange', 'keyup', 'input']) document.addEventListener(type, read)
+    return () => {
+      for (const type of ['selectionchange', 'keyup', 'input']) document.removeEventListener(type, read)
+    }
+  }, [editing, read])
+  return [styles, read]
+}
+
 const HEADS: Array<ArrowItem['heads']> = ['end', 'both', 'none']
 const HEADS_SAID = { end: 'at the end', both: 'at both ends', none: 'none' }
 const WIDTHS = [2, 3.5, 5]
@@ -143,6 +164,7 @@ export function ItemToolbar({ view, size, items, lookup, editing, statuses }: Pr
     const w = bar.current?.offsetWidth ?? 0
     if (w !== barWidth) setBarWidth(w)
   })
+  const [caretStyles, readCaret] = useCaretStyles(editing)
   const opener = (name: string) => (on: boolean) => setOpen(on ? name : null)
   const ids = items.map((i) => i.id).join()
   useEffect(() => setOpen(null), [ids])
@@ -239,9 +261,13 @@ export function ItemToolbar({ view, size, items, lookup, editing, statuses }: Pr
       {STYLES.map((s) => (
         <button
           key={s.style}
-          className={`toolbar-btn style-${s.style} ${!editing && allStyled(s.style) ? 'active' : ''}`}
+          className={`toolbar-btn style-${s.style} ${(editing ? caretStyles[s.style] : allStyled(s.style)) ? 'active' : ''}`}
           title={`${s.label} (${s.key})`}
-          onClick={() => (editing ? document.execCommand(s.command) : toggleStyleOnSelected(s.style))}
+          onClick={() => {
+            if (!editing) return toggleStyleOnSelected(s.style)
+            document.execCommand(s.command)
+            readCaret()
+          }}
         >
           {s.style.toUpperCase()}
         </button>

@@ -136,7 +136,7 @@ test('hovering a button explains what it does', async ({ app }) => {
   await app.key('Escape', 'Escape')
   await check('a key press hides it', await app.js(`!document.querySelector('.tooltip')`))
 
-  const undo = await hoverOver(`document.querySelector('.topbar-end .icon-btn')`)
+  const undo = await hoverOver(`[...document.querySelectorAll('.topbar-end .icon-btn')].find(b => (b.title || b.dataset.tip || '').startsWith('Undo'))`)
   await check('top bar buttons too', undo?.startsWith('Undo'), undo)
   await check('below the top bar, not off the top of the window', await app.js(`document.querySelector('.tooltip').classList.contains('below')`))
   const zoom = await hoverOver(`document.querySelector('.zoom-level')`)

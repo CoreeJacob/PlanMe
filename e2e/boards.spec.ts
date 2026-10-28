@@ -43,7 +43,7 @@ test('rename, show in Finder and trash boards from the right-click menu', async 
   await check('newest first', (await app.boardNames()).join() === 'Beta,Alpha', await app.boardNames())
 
   await app.rightClick(boardCard('Alpha'))
-  await check('menu', (await app.menuLabels()).join() === 'Open,Rename…,Show in Finder,Move to Trash…', await app.menuLabels())
+  await check('menu', (await app.menuLabels()).join() === 'Open,Rename…,Show in Finder,Restore from Backup…,Move to Trash…', await app.menuLabels())
   await app.pickMenu('Rename…')
   await app.answer('Platformer')
   await app.untilJs(`!!${boardCard('Platformer')}`)

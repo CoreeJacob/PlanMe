@@ -2,7 +2,7 @@
 // and pop-ups (messages and name prompts).
 
 import { create } from 'zustand'
-import type { BoardSummary, BoxShape, View } from '@shared/types'
+import type { BoardSummary, BoxShape, Theme, View } from '@shared/types'
 import { readPref, writePref } from '@/lib/prefs'
 
 export type Screen = 'loading' | 'boards' | 'board'
@@ -69,6 +69,12 @@ interface AppState {
   linking: string[] | null
   /** Where links were followed from, the latest last. */
   backStack: BackSpot[]
+  /** Light, dark, or as the Mac is set. */
+  theme: Theme
+  /** The keyboard shortcuts sheet is showing. */
+  shortcutsOpen: boolean
+  /** The Backups dialog is showing: for one board (its name), or every board (''). */
+  backupsFor: string | null
   toasts: Toast[]
   prompt: PromptRequest | null
 
@@ -92,6 +98,9 @@ interface AppState {
   /** Takes the latest place off the Back list and returns it. */
   popBack(): BackSpot | undefined
   clearBack(): void
+  setTheme(theme: Theme): void
+  setShortcutsOpen(open: boolean): void
+  setBackupsFor(board: string | null): void
   toast(message: string, options?: { kind?: Toast['kind']; action?: Toast['action'] }): void
   dismissToast(id: number): void
   /** Asks for a name; resolves with it, or null if cancelled. */
@@ -129,6 +138,9 @@ export const useApp = create<AppState>((set, get) => ({
   findRequest: 0,
   linking: null,
   backStack: [],
+  theme: 'system',
+  shortcutsOpen: false,
+  backupsFor: null,
   toasts: [],
   prompt: null,
 
@@ -180,6 +192,15 @@ export const useApp = create<AppState>((set, get) => ({
 
   clearBack: () => set({ backStack: [] }),
 
+  setTheme: (theme) => {
+    set({ theme })
+    void window.api.setTheme(theme)
+  },
+
+  setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
+
+  setBackupsFor: (backupsFor) => set({ backupsFor }),
+
   flash: (id) => {
     set({ flashId: id })
     setTimeout(() => get().flashId === id && set({ flashId: null }), FLASH_MS)
@@ -205,10 +226,10 @@ export const useApp = create<AppState>((set, get) => ({
   }
 }))
 
-/** True while a dialog (a name prompt, the status editor or the Link picker) is up, so the board's shortcuts wait. */
+/** True while a dialog (a name prompt, the status editor, the Link picker…) is up, so the board's shortcuts wait. */
 export const dialogOpen = (): boolean => {
-  const { prompt, statusEditorOpen, linking } = useApp.getState()
-  return !!prompt || statusEditorOpen || !!linking
+  const { prompt, statusEditorOpen, linking, shortcutsOpen, backupsFor } = useApp.getState()
+  return !!prompt || statusEditorOpen || !!linking || shortcutsOpen || backupsFor !== null
 }
 
 /** Runs an action, showing its error as a message instead of failing silently. Returns undefined on error. */

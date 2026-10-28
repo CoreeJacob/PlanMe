@@ -38,7 +38,7 @@ export function cleanName(name: string): string {
 }
 
 /** `name`, or `name 2`, `name 3`… whichever doesn't exist yet in `root`. */
-async function freeFolder(root: string, name: string): Promise<string> {
+export async function freeFolder(root: string, name: string): Promise<string> {
   let folder = path.join(root, name)
   for (let n = 2; await exists(folder); n++) folder = path.join(root, `${name} ${n}`)
   return folder

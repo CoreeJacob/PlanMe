@@ -8,7 +8,9 @@ import { isTyping } from '@/lib/dom'
 import { cycleTab, goToBoards, newBoard, newTab } from './actions'
 import { BoardScreen } from './BoardScreen'
 import { BoardsScreen } from './BoardsScreen'
+import { BackupsDialog } from './BackupsDialog'
 import { LinkPicker } from './LinkPicker'
+import { ShortcutsSheet } from './ShortcutsSheet'
 import { PromptDialog, Toasts } from './Overlays'
 import { toolForKey } from './SidePanel'
 import { StatusEditor } from './StatusEditor'
@@ -68,8 +70,8 @@ export function App() {
 
   // Start on the board that was open last time, or on the Boards screen.
   useEffect(() => {
-    void window.api.getStartup().then(({ root, board }) => {
-      useApp.setState({ root })
+    void window.api.getStartup().then(({ root, board, theme }) => {
+      useApp.setState({ root, theme })
       if (board) useBoard.getState().load(board)
       useApp.getState().setScreen(board ? 'board' : 'boards')
     })
@@ -83,6 +85,11 @@ export function App() {
   useEffect(
     () =>
       window.api.onMenuCommand((command) => {
+        // These work anywhere, even while typing.
+        if (command === 'themeSystem' || command === 'themeLight' || command === 'themeDark') {
+          return useApp.getState().setTheme(command === 'themeSystem' ? 'system' : command === 'themeLight' ? 'light' : 'dark')
+        }
+        if (command === 'shortcuts') return useApp.getState().setShortcutsOpen(!useApp.getState().shortcutsOpen)
         if (command === 'undo' || command === 'redo' || command === 'selectAll') {
           if (isTyping() || dialogOpen()) return void document.execCommand(command)
         } else if (isTyping() && command !== 'find') {
@@ -124,6 +131,8 @@ export function App() {
       <PromptDialog />
       <StatusEditor />
       <LinkPicker />
+      <ShortcutsSheet />
+      <BackupsDialog />
       <Toasts />
       <Tooltips />
     </div>

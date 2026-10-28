@@ -5,9 +5,12 @@
 import { promises as fs } from 'node:fs'
 import { writeFileAtomic } from './files'
 
+import type { Theme } from '@shared/types'
+
 export interface Settings {
   boardsRoot?: string
   lastBoard?: string | null
+  theme?: Theme
 }
 
 export class SettingsStore {

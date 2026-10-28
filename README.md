@@ -20,7 +20,11 @@ My Game/
   images/          pictures added to the board (copies; very large ones shrunk to 4000 pixels)
 ```
 
-The app's own settings (which folder, which board was open) are in `~/Library/Application Support/PlanMe/settings.json`.
+## Backups
+
+Before a board changes, it's backed up into a `PlanMe Backups` folder next to your boards folder (so `~/Documents/PlanMe Backups/My Game/2026-10-28 21.07.31/`), at most once an hour. The newest 24 are kept, plus one a day for 30 days. Pictures are copied as clones, which take no extra space until they change. To get one back: Boards screen → Backups… (or right-click a board → Restore from Backup…). It comes back as a new board, so nothing is overwritten. Backups of deleted boards are listed too.
+
+The app's own settings (which folder, which board was open, light or dark) are in `~/Library/Application Support/PlanMe/settings.json`.
 
 Changes are saved a moment after you make them, and straight away when the window closes. Every file is written to a temporary file first and then swapped in, so a crash can't leave one half-written.
 
@@ -67,3 +71,5 @@ Changes are saved a moment after you make them, and straight away when the windo
 | ⌘Z, ⇧⌘Z | Undo, redo |
 | ⇧⌘B | All boards |
 | ⇧⌘N | New board |
+| ⌘/ | Every key, on one sheet (or the keyboard button at the top right) |
+| View ▸ Appearance | Light, dark, or the same as the Mac (or the sun/moon button at the top right) |

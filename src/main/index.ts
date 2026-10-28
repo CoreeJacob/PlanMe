@@ -2,8 +2,9 @@ import { randomUUID } from 'node:crypto'
 import { promises as fs, watch, type FSWatcher } from 'node:fs'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, net, protocol, shell } from 'electron'
-import { IMAGE_EXTENSIONS, type MenuCommand, type SaveRequest, type Startup } from '@shared/types'
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, nativeTheme, net, protocol, shell } from 'electron'
+import { IMAGE_EXTENSIONS, type MenuCommand, type SaveRequest, type Startup, type Theme } from '@shared/types'
+import { backupsRoot, backUpIfDue, listBackups, renameBackups, restoreBackup } from './backups'
 import { createBoard, isBoard, listBoards, openBoard, renameBoard, saveBoard } from './boards'
 import {
   createImageFolder,
@@ -87,7 +88,7 @@ function createWindow(): void {
     title: 'PlanMe',
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 14, y: 14 },
-    backgroundColor: '#f4f5f8',
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#14151a' : '#f4f5f8',
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'),
       sandbox: true,
@@ -133,7 +134,14 @@ function createWindow(): void {
   }
 }
 
-function buildMenu(): void {
+/** Light, dark or the Mac's own: the app's look, its menus and its dialogs all follow it. */
+async function setTheme(theme: Theme): Promise<void> {
+  nativeTheme.themeSource = theme
+  await updateSettings({ theme })
+  buildMenu(theme)
+}
+
+function buildMenu(theme: Theme): void {
   const send = (command: MenuCommand) => () => mainWindow?.webContents.send('menu:command', command)
   Menu.setApplicationMenu(
     Menu.buildFromTemplate([
@@ -180,6 +188,15 @@ function buildMenu(): void {
           { label: 'Zoom to Fit', accelerator: 'Shift+1', registerAccelerator: false, click: send('zoomFit') },
           { label: 'Zoom to Selection', accelerator: 'Shift+2', registerAccelerator: false, click: send('zoomSelection') },
           { type: 'separator' },
+          {
+            label: 'Appearance',
+            submenu: [
+              { label: 'Same as the Mac', type: 'radio', checked: theme === 'system', click: send('themeSystem') },
+              { label: 'Light', type: 'radio', checked: theme === 'light', click: send('themeLight') },
+              { label: 'Dark', type: 'radio', checked: theme === 'dark', click: send('themeDark') }
+            ]
+          },
+          { type: 'separator' },
           { label: 'Show/Hide Side Panel', accelerator: 'CmdOrCtrl+\\', click: send('togglePanel') },
           { label: 'Next Tab', accelerator: 'Ctrl+Tab', click: send('nextTab') },
           { label: 'Previous Tab', accelerator: 'Ctrl+Shift+Tab', click: send('prevTab') },
@@ -189,7 +206,8 @@ function buildMenu(): void {
           { role: 'togglefullscreen' }
         ]
       },
-      { role: 'windowMenu' }
+      { role: 'windowMenu' },
+      { role: 'help', submenu: [{ label: 'Keyboard Shortcuts', accelerator: 'CmdOrCtrl+/', click: send('shortcuts') }] }
     ])
   )
 }
@@ -208,7 +226,7 @@ function registerIpc(): void {
       // A damaged or too-new board shouldn't stop the app starting: show the Boards screen instead.
       board = await openBoard(lastBoard).catch((err) => (console.error(err), null))
     }
-    return { root, board }
+    return { root, board, theme: (await settings.get()).theme ?? 'system' }
   })
   handle('boards:list', async () => listBoards(await boardsRoot()))
   handle('boards:create', async (name: string) => {
@@ -221,7 +239,11 @@ function registerIpc(): void {
     await updateSettings({ lastBoard: dir })
     return board
   })
-  handle('boards:rename', (dir: string, name: string) => renameBoard(dir, name))
+  handle('boards:rename', async (dir: string, name: string) => {
+    const renamed = await renameBoard(dir, name)
+    await renameBackups(dir, renamed).catch((err) => console.error('Could not rename backups', err))
+    return renamed
+  })
   handle('boards:trash', (dir: string) => shell.trashItem(dir))
   handle('boards:reveal', (dir: string) => shell.showItemInFolder(path.join(dir, 'board.json')))
   handle('boards:chooseRoot', async () => {
@@ -233,7 +255,20 @@ function registerIpc(): void {
     await updateSettings({ boardsRoot: result.filePaths[0] })
     return result.filePaths[0]
   })
-  handle('boards:save', (dir: string, request: SaveRequest) => saveBoard(dir, request))
+  handle('boards:save', async (dir: string, request: SaveRequest) => {
+    // Before the first save in an hour, back the board up as it was. A backup that fails mustn't stop the save.
+    await backUpIfDue(dir).catch((err) => console.error('Could not back up', err))
+    await saveBoard(dir, request)
+  })
+  handle('backups:list', async () => listBackups(await boardsRoot()))
+  handle('backups:restore', async (board: string, id: string) => path.basename(await restoreBackup(await boardsRoot(), board, id)))
+  handle('backups:reveal', async (board?: string) => {
+    const top = backupsRoot(await boardsRoot())
+    await fs.mkdir(top, { recursive: true })
+    if (board && path.basename(board) === board) shell.showItemInFolder(path.join(top, board))
+    else await shell.openPath(top)
+  })
+  handle('app:setTheme', (theme: Theme) => setTheme(theme))
   handle('boards:setLast', (dir: string | null) => updateSettings({ lastBoard: dir }))
   handle('images:import', async (board: string, paths: string[]) => {
     const imported = []
@@ -278,10 +313,13 @@ function registerProtocol(): void {
   })
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   registerProtocol()
   registerIpc()
-  buildMenu()
+  // The saved look first, so the window opens in it.
+  const theme = (await settings.get()).theme ?? 'system'
+  nativeTheme.themeSource = theme
+  buildMenu(theme)
   createWindow()
 
   app.on('activate', () => {

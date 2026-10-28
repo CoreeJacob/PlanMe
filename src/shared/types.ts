@@ -230,9 +230,30 @@ export interface SaveRequest {
   removed: string[]
 }
 
+/** One backup of a board. */
+export interface Backup {
+  /** Its folder name (when it was made). */
+  id: string
+  time: number
+  /** When, for reading: "28 Oct 9.07pm". */
+  label: string
+  tabs: number
+}
+
+/** A board's backups, newest first. `current`: the board is still in the boards folder (not deleted or renamed away). */
+export interface BoardBackups {
+  board: string
+  current: boolean
+  backups: Backup[]
+}
+
+/** Light, dark, or whichever the Mac is set to. */
+export type Theme = 'system' | 'light' | 'dark'
+
 export interface Startup {
   /** The folder new boards go in. */
   root: string
+  theme: Theme
   /** The board that was open last time, if it's still there. */
   board: OpenedBoard | null
 }
@@ -259,6 +280,10 @@ export type MenuCommand =
   | 'lock'
   | 'zoomFit'
   | 'zoomSelection'
+  | 'shortcuts'
+  | 'themeSystem'
+  | 'themeLight'
+  | 'themeDark'
 
 export interface PlanMeApi {
   getStartup(): Promise<Startup>
@@ -299,6 +324,14 @@ export interface PlanMeApi {
   revealImage(board: string, entry: string): Promise<void>
   /** The file on disk a dropped file came from ('' if it isn't one). */
   pathForFile(file: File): string
+  /** Every board with backups, and its backups. */
+  listBackups(): Promise<BoardBackups[]>
+  /** Copies a backup back in as a new board, and returns that board's name. */
+  restoreBackup(board: string, id: string): Promise<string>
+  /** Shows the backups folder (or one board's backups) in Finder. */
+  revealBackups(board?: string): Promise<void>
+  /** Switches between light, dark and the Mac's own setting (remembered, and used by menus and dialogs too). */
+  setTheme(theme: Theme): Promise<void>
   /** Opens a web page (http or https only) in the browser. */
   openWebLink(url: string): Promise<void>
   /** Remembers which board to reopen next launch (null: start on the Boards screen). */

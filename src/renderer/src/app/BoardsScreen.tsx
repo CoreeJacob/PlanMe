@@ -31,6 +31,9 @@ export function BoardsScreen() {
     <div className="boards-screen">
       <header className="boards-header drag-region">
         <h1>Boards</h1>
+        <button className="btn boards-backups" title="Backups — every board is backed up before it changes, at most once an hour" onClick={() => useApp.getState().setBackupsFor('')}>
+          Backups…
+        </button>
         <button className="btn primary" title="New board — one for each game or idea (⇧⌘N)" onClick={() => void newBoard()}>
           <Icon name="plus" size={16} /> New Board
         </button>
@@ -54,6 +57,7 @@ export function BoardsScreen() {
                   { label: 'Open', onSelect: () => void openBoard(b.path) },
                   { label: 'Rename…', icon: 'rename', onSelect: () => void renameBoard(b.path, b.name) },
                   { label: 'Show in Finder', icon: 'reveal', onSelect: () => void window.api.revealBoard(b.path) },
+                  { label: 'Restore from Backup…', icon: 'undo', onSelect: () => useApp.getState().setBackupsFor(b.name) },
                   'separator',
                   { label: 'Move to Trash…', icon: 'trash', danger: true, onSelect: () => void trashBoard(b.path, b.name) }
                 ])

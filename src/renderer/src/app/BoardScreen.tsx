@@ -40,6 +40,10 @@ export function BoardScreen() {
         </div>
         <TabBar />
         <div className="topbar-end">
+          <ThemeButton />
+          <button className="icon-btn" title="Keyboard shortcuts — every key, on one sheet (⌘/)" onClick={() => useApp.getState().setShortcutsOpen(true)}>
+            <Icon name="keyboard" />
+          </button>
           <button className="icon-btn" title="Undo (⌘Z)" disabled={!canUndo} onClick={() => useBoard.getState().undo()}>
             <Icon name="undo" />
           </button>
@@ -80,5 +84,23 @@ function BackChip() {
         <Icon name="close" size={12} />
       </button>
     </div>
+  )
+}
+
+const THEMES = [
+  { theme: 'system', icon: 'themeAuto', said: 'same as the Mac' },
+  { theme: 'light', icon: 'sun', said: 'light' },
+  { theme: 'dark', icon: 'moon', said: 'dark' }
+] as const
+
+/** Light, dark, or the same as the Mac: click for the next. */
+function ThemeButton() {
+  const theme = useApp((s) => s.theme)
+  const k = Math.max(0, THEMES.findIndex((t) => t.theme === theme))
+  const next = THEMES[(k + 1) % THEMES.length]
+  return (
+    <button className="icon-btn theme-btn" title={`Appearance — ${THEMES[k].said}. Click for ${next.said}`} onClick={() => useApp.getState().setTheme(next.theme)}>
+      <Icon name={THEMES[k].icon} />
+    </button>
   )
 }
