@@ -22,6 +22,40 @@ const DOT_SNAP = 14
 /** How far outside an item (in screen pixels) the pointer can go and still show its dots. */
 const DOT_REACH = DOT_OFFSET + 12
 
+/**
+ * How tall a section's title strip is on screen (see .section-title: 15px words that stay readable
+ * when zoomed out, 2px above and 6 screen pixels below).
+ */
+export const sectionTitleHeight = (zoom: number): number => (15 / Math.max(zoom, 0.5)) * 1.3 * zoom + 2 * zoom + 6
+
+/** How far outside an item (in screen pixels) the pointer can go and still show its move grip. */
+const GRIP_REACH = 40
+
+/**
+ * The item whose move grip shows: the top-most thing the pointer is over (or just around, to reach
+ * the grip), and failing that, a section the pointer is anywhere inside.
+ */
+export function gripTarget(p: Point, zoom: number): string | null {
+  const reach = GRIP_REACH / zoom
+  const items = currentItems()
+  const near = (s: Shape, by: number): boolean => p.x >= s.x - by && p.x <= s.x + s.w + by && p.y >= s.y - by && p.y <= s.y + s.h + by
+  for (let k = items.length - 1; k >= 0; k--) {
+    const s = items[k]
+    if (s.type !== 'arrow' && s.type !== 'section' && near(s, reach)) return s.id
+  }
+  for (let k = items.length - 1; k >= 0; k--) {
+    const s = items[k]
+    if (s.type === 'section' && near(s, reach)) return s.id
+  }
+  return null
+}
+
+/** Where an item's move grip sits on screen: just left of its top-left corner (beside a section's title). */
+export function gripOnScreen(view: View, size: Size, item: Shape): Point {
+  const corner = toScreen(view, size, item)
+  return item.type === 'section' ? { x: corner.x - 14, y: corner.y - sectionTitleHeight(view.zoom) / 2 } : { x: corner.x - 22, y: corner.y + 12 }
+}
+
 /** An arrow end at a board point: attached to `shape` if there is one, otherwise loose there. */
 export const endAt = (p: Point, shape: Shape | null | undefined): ArrowEnd => ({ item: shape?.id ?? null, x: p.x, y: p.y })
 

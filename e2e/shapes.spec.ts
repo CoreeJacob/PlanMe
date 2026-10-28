@@ -188,3 +188,39 @@ test('the right-click menu closes when you go back to the board', async ({ app }
   await app.clickAt(...(await app.screenOf(400, 300)))
   await check('a click on empty board closes it too', (await app.menuLabels()).length === 0)
 })
+
+test('a move grip shows on whatever the pointer is over, and drags it', async ({ app }) => {
+  await app.newBoard('Game')
+  const act = await sectionFrom(app, [-400, -200], [200, 250], 'Act 1')
+  await app.key('Escape', 'Escape')
+  const village = await app.noteAt(-200, 50, 'Village')
+  await app.key('Escape', 'Escape')
+  const grip = () => app.js<[string, number, number] | null>(`(() => { const g = document.querySelector('.grip'); if (!g) return null; const r = g.getBoundingClientRect(); return [g.dataset.grip, r.x + r.width / 2, r.y + r.height / 2] })()`)
+
+  // Anywhere inside a section (away from what's in it): its grip, beside its title.
+  await app.hoverAt(await app.screenOf(100, 200))
+  let g = await app.until(grip)
+  await check('the pointer anywhere inside a section shows its grip', g?.[0] === act, g)
+  await check('…and lights up its outline', await app.js(`!!document.querySelector('.hover-outline')`))
+  await app.drag([[g![1], g![2]], [g![1] + 30, g![2] + 20], [g![1] + 100, g![2] + 50]])
+  const moved = await app.item(act)
+  await check('dragging the grip moves the section…', moved.x === -300 && moved.y === -150, moved)
+  await check('…and what’s inside it', (await app.item(village)).x === -200, await app.item(village))
+  await check('…and selects it', (await app.selectedIds()).join() === act)
+
+  // Over a note: its grip, at its top-left.
+  await app.key('Escape', 'Escape')
+  const note = await app.item(village)
+  await app.hoverAt(await app.itemCentre(village))
+  g = await app.until(grip)
+  await check('the pointer over a note shows the note’s grip, at its top-left', g?.[0] === village && g[1] < (await app.screenOf(note.x, note.y))[0], g)
+  await app.hoverAt([g![1], g![2]])
+  await check('the grip stays while the pointer moves onto it', (await grip())?.[0] === village)
+  const count = (await app.items()).length
+  await app.doubleClickAt([g![1], g![2]])
+  await check('double-clicking the grip doesn’t add a note', (await app.items()).length === count)
+
+  await app.tool('h')
+  await app.hoverAt(await app.itemCentre(village))
+  await check('no grip with the Hand tool', (await grip()) === null)
+})

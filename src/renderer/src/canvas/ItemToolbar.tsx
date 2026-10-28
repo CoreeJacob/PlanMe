@@ -11,6 +11,7 @@ import type { TextStyle } from '@/board/richtext'
 import { boundsOf } from '@/lib/geometry'
 import { allStyled, bringSelectedToFront, deleteSelected, sendSelectedToBack, setOnSelected, setStatusOnSelected, toggleStyleOnSelected } from './actions'
 import { currentStatusChoice, palettesFor, statusChoicesFor, statusValue } from './looks'
+import { sectionTitleHeight } from './targets'
 import { toScreen, type Size } from './view'
 
 /** A toolbar button that opens a grid of choices (colours, or outlines) below it. */
@@ -112,9 +113,6 @@ function ArrowButtons({ arrow }: { arrow: ArrowItem }) {
 
 const GAP = 10
 const HEIGHT = 40
-
-/** How tall a section's title is on screen (see .section-title: it stays readable when zoomed out). */
-const sectionTitleHeight = (zoom: number): number => (15 / Math.max(zoom, 0.5)) * 1.3 * zoom + 4 * zoom + 4
 
 interface Props {
   view: View

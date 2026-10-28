@@ -1872,3 +1872,38 @@ button {
   font-size: 12px;
   overflow-wrap: anywhere;
 }
+
+/* ---------- move grip ---------- */
+
+.grip {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 24px;
+  margin: -12px 0 0 -8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
+  background: var(--panel);
+  color: var(--muted);
+  box-shadow: 0 1px 3px rgba(20, 22, 30, 0.15);
+  cursor: grab;
+  pointer-events: auto;
+}
+.grip:hover {
+  border-color: var(--select);
+  color: var(--select);
+}
+.grip svg {
+  width: 8px;
+  height: 14px;
+  fill: currentColor;
+}
+.hover-outline {
+  position: absolute;
+  margin: -1px 0 0 -1px;
+  border: 1.5px solid color-mix(in srgb, var(--select) 45%, transparent);
+  border-radius: 12px;
+  box-sizing: content-box;
+}

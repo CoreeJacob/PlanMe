@@ -7,7 +7,7 @@ import { arrowPoints, isArrow, pinsOf, type Lookup, type Pin } from '@/board/arr
 import type { Handle } from '@/board/items'
 import { boundsOf, type Point } from '@/lib/geometry'
 import type { Guide } from './snap'
-import { dotOnScreen } from './targets'
+import { dotOnScreen, gripOnScreen } from './targets'
 import { toScreen, type Size } from './view'
 
 const ALL_HANDLES: Handle[] = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w']
@@ -49,9 +49,11 @@ interface Props {
   dotted: Shape[]
   /** The dot an arrow would join if let go now. */
   activeDot: ActiveDot | null
+  /** The item showing its move grip (the one under the pointer). */
+  gripped: Shape | null
 }
 
-export function Overlay({ view, size, selected, lookup, editingId, marquee, ghost, guides, target, drawing, dotted, activeDot }: Props) {
+export function Overlay({ view, size, selected, lookup, editingId, marquee, ghost, guides, target, drawing, dotted, activeDot, gripped }: Props) {
   const screen = (r: Rect): { left: number; top: number; width: number; height: number } => {
     const p = toScreen(view, size, r)
     return { left: p.x, top: p.y, width: r.w * view.zoom, height: r.h * view.zoom }
@@ -108,6 +110,19 @@ export function Overlay({ view, size, selected, lookup, editingId, marquee, ghos
           )
         })
       )}
+      {/* A section's inside doesn't react to the pointer, so show which one the grip is for. */}
+      {gripped?.type === 'section' && <div className="hover-outline" style={screen(gripped)} />}
+      {gripped &&
+        (() => {
+          const p = gripOnScreen(view, size, gripped)
+          return (
+            <div className="grip" data-grip={gripped.id} title="Move — drag to move it (and, for a section, what’s inside)" style={{ left: p.x, top: p.y }}>
+              <svg viewBox="0 0 8 14" aria-hidden>
+                {[2, 7, 12].map((y) => [2, 6].map((x) => <circle key={`${x},${y}`} cx={x} cy={y} r={1.2} />))}
+              </svg>
+            </div>
+          )
+        })()}
       {marquee && <div className="marquee" style={screen(marquee)} />}
       {ghost && <div className="ghost" style={screen(ghost)} />}
       {guides.map((g, k) => {

@@ -47,7 +47,7 @@ import { canJoin, currentView, itemById, onlySelected, setCurrentView, viewport,
 import { useCanvasKeys, useClipboard } from './keys'
 import { Overlay, type ActiveDot } from './Overlay'
 import { snapMove, snapResize, type Guide } from './snap'
-import { dotNear, endAt, endOnDot, shapeAround, shapeUnder } from './targets'
+import { dotNear, endAt, endOnDot, gripTarget, shapeAround, shapeUnder } from './targets'
 import { gridSpacing, panBy, toBoard, toScreen, zoomAt } from './view'
 
 /** How close (in screen pixels) things must be to line up, and to count as a drag rather than a click. */
@@ -106,6 +106,8 @@ export function Canvas() {
   const [activeDot, setActiveDot] = useState<ActiveDot | null>(null)
   /** The item under (or just around) the pointer, which shows its dots. */
   const [hovered, setHovered] = useState<string | null>(null)
+  /** The item showing its move grip. */
+  const [gripId, setGripId] = useState<string | null>(null)
   const menu = useContextMenu()
   const sizeRef = useRef(size)
   sizeRef.current = size
@@ -175,9 +177,16 @@ export function Canvas() {
 
   /** Keeps track of which item the pointer is over (or just around), to show its dots. */
   const trackHover = (e: React.PointerEvent): void => {
-    if ((tool !== 'select' && tool !== 'arrow') || spaceDown) return void setHovered(null)
-    const found = shapeAround(boardPoint(e), currentView().zoom)
+    if ((tool !== 'select' && tool !== 'arrow') || spaceDown) {
+      setHovered(null)
+      setGripId(null)
+      return
+    }
+    const p = boardPoint(e)
+    const found = shapeAround(p, currentView().zoom)
     if (found !== hovered) setHovered(found)
+    const grip = tool === 'select' ? gripTarget(p, currentView().zoom) : null
+    if (grip !== gripId) setGripId(grip)
   }
 
   /** Escape during a drag puts things back as they were. */
@@ -261,7 +270,8 @@ export function Canvas() {
       return
     }
 
-    const hit = target.closest<HTMLElement>('[data-item-id]')?.dataset.itemId
+    // An item's move grip, or the item itself.
+    const hit = target.closest<HTMLElement>('[data-grip]')?.dataset.grip ?? target.closest<HTMLElement>('[data-item-id]')?.dataset.itemId
     if (hit) {
       if (e.shiftKey) {
         // Shift-click adds to (or takes away from) the selection.
@@ -428,7 +438,7 @@ export function Canvas() {
     // Look at what's really under the pointer.
     const target = document.elementFromPoint(e.clientX, e.clientY)
     // Handles (for resizing, or an arrow's ends) aren't empty space: no new note there.
-    if (!target || target.closest('.item-editor, .zoom-controls, .item-toolbar, [data-handle], [data-end], [data-dot], [data-status-badge]')) return
+    if (!target || target.closest('.item-editor, .zoom-controls, .item-toolbar, [data-handle], [data-end], [data-dot], [data-status-badge], [data-grip]')) return
     const hit = target.closest<HTMLElement>('[data-item-id]')?.dataset.itemId
     // Double-click an item to type in it (in a to-do list, the line or title clicked), or empty
     // space for a new sticky note.
@@ -503,6 +513,9 @@ export function Canvas() {
   const busy = drag !== null && drag.kind !== 'pan' && !pressOnly
   const cursor = drag?.kind === 'pan' ? 'panning' : tool === 'hand' || spaceDown ? 'can-pan' : isPlacingTool(tool) || tool === 'arrow' ? 'placing' : ''
   const lookup = lookupIn(items)
+  // The move grip shows on the item under the pointer, while nothing's being dragged or typed in it.
+  const gripItem = gripId && !busy && tool === 'select' && !spaceDown && gripId !== editingId ? items.find((i) => i.id === gripId) : undefined
+  const gripped = gripItem && isShape(gripItem) ? gripItem : null
   // Dots show on every item while an arrow is being drawn or moved; otherwise on the item under
   // the pointer and the one selected (not while typing in it, or during other drags).
   const drawingArrow = drag?.kind === 'arrow' || (drag?.kind === 'arrowEnd' && !pressOnly)
@@ -524,7 +537,11 @@ export function Canvas() {
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
-      onPointerLeave={() => !dragRef.current && setHovered(null)}
+      onPointerLeave={() => {
+        if (dragRef.current) return
+        setHovered(null)
+        setGripId(null)
+      }}
       onDoubleClick={onDoubleClick}
       onContextMenu={onContextMenu}
       // Pictures dropped from Finder (or another app) land where they're dropped.
@@ -585,6 +602,7 @@ export function Canvas() {
         drawing={drawing}
         dotted={dotted}
         activeDot={activeDot}
+        gripped={gripped}
       />
 
       {selectedItems.length > 0 && !busy && <ItemToolbar view={view} size={size} items={selectedItems} lookup={lookup} editing={editingId !== null} statuses={statuses} />}

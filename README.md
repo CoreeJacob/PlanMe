@@ -47,6 +47,7 @@ Changes are saved a moment after you make them, and straight away when the windo
 | ⌘B ⌘I ⌘U | Bold, italic, underline (while typing) |
 | Shift-click, drag across empty space | Select more than one |
 | Drag | Move; items line up with each other (hold ⌘ to stop that) |
+| ⠿ grip (on hover) | Shows at the top-left of whatever the pointer is over (anywhere inside a section): drag it to move the item, or a section with what's in it |
 | Shift while resizing | Keep the shape |
 | Arrows (Shift for 10) | Nudge |
 | ⌫ | Delete |
