@@ -1,9 +1,11 @@
-// The panel on the left: tools at the top, and every task on the board below.
+// The panel on the left: search at the top, then the tools, and below them every task on the
+// board or its pictures. While something is searched for, the results take their place.
 
 import { Icon, type IconName } from './Icon'
 import { SHAPE_CHOICES, shapeChoice } from './shapes'
 import { useApp, type Tool } from './store'
 import { ImagesPanel } from './ImagesPanel'
+import { SearchField, SearchResults, useSearch } from './Search'
 import { TasksPanel } from './TasksPanel'
 
 const TOOLS: Array<{ tool: Tool; label: string; tip?: string; key: string; icon: IconName }> = [
@@ -25,8 +27,12 @@ export function SidePanel() {
   const lower = useApp((s) => s.lowerPanel)
   const setLower = useApp((s) => s.setLowerPanel)
   const setBoxShape = useApp((s) => s.setBoxShape)
+  const search = useSearch()
   return (
     <aside className="side-panel">
+      <div className="panel-search">
+        <SearchField search={search} clearFirst onLeave={() => {}} />
+      </div>
       <section className="panel-section">
         <h2 className="panel-heading">Tools</h2>
         <div className="tool-grid">
@@ -59,16 +65,22 @@ export function SidePanel() {
           </div>
         )}
       </section>
-      {/* Below the tools: the board's tasks, or its pictures. */}
-      <div className="panel-switch" role="tablist">
-        {(['tasks', 'images'] as const).map((which) => (
-          <button key={which} role="tab" aria-selected={lower === which} className={`panel-tab ${lower === which ? 'active' : ''}`} onClick={() => setLower(which)}>
-            <Icon name={which === 'tasks' ? 'tasks' : 'image'} size={14} />
-            {which === 'tasks' ? 'Tasks' : 'Images'}
-          </button>
-        ))}
-      </div>
-      {lower === 'tasks' ? <TasksPanel /> : <ImagesPanel />}
+      {search.query.trim() ? (
+        <SearchResults search={search} />
+      ) : (
+        <>
+          {/* Below the tools: the board's tasks, or its pictures. */}
+          <div className="panel-switch" role="tablist">
+            {(['tasks', 'images'] as const).map((which) => (
+              <button key={which} role="tab" aria-selected={lower === which} className={`panel-tab ${lower === which ? 'active' : ''}`} onClick={() => setLower(which)}>
+                <Icon name={which === 'tasks' ? 'tasks' : 'image'} size={14} />
+                {which === 'tasks' ? 'Tasks' : 'Images'}
+              </button>
+            ))}
+          </div>
+          {lower === 'tasks' ? <TasksPanel /> : <ImagesPanel />}
+        </>
+      )}
     </aside>
   )
 }

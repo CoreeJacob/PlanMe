@@ -28,7 +28,12 @@ interface ItemBase extends Rect {
   status?: string
   /** When its status last changed (ms since 1970), so the Done list can show the newest first. */
   statusAt?: number
+  /** Where its link badge goes, if it has one. */
+  link?: Link
 }
+
+/** A link from an item: to another tab, to an item (on any tab), or to a web page. */
+export type Link = { type: 'tab'; tab: string } | { type: 'item'; item: string } | { type: 'web'; url: string }
 
 /** A sticky note. Its text shrinks to fit. Colours are names (see app/colors.ts). */
 export interface NoteItem extends ItemBase {
@@ -245,6 +250,8 @@ export type MenuCommand =
   | 'duplicate'
   | 'bringToFront'
   | 'sendToBack'
+  | 'find'
+  | 'link'
 
 export interface PlanMeApi {
   getStartup(): Promise<Startup>
@@ -285,6 +292,8 @@ export interface PlanMeApi {
   revealImage(board: string, entry: string): Promise<void>
   /** The file on disk a dropped file came from ('' if it isn't one). */
   pathForFile(file: File): string
+  /** Opens a web page (http or https only) in the browser. */
+  openWebLink(url: string): Promise<void>
   /** Remembers which board to reopen next launch (null: start on the Boards screen). */
   setLastBoard(path: string | null): Promise<void>
   onMenuCommand(callback: (command: MenuCommand) => void): () => void

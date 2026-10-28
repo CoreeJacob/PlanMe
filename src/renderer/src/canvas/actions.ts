@@ -1,10 +1,10 @@
 // What can be done to items on the tab showing: adding, typing, deleting, copying, colouring…
 // Shared by the keys, the menus, the floating toolbar and the right-click menu.
 
-import { DEFAULT_VIEW, type ArrowEnd, type BoardDoc, type BoxShape, type Item, type Rect, type Shape, type Status, type TodoItem } from '@shared/types'
+import { DEFAULT_VIEW, type ArrowEnd, type BoardDoc, type BoxShape, type Item, type Link, type Rect, type Shape, type Status, type TodoItem } from '@shared/types'
 import { upgradeItem } from '@shared/upgrade'
 import { attempt, useApp } from '@/app/store'
-import { arrowsAttached, boxOf, detach, isArrow, lookupIn } from '@/board/arrows'
+import { arrowsAttached, boxOf, detach, isArrow, isShape, lookupIn } from '@/board/arrows'
 import {
   addItems,
   copiesOf,
@@ -19,6 +19,7 @@ import {
   restack,
   updateItems
 } from '@/board/items'
+import { linkKey, linkTarget } from '@/board/links'
 import { cleanHtml, fromPlainText, isAllStyled, plainText, setWholeStyle, type TextStyle } from '@/board/richtext'
 import { withContents } from '@/board/sections'
 import { autoKind, withStatuses } from '@/board/statuses'
@@ -181,17 +182,79 @@ export function saveStatuses(statuses: Status[]): void {
 
 // ---------- going to things ----------
 
-/** Shows an item (from the Tasks panel): its tab, centred on screen, selected, and flashing briefly. */
-export function goToItem(tabId: string, id: string): void {
+/** Shows a tab, where it was last looking. */
+export function goToTab(tabId: string): void {
   finishEditing()
-  const board = state()
-  board.setTab(tabId)
-  const item = itemsOf(state().doc, tabId).find((i) => i.id === id)
-  if (!item || item.type === 'arrow') return
+  state().setTab(tabId)
+}
+
+/** Shows an item (from the Tasks panel, search or a link): its tab, centred on screen, selected, and flashing briefly. */
+export function goToItem(tabId: string, id: string): void {
+  goToTab(tabId)
+  const items = itemsOf(state().doc, tabId)
+  const item = items.find((i) => i.id === id)
+  if (!item) return
+  const box = boxOf(item, lookupIn(items))
   const zoom = (state().views[tabId] ?? DEFAULT_VIEW).zoom
-  state().setView(tabId, { x: item.x + item.w / 2, y: item.y + item.h / 2, zoom })
+  state().setView(tabId, { x: box.x + box.w / 2, y: box.y + box.h / 2, zoom })
   state().select([id])
   useApp.getState().flash(id)
+}
+
+// ---------- links ----------
+
+/** Opens the Link picker for the selected items (arrows can't have links). */
+export function linkSelected(): void {
+  finishEditing()
+  const ids = selectedItems().filter(isShape).map((i) => i.id)
+  if (ids.length) useApp.getState().setLinking(ids)
+}
+
+/** Gives items a link, or with null takes theirs away. One undo step. */
+export function setLink(ids: string[], link: Link | null): void {
+  change((doc, tabId) =>
+    updateItems(doc, tabId, ids, (i) => {
+      if (i.type === 'arrow') return i
+      if (!link) {
+        const { link: had, ...rest } = i
+        return had ? (rest as Shape) : i
+      }
+      return i.link && linkKey(i.link) === linkKey(link) ? i : { ...i, link }
+    })
+  )
+}
+
+/**
+ * Follows an item's link: to a tab or an item (the Back chip then comes back here), or to a web
+ * page in the browser. A broken link opens the Link picker to choose somewhere else.
+ */
+export function followLink(id: string): void {
+  const item = currentItems().find((i) => i.id === id)
+  if (!item || item.type === 'arrow' || !item.link) return
+  const target = linkTarget(state().doc, item.link)
+  if (!target) {
+    finishEditing()
+    state().select([id])
+    useApp.getState().setLinking([id])
+    return
+  }
+  if (target.type === 'web') return void attempt(() => window.api.openWebLink(target.url))
+  useApp.getState().pushBack({ tabId: state().tabId, view: currentView(), itemId: id })
+  if (target.type === 'tab') goToTab(target.tab.id)
+  else goToItem(target.tab.id, target.item.id)
+}
+
+/** Back to where the last link was followed from: that tab, looking where it was, with the link's item selected. */
+export function goBack(): void {
+  const { doc } = state()
+  let spot = useApp.getState().popBack()
+  // Skip places on tabs deleted since.
+  while (spot && !doc.tabs.some((t) => t.id === spot!.tabId)) spot = useApp.getState().popBack()
+  if (!spot) return
+  goToTab(spot.tabId)
+  state().setView(spot.tabId, spot.view)
+  const itemId = spot.itemId
+  if (itemsOf(doc, spot.tabId).some((i) => i.id === itemId)) state().select([itemId])
 }
 
 // ---------- selection ----------

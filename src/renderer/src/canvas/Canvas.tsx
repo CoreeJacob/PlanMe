@@ -18,6 +18,7 @@ import { IMAGE_DRAG } from '@/app/ImagesPanel'
 import { useDimFilter } from '@/app/TasksPanel'
 import { arrowPoints, boxOf, crossesBox, isArrow, isShape, lookupIn, nearestPin, pinPoint } from '@/board/arrows'
 import { besideRect, itemsOf, moveItems, resizeRect, updateItems, type Handle } from '@/board/items'
+import { linkTarget, linkTip } from '@/board/links'
 import { drawingOrder, isSection, withContents } from '@/board/sections'
 import { statusOf } from '@/board/statuses'
 import { NO_SELECTION, selectTab, useBoard } from '@/board/store'
@@ -31,8 +32,11 @@ import {
   deleteSelected,
   duplicateSelected,
   finishEditing,
+  followLink,
+  linkSelected,
   selectAll,
   sendSelectedToBack,
+  setLink,
   setOnSelected,
   setStatusOnSelected,
   startEditing,
@@ -93,6 +97,8 @@ export function Canvas() {
   const editingId = useBoard((s) => s.editingId)
   const editingPart = useBoard((s) => s.editingPart)
   const statuses = useBoard((s) => s.doc.statuses)
+  // Links can go to other tabs, so whether one still works depends on the whole board.
+  const doc = useBoard((s) => s.doc)
   const dimFilter = useDimFilter()
   const flashId = useApp((s) => s.flashId)
   const tool = useApp((s) => s.tool)
@@ -217,6 +223,15 @@ export function Canvas() {
       useBoard.getState().select([badgeOf.id])
       const r = badge.getBoundingClientRect()
       menu.show(r.left, r.bottom + 4, statusMenu([badgeOf]) ?? [])
+      return
+    }
+    // An item's link badge: follow the link.
+    const linkBadge = target.closest<HTMLElement>('[data-link-badge]')
+    const linkOf = linkBadge?.closest<HTMLElement>('[data-item-id]')?.dataset.itemId
+    if (linkBadge && linkOf) {
+      e.preventDefault()
+      finishEditing()
+      followLink(linkOf)
       return
     }
     // A to-do list's tick box: tick it (keeping the list open if it's being typed in).
@@ -438,7 +453,7 @@ export function Canvas() {
     // Look at what's really under the pointer.
     const target = document.elementFromPoint(e.clientX, e.clientY)
     // Handles (for resizing, or an arrow's ends) aren't empty space: no new note there.
-    if (!target || target.closest('.item-editor, .zoom-controls, .item-toolbar, [data-handle], [data-end], [data-dot], [data-status-badge], [data-grip]')) return
+    if (!target || target.closest('.item-editor, .zoom-controls, .item-toolbar, [data-handle], [data-end], [data-dot], [data-status-badge], [data-link-badge], [data-grip]')) return
     const hit = target.closest<HTMLElement>('[data-item-id]')?.dataset.itemId
     // Double-click an item to type in it (in a to-do list, the line or title clicked), or empty
     // space for a new sticky note.
@@ -494,6 +509,16 @@ export function Canvas() {
     }
     const statusEntries = statusMenu(chosen)
     if (statusEntries) entries.push({ label: 'Status', icon: 'flag', submenu: statusEntries })
+    // Links (arrows can't have them).
+    const linkable = chosen.filter(isShape)
+    if (linkable.length) {
+      const only = linkable.length === 1 ? linkable[0] : undefined
+      const going = only?.link && linkTarget(board.doc, only.link)
+      entries.push('separator')
+      if (only && going) entries.push({ label: going.type === 'web' ? 'Open Link' : 'Follow Link', icon: going.type === 'web' ? 'reveal' : 'link', onSelect: () => followLink(only.id) })
+      entries.push({ label: only?.link ? 'Change Link…' : 'Link to…', icon: 'link', hint: '⌘K', onSelect: linkSelected })
+      if (linkable.some((i) => i.link)) entries.push({ label: 'Remove Link', onSelect: () => setLink(linkable.map((i) => i.id), null) })
+    }
     entries.push(
       'separator',
       { label: 'Bring to Front', icon: 'toFront', hint: '⌘]', onSelect: bringSelectedToFront },
@@ -503,6 +528,13 @@ export function Canvas() {
       { label: 'Delete', icon: 'trash', hint: '⌫', danger: true, onSelect: deleteSelected }
     )
     menu.show(e.clientX, e.clientY, entries)
+  }
+
+  /** How an item's link badge looks, and its hover text. */
+  const linkProps = (item: Shape): { link?: 'go' | 'web' | 'broken'; linkTip?: string } => {
+    if (!item.link) return {}
+    const going = linkTarget(doc, item.link)
+    return { link: !going ? 'broken' : going.type === 'web' ? 'web' : 'go', linkTip: linkTip(going) }
   }
 
   const origin = toScreen(view, size, { x: 0, y: 0 })
@@ -584,6 +616,7 @@ export function Canvas() {
               status={statusOf(item, statuses)}
               dimmed={!!dimFilter && statusOf(item, statuses)?.id !== dimFilter}
               flashing={item.id === flashId}
+              {...linkProps(item)}
             />
           )
         )}

@@ -2,6 +2,7 @@
 
 import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { ImageItem, Item, Shape, Status } from '@shared/types'
+import { Icon } from '@/app/Icon'
 import { updateItems } from '@/board/items'
 import { cleanHtml } from '@/board/richtext'
 import { useBoard } from '@/board/store'
@@ -54,9 +55,13 @@ interface Props {
   dimmed?: boolean
   /** Just gone to from the Tasks panel. */
   flashing?: boolean
+  /** Its link, if it has one: to a tab or item ('go'), a web page, or something deleted since. */
+  link?: 'go' | 'web' | 'broken'
+  /** What following its link does, in words. */
+  linkTip?: string
 }
 
-export const ItemView = memo(function ItemView({ item, editing, part = null, status, dimmed, flashing }: Props) {
+export const ItemView = memo(function ItemView({ item, editing, part = null, status, dimmed, flashing, link, linkTip }: Props) {
   const area = useRef<HTMLDivElement>(null)
   const text = useRef<HTMLDivElement>(null)
   const fits = item.type === 'note' || item.type === 'box'
@@ -101,6 +106,13 @@ export const ItemView = memo(function ItemView({ item, editing, part = null, sta
     </button>
   )
 
+  // Clicking the link badge follows the link (see the canvas).
+  const linkBadge = link && (
+    <button className={`link-badge ${link}`} data-link-badge title={linkTip}>
+      <Icon name={link === 'web' ? 'reveal' : 'link'} size={12} />
+    </button>
+  )
+
   const words = editing ? <Editor item={item} textRef={text} /> : <div ref={text} className="item-words" dangerouslySetInnerHTML={{ __html: cleanHtml(item.text) }} />
 
   if (item.type === 'section') {
@@ -113,6 +125,7 @@ export const ItemView = memo(function ItemView({ item, editing, part = null, sta
         <div className="section-edge bottom" />
         <div className="section-edge left" />
         {badge}
+        {linkBadge}
       </div>
     )
   }
@@ -132,6 +145,7 @@ export const ItemView = memo(function ItemView({ item, editing, part = null, sta
         words
       )}
       {badge}
+      {linkBadge}
     </div>
   )
 })

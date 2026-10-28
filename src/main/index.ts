@@ -48,6 +48,13 @@ const boardsRoot = async (): Promise<string> => (await settings.get()).boardsRoo
 
 let mainWindow: BrowserWindow | null = null
 
+/** Opens a web page in the browser. Only http and https: a link must never run or open a file. */
+async function openWebLink(url: string): Promise<void> {
+  const parsed = new URL(url)
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') throw new Error('Only web addresses (http or https) can be opened.')
+  await shell.openExternal(parsed.toString())
+}
+
 /** Watches the open board's images folder, so pictures moved in Finder show up (and get found). */
 let imageWatcher: FSWatcher | null = null
 let imageWatchTimer: ReturnType<typeof setTimeout> | undefined
@@ -115,7 +122,7 @@ function createWindow(): void {
 
   // Open external links in the browser, never inside the app.
   window.webContents.setWindowOpenHandler(({ url }) => {
-    void shell.openExternal(url)
+    openWebLink(url).catch((err) => console.error(err))
     return { action: 'deny' }
   })
 
@@ -154,6 +161,9 @@ function buildMenu(): void {
           { role: 'paste' },
           { label: 'Select All', accelerator: 'CmdOrCtrl+A', click: send('selectAll') },
           { label: 'Duplicate', accelerator: 'CmdOrCtrl+D', click: send('duplicate') },
+          { label: 'Link to…', accelerator: 'CmdOrCtrl+K', click: send('link') },
+          { type: 'separator' },
+          { label: 'Find…', accelerator: 'CmdOrCtrl+F', click: send('find') },
           { type: 'separator' },
           { label: 'Bring to Front', accelerator: 'CmdOrCtrl+]', click: send('bringToFront') },
           { label: 'Send to Back', accelerator: 'CmdOrCtrl+[', click: send('sendToBack') }
@@ -245,6 +255,7 @@ function registerIpc(): void {
     })
     return result.canceled || !result.filePaths.length ? null : result.filePaths
   })
+  handle('app:openWebLink', (url: string) => openWebLink(url))
   handle('app:ask', async ({ message, detail, buttons }: { message: string; detail?: string; buttons: string[] }) => {
     const result = await dialog.showMessageBox(mainWindow!, { type: 'question', message, detail, buttons, defaultId: 0, cancelId: buttons.length - 1 })
     return result.response

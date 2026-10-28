@@ -2,12 +2,13 @@ import { useEffect } from 'react'
 import type { MenuCommand } from '@shared/types'
 import { flushSave, startSaving } from '@/board/saver'
 import { useBoard } from '@/board/store'
-import { bringSelectedToFront, duplicateSelected, selectAll, sendSelectedToBack } from '@/canvas/actions'
+import { bringSelectedToFront, duplicateSelected, linkSelected, selectAll, sendSelectedToBack } from '@/canvas/actions'
 import { zoomReset, zoomStep } from '@/canvas/current'
 import { isTyping } from '@/lib/dom'
 import { cycleTab, goToBoards, newBoard, newTab } from './actions'
 import { BoardScreen } from './BoardScreen'
 import { BoardsScreen } from './BoardsScreen'
+import { LinkPicker } from './LinkPicker'
 import { PromptDialog, Toasts } from './Overlays'
 import { toolForKey } from './SidePanel'
 import { StatusEditor } from './StatusEditor'
@@ -45,6 +46,10 @@ function runBoardCommand(command: MenuCommand): void {
       return bringSelectedToFront()
     case 'sendToBack':
       return sendSelectedToBack()
+    case 'link':
+      return linkSelected()
+    case 'find':
+      return app.find()
     case 'revealBoard':
       if (board.board) void window.api.revealBoard(board.board.path)
       return
@@ -74,8 +79,9 @@ export function App() {
       window.api.onMenuCommand((command) => {
         if (command === 'undo' || command === 'redo' || command === 'selectAll') {
           if (isTyping() || dialogOpen()) return void document.execCommand(command)
-        } else if (isTyping()) {
-          // Other board commands (⌘D, ⌘]…) wait until typing is finished.
+        } else if (isTyping() && command !== 'find') {
+          // Other board commands (⌘D, ⌘]…) wait until typing is finished. ⌘F doesn't: the search
+          // takes the keyboard, which finishes the typing.
           return
         }
         if (command === 'newBoard') return void newBoard()
@@ -111,6 +117,7 @@ export function App() {
       {screen === 'board' && <BoardScreen />}
       <PromptDialog />
       <StatusEditor />
+      <LinkPicker />
       <Toasts />
       <Tooltips />
     </div>

@@ -4,6 +4,7 @@
 
 import type { BoardDoc, Item, Shape, Status } from '@shared/types'
 import { plainText } from './richtext'
+import { inReadingOrder } from './search'
 import { progressOf, statusOf } from './statuses'
 
 export interface Task {
@@ -32,9 +33,6 @@ export function labelOf(item: Shape): string {
   return first?.trim() ?? (item.type === 'image' ? item.name : UNTITLED[item.type])
 }
 
-/** Top to bottom, then left to right, like reading the board. */
-const readingOrder = (a: Task, b: Task): number => a.item.y - b.item.y || a.item.x - b.item.x
-
 export interface TaskLists {
   /** Unfinished tasks, a group for each tab that has any, in tab order. */
   active: Array<{ tabId: string; tabName: string; tasks: Task[] }>
@@ -57,7 +55,7 @@ export function tasksOf(doc: BoardDoc): TaskLists {
       }
       ;(status.kind === 'done' ? done : open).push(task)
     }
-    if (open.length) active.push({ tabId: tab.id, tabName: tab.name, tasks: open.sort(readingOrder) })
+    if (open.length) active.push({ tabId: tab.id, tabName: tab.name, tasks: inReadingOrder(open, (t) => t.item) })
   }
   done.sort((a, b) => (b.item.statusAt ?? 0) - (a.item.statusAt ?? 0))
   return { active, done }

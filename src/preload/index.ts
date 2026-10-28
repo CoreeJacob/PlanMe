@@ -18,6 +18,7 @@ const api: PlanMeApi = {
   chooseRoot: () => ipcRenderer.invoke('boards:chooseRoot'),
   saveBoard: (path, request) => ipcRenderer.invoke('boards:save', path, request),
   setLastBoard: (path) => ipcRenderer.invoke('boards:setLast', path),
+  openWebLink: (url) => ipcRenderer.invoke('app:openWebLink', url),
   ask: (question) => ipcRenderer.invoke('app:ask', question),
   importImages: (board, paths) => ipcRenderer.invoke('images:import', board, paths),
   importImageData: (board, name, data) => ipcRenderer.invoke('images:importData', board, name, data),

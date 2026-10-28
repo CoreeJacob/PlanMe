@@ -1907,3 +1907,239 @@ button {
   border-radius: 12px;
   box-sizing: content-box;
 }
+
+/* ---------- links ---------- */
+
+/* On the bottom edge, opposite the status badge's top edge. Click to follow the link. */
+.link-badge {
+  position: absolute;
+  bottom: -11px;
+  right: 10px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
+  background: var(--panel);
+  color: var(--accent);
+  box-shadow: 0 1px 3px rgba(20, 22, 30, 0.15);
+  cursor: pointer;
+  pointer-events: auto;
+}
+.link-badge:hover {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+/* Linked to something deleted since: still there, so it can be fixed. */
+.link-badge.broken {
+  border: 1.5px dashed var(--danger);
+  color: var(--danger);
+}
+
+.modal.link-picker {
+  width: 460px;
+}
+.link-picker .result-list {
+  max-height: 300px;
+  margin: 0 -6px;
+}
+.link-none {
+  font-size: 12px;
+}
+.link-remove {
+  margin-right: auto;
+  color: var(--danger);
+}
+
+/* After following a link: back to where it was followed from. */
+.back-chip {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+.back-chip button {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: 30px;
+  border: none;
+  background: none;
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+}
+.back-go {
+  padding: 0 6px 0 10px;
+  border-radius: 999px 0 0 999px;
+  font-weight: 600;
+}
+.back-close {
+  padding: 0 10px 0 6px;
+  border-radius: 0 999px 999px 0;
+  color: var(--muted) !important;
+}
+.back-chip button:hover {
+  background: var(--panel-2);
+}
+
+/* ---------- search ---------- */
+
+.canvas-area {
+  position: relative;
+  flex: 1;
+  display: flex;
+  min-width: 0;
+}
+.panel-search {
+  padding: 12px 12px 0;
+}
+.search-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+  color: var(--muted);
+}
+.search-field > svg {
+  position: absolute;
+  left: 9px;
+  pointer-events: none;
+}
+.search-input {
+  width: 100%;
+  height: 30px;
+  padding: 0 26px 0 29px;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  background: var(--panel-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+}
+.search-input:focus {
+  border-color: var(--accent);
+  background: var(--panel);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.search-clear {
+  position: absolute;
+  right: 5px;
+  display: flex;
+  padding: 4px;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+.search-clear:hover {
+  background: var(--border);
+  color: var(--text);
+}
+.search-results {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.search-count {
+  margin: 0 0 6px 2px;
+  font-size: 11px;
+}
+.result-list {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+}
+.result-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  min-height: 28px;
+  padding: 3px 6px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.result-row > svg {
+  flex-shrink: 0;
+  color: var(--muted);
+}
+.result-row:hover {
+  background: var(--panel-2);
+}
+.result-row.active {
+  background: var(--accent-soft);
+}
+.result-row.current .result-text {
+  font-weight: 650;
+}
+.result-row.current::after {
+  content: '✓';
+  color: var(--accent);
+  font-size: 12px;
+}
+.result-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.result-text mark {
+  border-radius: 2px;
+  background: color-mix(in srgb, #f5c400 40%, transparent);
+  color: inherit;
+}
+.result-meta {
+  flex-shrink: 0;
+  max-width: 90px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* ⌘F with the side panel hidden: the search drops down over the top of the board. */
+.find-box {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 440px;
+  max-width: calc(100% - 32px);
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  transform: translateX(-50%);
+}
+.find-box .result-list {
+  max-height: 45vh;
+}
+.find-empty {
+  margin: 2px 4px;
+  font-size: 12px;
+}

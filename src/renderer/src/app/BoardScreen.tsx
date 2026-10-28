@@ -1,9 +1,12 @@
 // An open board: the top bar with its tabs, the side panel, and the current tab's canvas.
 
+import { useEffect } from 'react'
 import { Canvas } from '@/canvas/Canvas'
+import { goBack } from '@/canvas/actions'
 import { useBoard } from '@/board/store'
 import { goToBoards } from './actions'
 import { Icon } from './Icon'
+import { FindBox } from './Search'
 import { SidePanel } from './SidePanel'
 import { useImageLibrary } from './imageLibrary'
 import { TabBar } from './TabBar'
@@ -15,6 +18,10 @@ export function BoardScreen() {
   const canUndo = useBoard((s) => s.history.past.length > 0)
   const canRedo = useBoard((s) => s.history.future.length > 0)
   const panelOpen = useApp((s) => s.panelOpen)
+  const findOpen = useApp((s) => s.findOpen)
+  const path = useBoard((s) => s.board?.path)
+  // Another board: links followed and searches were for the last one.
+  useEffect(() => useApp.setState({ backStack: [], search: '', findOpen: false }), [path])
   // The board's images folder, kept up to date (and pictures moved in Finder found again).
   useImageLibrary()
   const setPanelOpen = useApp((s) => s.setPanelOpen)
@@ -43,9 +50,35 @@ export function BoardScreen() {
       </header>
       <div className="board-body">
         {panelOpen && <SidePanel />}
-        {/* A fresh canvas per tab, so nothing from one tab's drag carries over to another. */}
-        <Canvas key={tabId} />
+        <div className="canvas-area">
+          {/* A fresh canvas per tab, so nothing from one tab's drag carries over to another. */}
+          <Canvas key={tabId} />
+          <BackChip />
+          {findOpen && !panelOpen && <FindBox />}
+        </div>
       </div>
+    </div>
+  )
+}
+
+/** After following a link: back to where it was followed from. */
+function BackChip() {
+  const stack = useApp((s) => s.backStack)
+  const tabs = useBoard((s) => s.doc.tabs)
+  const tabId = useBoard((s) => s.tabId)
+  // The latest place whose tab is still there.
+  const spot = stack.findLast((s) => tabs.some((t) => t.id === s.tabId))
+  if (!spot) return null
+  const name = tabs.find((t) => t.id === spot.tabId)!.name
+  return (
+    <div className="back-chip">
+      <button className="back-go" title="Back to where you followed the link from" onClick={goBack}>
+        <Icon name="left" size={14} />
+        {spot.tabId === tabId ? 'Back' : `Back to ${name}`}
+      </button>
+      <button className="back-close" title="Hide — forget where links were followed from" onClick={() => useApp.getState().clearBack()}>
+        <Icon name="close" size={12} />
+      </button>
     </div>
   )
 }
