@@ -5,6 +5,7 @@ import { useBoard } from '@/board/store'
 import { goToBoards } from './actions'
 import { Icon } from './Icon'
 import { SidePanel } from './SidePanel'
+import { useImageLibrary } from './imageLibrary'
 import { TabBar } from './TabBar'
 import { useApp } from './store'
 
@@ -14,6 +15,8 @@ export function BoardScreen() {
   const canUndo = useBoard((s) => s.history.past.length > 0)
   const canRedo = useBoard((s) => s.history.future.length > 0)
   const panelOpen = useApp((s) => s.panelOpen)
+  // The board's images folder, kept up to date (and pictures moved in Finder found again).
+  useImageLibrary()
   const setPanelOpen = useApp((s) => s.setPanelOpen)
 
   return (

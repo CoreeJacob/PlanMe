@@ -50,6 +50,8 @@ interface AppState {
   doneOpen: boolean
   /** An item just jumped to from the Tasks panel, which flashes briefly. */
   flashId: string | null
+  /** What the side panel shows below the tools. */
+  lowerPanel: 'tasks' | 'images'
   toasts: Toast[]
   prompt: PromptRequest | null
 
@@ -63,6 +65,7 @@ interface AppState {
   setDimRest(dim: boolean): void
   setDoneOpen(open: boolean): void
   flash(id: string): void
+  setLowerPanel(which: 'tasks' | 'images'): void
   toast(message: string, options?: { kind?: Toast['kind']; action?: Toast['action'] }): void
   dismissToast(id: number): void
   /** Asks for a name; resolves with it, or null if cancelled. */
@@ -72,6 +75,7 @@ interface AppState {
 
 const PANEL_KEY = 'planme.panelOpen'
 const DONE_KEY = 'planme.doneOpen'
+const LOWER_KEY = 'planme.lowerPanel'
 /** How long an item jumped to from the Tasks panel flashes. */
 const FLASH_MS = 1600
 
@@ -91,6 +95,7 @@ export const useApp = create<AppState>((set, get) => ({
   dimRest: false,
   doneOpen: readPref(DONE_KEY) === 'true',
   flashId: null,
+  lowerPanel: readPref(LOWER_KEY) === 'images' ? 'images' : 'tasks',
   toasts: [],
   prompt: null,
 
@@ -116,6 +121,11 @@ export const useApp = create<AppState>((set, get) => ({
   setDoneOpen: (doneOpen) => {
     set({ doneOpen })
     writePref(DONE_KEY, String(doneOpen))
+  },
+
+  setLowerPanel: (lowerPanel) => {
+    set({ lowerPanel })
+    writePref(LOWER_KEY, lowerPanel)
   },
 
   flash: (id) => {

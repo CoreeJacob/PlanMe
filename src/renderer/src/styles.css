@@ -1450,7 +1450,12 @@ button {
   font-weight: 650;
   line-height: 16px;
   white-space: nowrap;
-  pointer-events: none;
+  border: none;
+  cursor: pointer;
+}
+.status-badge:hover {
+  filter: brightness(1.1);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--status) 35%, transparent);
 }
 /* Finished things fade back so the work still to do stands out. */
 .item.is-finished {
@@ -1728,5 +1733,142 @@ button {
   color: var(--muted);
   font-size: 12px;
   text-align: center;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- Tasks / Images switch ---------- */
+
+.panel-switch {
+  display: flex;
+  gap: 2px;
+  margin: 10px 12px 0;
+  padding: 2px;
+  border-radius: 8px;
+  background: var(--panel-2);
+}
+.panel-tab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 26px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.panel-tab.active {
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: 0 1px 2px rgba(20, 22, 30, 0.12);
+}
+
+/* ---------- the Images panel ---------- */
+
+.images-section {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding-left: 6px;
+  padding-right: 6px;
+}
+.library-tree {
+  flex: 1;
+  min-height: 60px;
+  overflow-y: auto;
+}
+.library-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding-right: 6px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: default;
+}
+.library-row:hover {
+  background: var(--panel-2);
+}
+.library-row.chosen {
+  background: var(--accent-soft);
+}
+.library-row.drop {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.library-row.top {
+  padding-left: 6px;
+  font-weight: 600;
+}
+.library-row.top .icon-btn {
+  width: 24px;
+  height: 24px;
+}
+.library-chevron {
+  display: inline-flex;
+  color: var(--muted);
+  transition: transform 0.12s ease-out;
+}
+.library-chevron.open {
+  transform: rotate(90deg);
+}
+.library-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.library-count {
+  font-size: 11px;
+  color: var(--muted);
+}
+.library-thumb {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  background: var(--panel-2);
+  object-fit: cover;
+}
+.library-unused {
+  flex-shrink: 0;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--panel-2);
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 16px;
+}
+.library-clear {
+  align-self: flex-start;
+  margin: 6px 6px 0;
+  font-size: 12px;
+}
+.library-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 8px 6px 0;
+  border-top: 1px solid var(--border);
+}
+.library-preview img {
+  max-width: 100%;
+  max-height: 120px;
+  align-self: center;
+  border-radius: 4px;
+  object-fit: contain;
+}
+.library-facts {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
   overflow-wrap: anywhere;
 }

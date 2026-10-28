@@ -10,10 +10,11 @@
 // text, shape or section tool: click to place one, or drag to choose its size.
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { DEFAULT_VIEW, type ArrowEnd, type ArrowItem, type BoardDoc, type Item, type Rect, type Shape } from '@shared/types'
+import { DEFAULT_VIEW, type ArrowEnd, type ArrowItem, type BoardDoc, type ImportedImage, type Item, type Rect, type Shape } from '@shared/types'
 import { useContextMenu, type MenuEntry } from '@/app/ContextMenu'
 import { Icon } from '@/app/Icon'
 import { isPlacingTool, useApp, type PlacingTool } from '@/app/store'
+import { IMAGE_DRAG } from '@/app/ImagesPanel'
 import { useDimFilter } from '@/app/TasksPanel'
 import { arrowPoints, boxOf, crossesBox, isArrow, isShape, lookupIn, nearestPin, pinPoint } from '@/board/arrows'
 import { besideRect, itemsOf, moveItems, resizeRect, updateItems, type Handle } from '@/board/items'
@@ -38,10 +39,10 @@ import {
   tickEntry
 } from './actions'
 import { ArrowView } from './ArrowView'
-import { addImageFiles, chooseImages } from './images'
+import { addImageFiles, chooseImages, placeImages } from './images'
 import { ItemToolbar } from './ItemToolbar'
 import { ItemView } from './ItemView'
-import { palettesFor, paletteName, statusChoicesFor, statusValue } from './looks'
+import { currentStatusChoice, palettesFor, paletteName, statusChoicesFor, statusValue } from './looks'
 import { canJoin, currentView, itemById, onlySelected, setCurrentView, viewport, zoomReset, zoomStep } from './current'
 import { useCanvasKeys, useClipboard } from './keys'
 import { Overlay, type ActiveDot } from './Overlay'
@@ -198,6 +199,17 @@ export function Canvas() {
     if (e.button !== 0) return
     // Clicking inside the words being typed moves the caret, as usual.
     if (target.closest('.item-editor, .todo-input')) return
+    // An item's status badge: pick its status right there.
+    const badge = target.closest<HTMLElement>('[data-status-badge]')
+    const badgeOf = itemById(badge?.closest<HTMLElement>('[data-item-id]')?.dataset.itemId)
+    if (badge && badgeOf) {
+      e.preventDefault()
+      finishEditing()
+      useBoard.getState().select([badgeOf.id])
+      const r = badge.getBoundingClientRect()
+      menu.show(r.left, r.bottom + 4, statusMenu([badgeOf]) ?? [])
+      return
+    }
     // A to-do list's tick box: tick it (keeping the list open if it's being typed in).
     const tick = target.closest<HTMLElement>('[data-tick]')
     const tickIn = tick?.closest<HTMLElement>('[data-item-id]')?.dataset.itemId
@@ -416,13 +428,25 @@ export function Canvas() {
     // Look at what's really under the pointer.
     const target = document.elementFromPoint(e.clientX, e.clientY)
     // Handles (for resizing, or an arrow's ends) aren't empty space: no new note there.
-    if (!target || target.closest('.item-editor, .zoom-controls, .item-toolbar, [data-handle], [data-end], [data-dot]')) return
+    if (!target || target.closest('.item-editor, .zoom-controls, .item-toolbar, [data-handle], [data-end], [data-dot], [data-status-badge]')) return
     const hit = target.closest<HTMLElement>('[data-item-id]')?.dataset.itemId
     // Double-click an item to type in it (in a to-do list, the line or title clicked), or empty
     // space for a new sticky note.
     const part = target.closest<HTMLElement>('[data-entry]')?.dataset.entry ?? (target.closest('.todo-head') ? 'title' : null)
     if (hit) startEditing(hit, part)
     else addItem('note', boardPoint(e))
+  }
+
+  /** The status choices for some items, as menu entries (the current one ticked), or null if they can't have one. */
+  const statusMenu = (chosen: Item[]): MenuEntry[] | null => {
+    const choices = statusChoicesFor(chosen, statuses)
+    if (!choices) return null
+    const current = currentStatusChoice(chosen)
+    return [
+      ...choices.map((c) => ({ label: c.label.split(' — ')[0], hint: c.value === current ? '✓' : undefined, onSelect: () => setStatusOnSelected(statusValue(c.value)) })),
+      'separator' as const,
+      { label: 'Edit Statuses…', onSelect: () => useApp.getState().setStatusEditorOpen(true) }
+    ]
   }
 
   const onContextMenu = (e: React.MouseEvent): void => {
@@ -458,18 +482,8 @@ export function Canvas() {
     for (const p of palettesFor(chosen)) {
       entries.push({ label: paletteName(p), submenu: p.choices.map((c) => ({ label: c.label, onSelect: () => setOnSelected(p.key, c.name) })) })
     }
-    const statusChoices = statusChoicesFor(chosen, statuses)
-    if (statusChoices) {
-      entries.push({
-        label: 'Status',
-        icon: 'flag',
-        submenu: [
-          ...statusChoices.map((c) => ({ label: c.label.split(' — ')[0], onSelect: () => setStatusOnSelected(statusValue(c.value)) })),
-          'separator' as const,
-          { label: 'Edit Statuses…', onSelect: () => useApp.getState().setStatusEditorOpen(true) }
-        ]
-      })
-    }
+    const statusEntries = statusMenu(chosen)
+    if (statusEntries) entries.push({ label: 'Status', icon: 'flag', submenu: statusEntries })
     entries.push(
       'separator',
       { label: 'Bring to Front', icon: 'toFront', hint: '⌘]', onSelect: bringSelectedToFront },
@@ -515,11 +529,18 @@ export function Canvas() {
       onContextMenu={onContextMenu}
       // Pictures dropped from Finder (or another app) land where they're dropped.
       onDragOver={(e) => {
-        if (!e.dataTransfer.types.includes('Files')) return
+        if (!e.dataTransfer.types.includes('Files') && !e.dataTransfer.types.includes(IMAGE_DRAG)) return
         e.preventDefault()
         e.dataTransfer.dropEffect = 'copy'
       }}
       onDrop={(e) => {
+        // A picture from the Images panel: it's already in the board, so just place it.
+        const fromPanel = e.dataTransfer.getData(IMAGE_DRAG)
+        if (fromPanel) {
+          e.preventDefault()
+          void placeImages([JSON.parse(fromPanel) as ImportedImage], boardPoint(e))
+          return
+        }
         if (!e.dataTransfer.files.length) return
         e.preventDefault()
         void addImageFiles([...e.dataTransfer.files], boardPoint(e))

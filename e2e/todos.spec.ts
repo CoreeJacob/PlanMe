@@ -114,3 +114,33 @@ test('statuses: pick one, finished ones fade, and edit the board’s list', asyn
   })
   await check('the board’s statuses are saved with it', saved?.map((s: any) => s.name).join() === 'To do,Done,Waiting,New status', saved)
 })
+
+test('clicking an item’s status badge changes its status right there', async ({ app }) => {
+  await app.newBoard('Game')
+  await app.tool('l')
+  await app.clickAt(...(await app.screenOf(0, 0)))
+  await app.type('Level 1')
+  await app.key('Escape', 'Escape')
+  const list = (await app.lastItem()).id
+  await app.key('Escape', 'Escape')
+  const badgeAt = () => app.centre(`document.querySelector('[data-item-id="${list}"] .status-badge')`)
+
+  await app.clickAt(...(await badgeAt()))
+  const labels = await app.menuLabels()
+  await check('the badge opens the status list, with Automatic for a to-do list', ['No status', 'To do', 'Doing', 'Done', 'Blocked', 'Automatic', 'Edit Statuses…'].every((l) => labels.includes(l)), labels)
+  await check('…and the list is selected', (await app.selectedIds()).join() === list)
+  await check('the current one is ticked', await app.js(`[...document.querySelectorAll('.menu-item')].find(b => b.querySelector('.menu-label').textContent === 'Automatic').querySelector('.menu-hint')?.textContent === '✓'`))
+  await app.pickMenu('Blocked')
+  await check('picking one sets it', (await badge(app, list)) === 'Blocked')
+  await app.clickAt(...(await badgeAt()))
+  await app.pickMenu('Automatic')
+  await check('…and Automatic hands it back to the ticks', (await badge(app, list)) === 'To do')
+
+  const note = await app.noteAt(400, 0, 'Shop')
+  await app.setStatus('Doing')
+  await app.key('Escape', 'Escape')
+  await app.clickAt(...(await app.centre(`document.querySelector('[data-item-id="${note}"] .status-badge')`)))
+  await check('it works on notes too (no Automatic there)', !(await app.menuLabels()).includes('Automatic'), await app.menuLabels())
+  await app.pickMenu('Done')
+  await check('the note is Done', (await badge(app, note)) === 'Done')
+})

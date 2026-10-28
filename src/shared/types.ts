@@ -99,6 +99,25 @@ export interface ImportedImage {
   name: string
 }
 
+/** A picture in a board's images folder. */
+export interface ImageFile {
+  /** Where it is inside the board's folder, as image items name it ("images/Characters/hero.png"). */
+  src: string
+  name: string
+  /** The folder it's in, inside the images folder ('' for the top). */
+  folder: string
+  bytes: number
+}
+
+/** What's in a board's images folder: its folders (inside it, like "Characters/Bats") and pictures. */
+export interface ImageLibrary {
+  folders: string[]
+  files: ImageFile[]
+}
+
+/** Where pictures moved to (old src → new src), so the board can follow. */
+export type ImageMoves = Record<string, string>
+
 /** One end of an arrow: attached to an item, or loose at a point on the board. */
 export interface ArrowEnd {
   /** The item it's attached to, or null for a loose end. */
@@ -249,6 +268,21 @@ export interface PlanMeApi {
   copyImage(from: string, src: string, to: string): Promise<ImportedImage>
   /** Asks which image files to add; null if cancelled. */
   chooseImages(): Promise<string[] | null>
+  /** What's in a board's images folder. */
+  listImages(board: string): Promise<ImageLibrary>
+  /** Watches a board's images folder (null: stop), so changes made in Finder show up. */
+  watchImages(board: string | null): Promise<void>
+  onImagesChanged(callback: () => void): () => void
+  /** Makes a folder inside the images folder (in `parent`, '' for the top) and returns where it is. */
+  createImageFolder(board: string, parent: string, name: string): Promise<string>
+  /** Moves pictures or folders (paths inside the images folder) into a folder ('' for the top). */
+  moveImages(board: string, entries: string[], folder: string): Promise<ImageMoves>
+  /** Renames a picture or folder (a path inside the images folder). */
+  renameImageEntry(board: string, entry: string, name: string): Promise<ImageMoves>
+  /** Moves pictures or folders (paths inside the images folder) to the Trash. */
+  trashImageEntries(board: string, entries: string[]): Promise<void>
+  /** Shows a picture or folder (a path inside the images folder; '' for the folder itself) in Finder. */
+  revealImage(board: string, entry: string): Promise<void>
   /** The file on disk a dropped file came from ('' if it isn't one). */
   pathForFile(file: File): string
   /** Remembers which board to reopen next launch (null: start on the Boards screen). */

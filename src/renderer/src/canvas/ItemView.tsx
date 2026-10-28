@@ -94,7 +94,12 @@ export const ItemView = memo(function ItemView({ item, editing, part = null, sta
   ]
     .filter(Boolean)
     .join(' ')
-  const badge = status && <div className="status-badge">{status.name}</div>
+  // Clicking the badge opens the status list right there (see the canvas).
+  const badge = status && (
+    <button className="status-badge" data-status-badge title="Status — click to change it">
+      {status.name}
+    </button>
+  )
 
   const words = editing ? <Editor item={item} textRef={text} /> : <div ref={text} className="item-words" dangerouslySetInnerHTML={{ __html: cleanHtml(item.text) }} />
 

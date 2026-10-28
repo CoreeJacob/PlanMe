@@ -3,6 +3,7 @@
 import { Icon, type IconName } from './Icon'
 import { SHAPE_CHOICES, shapeChoice } from './shapes'
 import { useApp, type Tool } from './store'
+import { ImagesPanel } from './ImagesPanel'
 import { TasksPanel } from './TasksPanel'
 
 const TOOLS: Array<{ tool: Tool; label: string; tip?: string; key: string; icon: IconName }> = [
@@ -21,6 +22,8 @@ export function SidePanel() {
   const tool = useApp((s) => s.tool)
   const setTool = useApp((s) => s.setTool)
   const boxShape = useApp((s) => s.boxShape)
+  const lower = useApp((s) => s.lowerPanel)
+  const setLower = useApp((s) => s.setLowerPanel)
   const setBoxShape = useApp((s) => s.setBoxShape)
   return (
     <aside className="side-panel">
@@ -56,7 +59,16 @@ export function SidePanel() {
           </div>
         )}
       </section>
-      <TasksPanel />
+      {/* Below the tools: the board's tasks, or its pictures. */}
+      <div className="panel-switch" role="tablist">
+        {(['tasks', 'images'] as const).map((which) => (
+          <button key={which} role="tab" aria-selected={lower === which} className={`panel-tab ${lower === which ? 'active' : ''}`} onClick={() => setLower(which)}>
+            <Icon name={which === 'tasks' ? 'tasks' : 'image'} size={14} />
+            {which === 'tasks' ? 'Tasks' : 'Images'}
+          </button>
+        ))}
+      </div>
+      {lower === 'tasks' ? <TasksPanel /> : <ImagesPanel />}
     </aside>
   )
 }

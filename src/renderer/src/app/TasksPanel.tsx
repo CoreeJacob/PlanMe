@@ -42,9 +42,6 @@ export function TasksPanel() {
   return (
     <>
       <section className="panel-section grow tasks-section">
-        <h2 className="panel-heading">
-          <Icon name="tasks" size={14} /> Tasks
-        </h2>
         {total + lists.done.length === 0 ? (
           <p className="panel-empty muted">Anything you give a status will be listed here, from every tab.</p>
         ) : (

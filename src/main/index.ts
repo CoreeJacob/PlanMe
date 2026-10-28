@@ -1,11 +1,22 @@
 import { randomUUID } from 'node:crypto'
-import { promises as fs } from 'node:fs'
+import { promises as fs, watch, type FSWatcher } from 'node:fs'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, net, protocol, shell } from 'electron'
 import { IMAGE_EXTENSIONS, type MenuCommand, type SaveRequest, type Startup } from '@shared/types'
 import { createBoard, isBoard, listBoards, openBoard, renameBoard, saveBoard } from './boards'
-import { importImage, imagePath, MAX_SIDE, saveImage, type Shrink } from './images'
+import {
+  createImageFolder,
+  importImage,
+  imagePath,
+  libraryPath,
+  listImages,
+  MAX_SIDE,
+  moveImages,
+  renameImageEntry,
+  saveImage,
+  type Shrink
+} from './images'
 import { SettingsStore, type Settings } from './settings'
 
 // A board's images are shown as board://image/<path in the board>?board=<the board's folder>.
@@ -36,6 +47,23 @@ const defaultRoot = (): string => (testData ? path.join(testData, 'Boards') : pa
 const boardsRoot = async (): Promise<string> => (await settings.get()).boardsRoot ?? defaultRoot()
 
 let mainWindow: BrowserWindow | null = null
+
+/** Watches the open board's images folder, so pictures moved in Finder show up (and get found). */
+let imageWatcher: FSWatcher | null = null
+let imageWatchTimer: ReturnType<typeof setTimeout> | undefined
+
+async function watchImages(board: string | null): Promise<void> {
+  imageWatcher?.close()
+  imageWatcher = null
+  if (!board) return
+  const dir = libraryPath(board, '')
+  await fs.mkdir(dir, { recursive: true })
+  imageWatcher = watch(dir, { recursive: true }, () => {
+    // A burst of changes (a folder moved in Finder, say) becomes one message.
+    clearTimeout(imageWatchTimer)
+    imageWatchTimer = setTimeout(() => mainWindow?.webContents.send('images:changed'), 250)
+  })
+}
 /** Set by ⌘Q. Holding the window open to save cancels quitting, so quit again once it's closed. */
 let quitting = false
 app.on('before-quit', () => {
@@ -200,6 +228,15 @@ function registerIpc(): void {
   })
   handle('images:importData', (board: string, name: string, data: Uint8Array) => saveImage(board, name, data, shrink))
   handle('images:copy', async (from: string, src: string, to: string) => importImage(to, imagePath(from, src), shrink))
+  handle('images:list', (board: string) => listImages(board))
+  handle('images:watch', (board: string | null) => watchImages(board))
+  handle('images:createFolder', (board: string, parent: string, name: string) => createImageFolder(board, parent, name))
+  handle('images:move', (board: string, entries: string[], folder: string) => moveImages(board, entries, folder))
+  handle('images:rename', (board: string, entry: string, name: string) => renameImageEntry(board, entry, name))
+  handle('images:trash', async (board: string, entries: string[]) => {
+    for (const entry of entries) await shell.trashItem(libraryPath(board, entry))
+  })
+  handle('images:reveal', (board: string, entry: string) => shell.showItemInFolder(libraryPath(board, entry)))
   handle('images:choose', async () => {
     const result = await dialog.showOpenDialog(mainWindow!, {
       title: 'Add Images',

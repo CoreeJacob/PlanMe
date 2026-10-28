@@ -1,9 +1,10 @@
 // The open board: its tabs and what's on them, where each tab is looking, and undo history.
 
 import { create } from 'zustand'
-import type { BoardDoc, OpenedBoard, View } from '@shared/types'
+import type { BoardDoc, ImageMoves, OpenedBoard, View } from '@shared/types'
 import { readPref, writePref } from '@/lib/prefs'
 import { EMPTY_HISTORY, record, redo, undo, type History, type Step } from './history'
+import { remapDoc } from './images'
 
 const NO_DOC: BoardDoc = { tabs: [], statuses: [] }
 const NO_VIEWS: Record<string, View> = {}
@@ -60,6 +61,11 @@ interface BoardState {
   cancelGesture(): void
   /** A change the app makes to keep things tidy (like a text item's height), not an undo step. */
   fixLayout(doc: BoardDoc): void
+  /**
+   * Picture files moved: point the board at their new places, and every undo step too (so undo
+   * never brings back a picture's old place). Not an undo step itself: the files have moved.
+   */
+  remapImages(moves: ImageMoves): void
 }
 
 export const NO_SELECTION: string[] = []
@@ -151,6 +157,17 @@ export const useBoard = create<BoardState>((set, get) => {
 
     fixLayout: (doc) => {
       if (doc !== get().doc) set({ doc })
+    },
+
+    remapImages: (moves) => {
+      if (!Object.keys(moves).length) return
+      const step = (s: Step): Step => ({ ...s, doc: remapDoc(s.doc, moves) })
+      const { history, gesture } = get()
+      set({
+        doc: remapDoc(get().doc, moves),
+        history: { past: history.past.map(step), future: history.future.map(step) },
+        gesture: gesture && step(gesture)
+      })
     }
   }
 })

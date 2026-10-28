@@ -40,6 +40,8 @@ Changes are saved a moment after you make them, and straight away when the windo
 | Double-click an arrow | Label it |
 | Status (toolbar or right-click) | To do, Doing, Done, Blocked… per board; “Edit statuses…” to change the list. Finished ones fade |
 | Tasks (side panel) | Everything with a status, from every tab. Filter by status, “Dim the rest of the board”, click a task to go to it. Finished ones are in the folded Done list (they stay on the board) |
+| Images (side panel) | The board's images folder as a tree: make folders, drag pictures between them (the board follows), drag one onto the board to use it again, remove unused ones. Pictures moved in Finder are found again |
+| Click a status badge | Change the status right there |
 | Double-click | Empty space: a new sticky note. An item: type in it |
 | Return, Escape | Start typing in the selected item, finish typing |
 | ⌘B ⌘I ⌘U | Bold, italic, underline (while typing) |
