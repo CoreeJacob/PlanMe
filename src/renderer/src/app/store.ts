@@ -51,12 +51,20 @@ interface AppState {
   statusEditorOpen: boolean
   /** The Tasks panel shows only this status (an id), or everything. */
   taskFilter: string | null
+  /** …and only things with this tag (an id), or any. */
+  tagFilter: string | null
+  /** Tags show as chips on the board (on every board). */
+  showTags: boolean
+  /** The board's tags are being edited. */
+  tagEditorOpen: boolean
+  /** The Details pane is showing, on the right. */
+  detailsOpen: boolean
   /** While filtering, fade everything on the board that doesn't match. */
   dimRest: boolean
   /** The Done list at the bottom of the Tasks panel is open. */
   doneOpen: boolean
-  /** An item just jumped to from the Tasks panel, which flashes briefly. */
-  flashId: string | null
+  /** Items that flash briefly: one just gone to (from the Tasks panel, search or a link), or ones changed from outside. */
+  flashIds: readonly string[]
   /** What the side panel shows below the tools. */
   lowerPanel: 'tasks' | 'images'
   /** The words being searched for (in the side panel, or the ⌘F box when the panel is hidden). */
@@ -85,9 +93,13 @@ interface AppState {
   setEditingTab(id: string | null): void
   setStatusEditorOpen(open: boolean): void
   setTaskFilter(filter: string | null): void
+  setTagFilter(filter: string | null): void
+  setShowTags(show: boolean): void
+  setTagEditorOpen(open: boolean): void
+  setDetailsOpen(open: boolean): void
   setDimRest(dim: boolean): void
   setDoneOpen(open: boolean): void
-  flash(id: string): void
+  flash(ids: readonly string[]): void
   setLowerPanel(which: 'tasks' | 'images'): void
   setSearch(search: string): void
   setFindOpen(open: boolean): void
@@ -111,6 +123,8 @@ interface AppState {
 const PANEL_KEY = 'planme.panelOpen'
 const DONE_KEY = 'planme.doneOpen'
 const LOWER_KEY = 'planme.lowerPanel'
+const TAGS_KEY = 'planme.showTags'
+const DETAILS_KEY = 'planme.detailsOpen'
 /** How long an item jumped to from the Tasks panel flashes. */
 const FLASH_MS = 1600
 /** How many places back the Back chip remembers. */
@@ -129,9 +143,13 @@ export const useApp = create<AppState>((set, get) => ({
   editingTab: null,
   statusEditorOpen: false,
   taskFilter: null,
+  tagFilter: null,
+  showTags: readPref(TAGS_KEY) !== 'false',
+  tagEditorOpen: false,
+  detailsOpen: readPref(DETAILS_KEY) === 'true',
   dimRest: false,
   doneOpen: readPref(DONE_KEY) === 'true',
-  flashId: null,
+  flashIds: [],
   lowerPanel: readPref(LOWER_KEY) === 'images' ? 'images' : 'tasks',
   search: '',
   findOpen: false,
@@ -161,6 +179,20 @@ export const useApp = create<AppState>((set, get) => ({
   setStatusEditorOpen: (statusEditorOpen) => set({ statusEditorOpen }),
 
   setTaskFilter: (taskFilter) => set({ taskFilter }),
+
+  setTagFilter: (tagFilter) => set({ tagFilter }),
+
+  setShowTags: (showTags) => {
+    set({ showTags })
+    writePref(TAGS_KEY, String(showTags))
+  },
+
+  setTagEditorOpen: (tagEditorOpen) => set({ tagEditorOpen }),
+
+  setDetailsOpen: (detailsOpen) => {
+    set({ detailsOpen })
+    writePref(DETAILS_KEY, String(detailsOpen))
+  },
 
   setDimRest: (dimRest) => set({ dimRest }),
 
@@ -201,9 +233,9 @@ export const useApp = create<AppState>((set, get) => ({
 
   setBackupsFor: (backupsFor) => set({ backupsFor }),
 
-  flash: (id) => {
-    set({ flashId: id })
-    setTimeout(() => get().flashId === id && set({ flashId: null }), FLASH_MS)
+  flash: (ids) => {
+    set({ flashIds: ids })
+    setTimeout(() => get().flashIds === ids && set({ flashIds: [] }), FLASH_MS)
   },
 
   toast: (message, { kind = 'info', action } = {}) => {
@@ -228,8 +260,8 @@ export const useApp = create<AppState>((set, get) => ({
 
 /** True while a dialog (a name prompt, the status editor, the Link picker…) is up, so the board's shortcuts wait. */
 export const dialogOpen = (): boolean => {
-  const { prompt, statusEditorOpen, linking, shortcutsOpen, backupsFor } = useApp.getState()
-  return !!prompt || statusEditorOpen || !!linking || shortcutsOpen || backupsFor !== null
+  const { prompt, statusEditorOpen, tagEditorOpen, linking, shortcutsOpen, backupsFor } = useApp.getState()
+  return !!prompt || statusEditorOpen || tagEditorOpen || !!linking || shortcutsOpen || backupsFor !== null
 }
 
 /** Runs an action, showing its error as a message instead of failing silently. Returns undefined on error. */

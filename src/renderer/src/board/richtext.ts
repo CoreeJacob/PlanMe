@@ -1,14 +1,17 @@
 // The words on items are kept as a small piece of HTML with only bold, italic, underline and
-// line breaks. Anything else (from pasting, or a hand-edited file) is cleaned away.
+// line breaks (and, for an item's details, bullet lists). Anything else (from pasting, or a
+// hand-edited file) is cleaned away.
 
 const KEEP: Record<string, string> = { b: 'b', strong: 'b', i: 'i', em: 'i', u: 'u', div: 'div', p: 'div', br: 'br' }
+const KEEP_LISTS: Record<string, string> = { ...KEEP, ul: 'ul', ol: 'ol', li: 'li' }
 /** Tags whose contents are dropped too, not just the tags. */
 const DROP_CONTENTS = new Set(['script', 'style', 'title', 'head'])
 
 const escapeText = (s: string): string => s.replace(/&(?!#?\w+;)/g, '&amp;').replace(/>/g, '&gt;')
 
-/** Keeps only the allowed tags, without any attributes. */
-export function cleanHtml(html: string): string {
+/** Keeps only the allowed tags, without any attributes. `lists` keeps bullet and numbered lists too (for details). */
+export function cleanHtml(html: string, { lists = false } = {}): string {
+  const keep = lists ? KEEP_LISTS : KEEP
   let out = ''
   let dropping: string | null = null
   for (const [token, close, name] of html.matchAll(/<(\/?)([a-zA-Z][\w-]*)[^>]*>|<!--[\s\S]*?-->|[^<]+|</g)) {
@@ -23,9 +26,9 @@ export function cleanHtml(html: string): string {
       out += token === '<' ? '&lt;' : escapeText(token)
     } else if (DROP_CONTENTS.has(tag) && !close) {
       dropping = tag
-    } else if (KEEP[tag]) {
-      if (KEEP[tag] === 'br') out += close ? '' : '<br>'
-      else out += `<${close}${KEEP[tag]}>`
+    } else if (keep[tag]) {
+      if (keep[tag] === 'br') out += close ? '' : '<br>'
+      else out += `<${close}${keep[tag]}>`
     }
   }
   return out
@@ -36,7 +39,7 @@ export function plainText(html: string): string {
   return html
     // Typing makes each new line a <div>; an empty line is <div><br></div>, and a line may end in a spare <br>.
     .replace(/<br><\/div>/g, '</div>')
-    .replace(/(.)<div>/g, '$1\n')
+    .replace(/(.)<(div|li)>/g, '$1\n')
     .replace(/<br>/g, '\n')
     .replace(/<[^>]*>/g, '')
     .replace(/&nbsp;/g, ' ')

@@ -6,9 +6,11 @@ import { goBack } from '@/canvas/actions'
 import { useBoard } from '@/board/store'
 import { goToBoards } from './actions'
 import { Icon } from './Icon'
+import { DetailsPane } from './DetailsPane'
 import { FindBox } from './Search'
 import { SidePanel } from './SidePanel'
 import { useImageLibrary } from './imageLibrary'
+import { useOutsideChanges } from './outside'
 import { TabBar } from './TabBar'
 import { useApp } from './store'
 
@@ -24,6 +26,8 @@ export function BoardScreen() {
   useEffect(() => useApp.setState({ backStack: [], search: '', findOpen: false }), [path])
   // The board's images folder, kept up to date (and pictures moved in Finder found again).
   useImageLibrary()
+  // Changes made to the board's files outside PlanMe (say, by an assistant) show up as they happen.
+  useOutsideChanges()
   const setPanelOpen = useApp((s) => s.setPanelOpen)
 
   return (
@@ -60,6 +64,7 @@ export function BoardScreen() {
           <BackChip />
           {findOpen && !panelOpen && <FindBox />}
         </div>
+        <DetailsPane />
       </div>
     </div>
   )

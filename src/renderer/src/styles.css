@@ -1913,12 +1913,19 @@ button {
 
 /* ---------- links ---------- */
 
-/* On the bottom edge, opposite the status badge's top edge. Click to follow the link. */
-.link-badge {
+/* On the bottom edge at the right, opposite the status badge: details, then the link. */
+.corner-badges {
   position: absolute;
   bottom: -11px;
   right: 10px;
   z-index: 1;
+  display: flex;
+  gap: 4px;
+  pointer-events: none;
+}
+/* Click to follow the link. */
+.link-badge,
+.details-badge {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1933,7 +1940,8 @@ button {
   cursor: pointer;
   pointer-events: auto;
 }
-.link-badge:hover {
+.link-badge:hover,
+.details-badge:hover {
   border-color: var(--accent);
   box-shadow: 0 0 0 2px var(--accent-soft);
 }
@@ -2305,4 +2313,167 @@ button {
 }
 .backups-reveal {
   margin-right: auto;
+}
+
+/* ---------- tags ---------- */
+
+/* Along the top edge, at the left (the status badge is at the right). */
+.tag-chips {
+  position: absolute;
+  top: -9px;
+  left: 10px;
+  right: 10px;
+  z-index: 1;
+  display: flex;
+  gap: 3px;
+  overflow: hidden;
+  pointer-events: none;
+}
+/* Clear of the status badge at the right. */
+.tag-chips.beside-status {
+  right: 90px;
+}
+/* A section's title sits above its edge, so its tags go just inside. */
+.item-section .tag-chips {
+  top: 8px;
+}
+.tag-chip {
+  /* Short of room, names shorten ("Chara…"); the "+2" always shows. */
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0 6px;
+  border: 1px solid color-mix(in srgb, var(--status, var(--muted)) 55%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--status, var(--muted)) 16%, var(--panel));
+  color: color-mix(in srgb, var(--status, var(--muted)) 70%, var(--text));
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 16px;
+  white-space: nowrap;
+}
+.tag-chip.more {
+  --status: var(--muted);
+  flex-shrink: 0;
+}
+.tags-popover {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  min-width: 170px;
+  gap: 2px;
+}
+.tags-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+}
+.tags-row:hover {
+  background: var(--panel-2);
+}
+.tags-mark {
+  width: 12px;
+  color: var(--accent);
+  font-weight: 700;
+}
+.chip.tag {
+  color: color-mix(in srgb, var(--status) 70%, var(--text));
+}
+.tags-switch {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--muted);
+  cursor: pointer;
+}
+.modal.tag-editor {
+  width: 420px;
+}
+
+/* ---------- details ---------- */
+
+.details-pane {
+  display: flex;
+  flex-direction: column;
+  width: 320px;
+  flex-shrink: 0;
+  background: var(--panel);
+  border-left: 1px solid var(--border);
+}
+.details-header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 8px 10px 14px;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
+}
+.details-header h2 {
+  flex: 1;
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.details-empty {
+  margin: 0;
+  padding: 16px 14px;
+  font-size: 13px;
+}
+.details-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+.details-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 12px 14px 6px;
+  color: var(--muted);
+}
+.details-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 650;
+}
+.details-tools {
+  display: flex;
+  gap: 2px;
+  padding: 0 10px 6px;
+  border-bottom: 1px solid var(--border);
+}
+.details-editor {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 14px 40px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  outline: none;
+  cursor: text;
+  user-select: text;
+}
+.details-editor ul,
+.details-editor ol {
+  margin: 4px 0;
+  padding-left: 22px;
+}
+.details-editor:empty::before {
+  content: attr(data-placeholder);
+  color: var(--muted);
 }

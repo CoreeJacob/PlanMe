@@ -1,13 +1,14 @@
 // The small toolbar that floats above the selection: colours, bold/italic/underline, lining
 // things up, front/back, lock and delete.
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
-import type { ArrowItem, Item, Status, View } from '@shared/types'
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import type { ArrowItem, Item, Status, Tag, View } from '@shared/types'
 import { Icon } from '@/app/Icon'
 import { SHAPE_CHOICES, shapeChoice } from '@/app/shapes'
 import { useApp } from '@/app/store'
 import { boxOf, isArrow, isShape, type Lookup } from '@/board/arrows'
 import { isLocked } from '@/board/items'
+import { tagState } from '@/board/tags'
 import type { TextStyle } from '@/board/richtext'
 import { boundsOf } from '@/lib/geometry'
 import {
@@ -15,14 +16,18 @@ import {
   arrangeSelected,
   bringSelectedToFront,
   deleteSelected,
+  newTagForSelected,
   sendSelectedToBack,
   setOnSelected,
   setStatusOnSelected,
+  showDetails,
   toggleLockOnSelected,
-  toggleStyleOnSelected
+  toggleStyleOnSelected,
+  toggleTagOnSelected
 } from './actions'
 import { ALIGN_CHOICES, currentStatusChoice, palettesFor, SPREAD_CHOICES, statusChoicesFor, statusValue } from './looks'
 import { sectionTitleHeight } from './targets'
+import { useCaretStyles } from './caretStyles'
 import { toScreen, type Size } from './view'
 
 /** A toolbar button that opens a grid of choices (colours, or outlines) below it. */
@@ -81,27 +86,6 @@ const STYLES: Array<{ style: TextStyle; label: string; command: string; key: str
   { style: 'u', label: 'Underline — for all the words, or just the ones picked while typing', command: 'underline', key: '⌘U' }
 ]
 
-const NO_STYLES: Record<TextStyle, boolean> = { b: false, i: false, u: false }
-
-/** While typing: which of bold, italic and underline are on where the caret is (and a way to look again). */
-function useCaretStyles(editing: boolean): [Record<TextStyle, boolean>, () => void] {
-  const [styles, setStyles] = useState(NO_STYLES)
-  const read = useCallback(() => {
-    const next = { b: document.queryCommandState('bold'), i: document.queryCommandState('italic'), u: document.queryCommandState('underline') }
-    setStyles((s) => (s.b === next.b && s.i === next.i && s.u === next.u ? s : next))
-  }, [])
-  useEffect(() => {
-    if (!editing) return
-    read()
-    // The caret moving, or typing (⌘B with nothing picked changes what comes next, not the selection).
-    for (const type of ['selectionchange', 'keyup', 'input']) document.addEventListener(type, read)
-    return () => {
-      for (const type of ['selectionchange', 'keyup', 'input']) document.removeEventListener(type, read)
-    }
-  }, [editing, read])
-  return [styles, read]
-}
-
 const HEADS: Array<ArrowItem['heads']> = ['end', 'both', 'none']
 const HEADS_SAID = { end: 'at the end', both: 'at both ends', none: 'none' }
 const WIDTHS = [2, 3.5, 5]
@@ -153,9 +137,40 @@ interface Props {
   lookup: Lookup
   editing: boolean
   statuses: Status[]
+  tags: readonly Tag[]
 }
 
-export function ItemToolbar({ view, size, items, lookup, editing, statuses }: Props) {
+/** The Tags button: tick the selection's tags on and off, or make a new one. */
+function TagsButton({ items, tags, open, onOpen }: { items: Item[]; tags: readonly Tag[]; open: boolean; onOpen: (open: boolean) => void }) {
+  const marks = { all: '✓', some: '–', none: '' }
+  return (
+    <div className="toolbar-group">
+      <button className={`toolbar-btn ${open ? 'active' : ''}`} title="Tags — what area it belongs to: Art, Audio, Combat…" onClick={() => onOpen(!open)}>
+        <Icon name="tag" size={16} />
+      </button>
+      {open && (
+        <div className="swatch-popover tags-popover" role="menu" aria-label="Tags">
+          {tags.map((t) => (
+            <button key={t.id} className="tags-row" role="menuitemcheckbox" aria-checked={tagState(items, t.id) === 'all'} onClick={() => toggleTagOnSelected(t.id)}>
+              <span className="tags-mark">{marks[tagState(items, t.id)]}</span>
+              <span className={`tag-chip status-${t.color}`}>{t.name}</span>
+            </button>
+          ))}
+          <button className="status-edit" onClick={() => (onOpen(false), void newTagForSelected())}>
+            New tag…
+          </button>
+          {tags.length > 0 && (
+            <button className="status-edit" onClick={() => (onOpen(false), useApp.getState().setTagEditorOpen(true))}>
+              Edit tags…
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+export function ItemToolbar({ view, size, items, lookup, editing, statuses, tags }: Props) {
   const [open, setOpen] = useState<string | null>(null)
   // The toolbar's own width, so it can stay wholly on screen near the window's edges.
   const bar = useRef<HTMLDivElement>(null)
@@ -181,6 +196,9 @@ export function ItemToolbar({ view, size, items, lookup, editing, statuses }: Pr
   const centre = topLeft.x + width / 2
   const palettes = palettesFor(items)
   const allLocked = items.every(isLocked)
+  const detailsOpen = useApp((s) => s.detailsOpen)
+  const only = items.length === 1 && !isArrow(items[0]) ? items[0] : null
+  const canTag = items.some((i) => !isArrow(i))
   // Locked things keep their outline, like their size and place.
   const box = items.every((i) => i.type === 'box' && !i.locked) ? items[0] : null
   const shapes = items.filter(isShape).length
@@ -256,6 +274,16 @@ export function ItemToolbar({ view, size, items, lookup, editing, statuses }: Pr
           onPick={(value) => arrangeSelected(value as (typeof arranging)[number]['value'])}
           className="align-popover"
         />
+      )}
+      {canTag && <TagsButton items={items} tags={tags} open={open === 'tags'} onOpen={opener('tags')} />}
+      {only && (
+        <button
+          className={`toolbar-btn ${detailsOpen ? 'active' : ''}`}
+          title="Details — longer notes behind its words, in a pane on the right (⌘E)"
+          onClick={() => (detailsOpen ? useApp.getState().setDetailsOpen(false) : showDetails(only.id))}
+        >
+          <Icon name="details" size={16} />
+        </button>
       )}
       {palettes.length > 0 && <span className="toolbar-sep" />}
       {STYLES.map((s) => (

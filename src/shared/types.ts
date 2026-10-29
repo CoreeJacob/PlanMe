@@ -32,6 +32,17 @@ interface ItemBase extends Rect {
   link?: Link
   /** Locked: it can't be moved, resized or deleted (its words, colours and status can still change). */
   locked?: boolean
+  /** Its tags (ids of the board's tags), like "Art" or "Combat". */
+  tags?: string[]
+  /** Longer notes behind its words, as simple HTML like `text` plus bullet lists. */
+  details?: string
+}
+
+/** A label for what area of the game something belongs to ("Art", "Combat"), per board. Its colour is a name. */
+export interface Tag {
+  id: string
+  name: string
+  color: string
 }
 
 /** A link from an item: to another tab, to an item (on any tab), or to a web page. */
@@ -185,10 +196,12 @@ export interface Status {
   kind: StatusKind
 }
 
-/** Everything undo can step through: the tabs, in order, with what's on them, and the statuses. */
+/** Everything undo can step through: the tabs, in order, with what's on them, the statuses and tags. */
 export interface BoardDoc {
   tabs: Tab[]
   statuses: Status[]
+  /** Missing until the board has any (see board/tags.ts tagsOf). */
+  tags?: Tag[]
 }
 
 /** board.json, inside the board's folder. */
@@ -197,6 +210,7 @@ export interface BoardFile {
   tabs: Array<{ id: string; name: string }>
   /** Missing in boards made before statuses: they get the usual four. */
   statuses?: Status[]
+  tags?: Tag[]
 }
 
 /** tabs/<id>.json, inside the board's folder. */
@@ -250,6 +264,9 @@ export interface BoardBackups {
 /** Light, dark, or whichever the Mac is set to. */
 export type Theme = 'system' | 'light' | 'dark'
 
+/** How a save went: written, or not, because the files had changed outside PlanMe (bring that in first). */
+export type SaveResult = 'saved' | 'outside'
+
 export interface Startup {
   /** The folder new boards go in. */
   root: string
@@ -281,6 +298,8 @@ export type MenuCommand =
   | 'zoomFit'
   | 'zoomSelection'
   | 'shortcuts'
+  | 'toggleTags'
+  | 'details'
   | 'themeSystem'
   | 'themeLight'
   | 'themeDark'
@@ -296,7 +315,7 @@ export interface PlanMeApi {
   revealBoard(path: string): Promise<void>
   /** Asks for a different folder to keep boards in; returns it, or null if cancelled. */
   chooseRoot(): Promise<string | null>
-  saveBoard(path: string, request: SaveRequest): Promise<void>
+  saveBoard(path: string, request: SaveRequest): Promise<SaveResult>
   /** Asks a question in a Mac dialog and resolves with the index of the button chosen. The last button is Cancel. */
   ask(question: { message: string; detail?: string; buttons: string[] }): Promise<number>
   /** Copies image files (from Finder) into a board's images folder. */
@@ -324,6 +343,13 @@ export interface PlanMeApi {
   revealImage(board: string, entry: string): Promise<void>
   /** The file on disk a dropped file came from ('' if it isn't one). */
   pathForFile(file: File): string
+  /** Watches the open board's files (null: stop), to hear about changes made outside PlanMe. */
+  watchBoard(board: string | null): Promise<void>
+  onBoardChangedOutside(callback: () => void): () => void
+  /** Reads a board again after a change from outside (fails if a file is half-written). */
+  readBoard(board: string): Promise<OpenedBoard>
+  /** Boards were added or removed in the boards folder. */
+  onBoardListChanged(callback: () => void): () => void
   /** Every board with backups, and its backups. */
   listBackups(): Promise<BoardBackups[]>
   /** Copies a backup back in as a new board, and returns that board's name. */

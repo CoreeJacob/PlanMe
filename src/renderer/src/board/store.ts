@@ -62,6 +62,11 @@ interface BoardState {
   /** A change the app makes to keep things tidy (like a text item's height), not an undo step. */
   fixLayout(doc: BoardDoc): void
   /**
+   * A change made to the board's files from outside PlanMe, already merged with what's in the app
+   * (see merge.ts). One undo step. New tabs bring their views; if the tab showing went, the first shows.
+   */
+  applyOutside(doc: BoardDoc, views: Record<string, View>): void
+  /**
    * Picture files moved: point the board at their new places, and every undo step too (so undo
    * never brings back a picture's old place). Not an undo step itself: the files have moved.
    */
@@ -157,6 +162,19 @@ export const useBoard = create<BoardState>((set, get) => {
 
     fixLayout: (doc) => {
       if (doc !== get().doc) set({ doc })
+    },
+
+    applyOutside: (doc, views) => {
+      const { tabId, selected } = get()
+      const showing = doc.tabs.some((t) => t.id === tabId)
+      get().commit(doc, showing ? undefined : doc.tabs[0].id)
+      const fresh = Object.fromEntries(Object.entries(views).filter(([id]) => !get().views[id]))
+      if (Object.keys(fresh).length) set({ views: { ...get().views, ...fresh } })
+      // Things deleted outside can't stay selected.
+      if (showing) {
+        const here = new Set(doc.tabs.find((t) => t.id === tabId)!.items.map((i) => i.id))
+        get().select(selected.filter((id) => here.has(id)))
+      }
     },
 
     remapImages: (moves) => {

@@ -1,10 +1,11 @@
 // One item on the canvas, drawn in board units (the canvas scales the whole board at once).
 
 import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import type { ImageItem, Item, Shape, Status } from '@shared/types'
+import type { ImageItem, Item, Shape, Status, Tag } from '@shared/types'
 import { Icon } from '@/app/Icon'
 import { updateItems } from '@/board/items'
-import { cleanHtml } from '@/board/richtext'
+import { cleanHtml, plainText } from '@/board/richtext'
+import { itemTags } from '@/board/tags'
 import { useBoard } from '@/board/store'
 import { editText, finishEditing } from './actions'
 import { imageUrl } from './images'
@@ -59,9 +60,26 @@ interface Props {
   link?: 'go' | 'web' | 'broken'
   /** What following its link does, in words. */
   linkTip?: string
+  /** The board's tags, when they show as chips on the board. */
+  tags?: readonly Tag[]
 }
 
-export const ItemView = memo(function ItemView({ item, editing, part = null, status, dimmed, flashing, link, linkTip }: Props) {
+/** Roughly how wide a tag chip is (board units), and the "+2" one. */
+const chipWidth = (name: string): number => name.length * 6.4 + 17
+const MORE_WIDTH = 30
+
+/** How many tag chips fit along an item's top edge (at least one); the rest show as "+2". */
+function chipsThatFit(tags: readonly Tag[], room: number): number {
+  let used = 0
+  for (let k = 0; k < tags.length; k++) {
+    used += chipWidth(tags[k].name) + 3
+    const rest = k < tags.length - 1 ? MORE_WIDTH : 0
+    if (used + rest > room) return Math.max(1, k)
+  }
+  return tags.length
+}
+
+export const ItemView = memo(function ItemView({ item, editing, part = null, status, dimmed, flashing, link, linkTip, tags }: Props) {
   const area = useRef<HTMLDivElement>(null)
   const text = useRef<HTMLDivElement>(null)
   const fits = item.type === 'note' || item.type === 'box'
@@ -106,11 +124,35 @@ export const ItemView = memo(function ItemView({ item, editing, part = null, sta
     </button>
   )
 
-  // Clicking the link badge follows the link (see the canvas).
-  const linkBadge = link && (
-    <button className={`link-badge ${link}`} data-link-badge title={linkTip}>
-      <Icon name={link === 'web' ? 'reveal' : 'link'} size={12} />
-    </button>
+  // Bottom right: the details badge (click to read them) and the link badge (click to follow
+  // it); see the canvas.
+  const hasDetails = !!item.details && !!plainText(item.details).trim()
+  const corner = (hasDetails || link) && (
+    <div className="corner-badges">
+      {hasDetails && (
+        <button className="details-badge" data-details-badge title="Details — click to read them">
+          <Icon name="details" size={12} />
+        </button>
+      )}
+      {link && (
+        <button className={`link-badge ${link}`} data-link-badge title={linkTip}>
+          <Icon name={link === 'web' ? 'reveal' : 'link'} size={12} />
+        </button>
+      )}
+    </div>
+  )
+  // Top left: its tags.
+  const mine = tags ? itemTags(item, tags) : []
+  const shown = chipsThatFit(mine, item.w - 20 - (status ? 80 : 0))
+  const chips = mine.length > 0 && (
+    <div className={`tag-chips ${status ? 'beside-status' : ''}`} title={mine.map((t) => t.name).join(', ')}>
+      {mine.slice(0, shown).map((t) => (
+        <span key={t.id} className={`tag-chip status-${t.color}`}>
+          {t.name}
+        </span>
+      ))}
+      {mine.length > shown && <span className="tag-chip more">+{mine.length - shown}</span>}
+    </div>
   )
 
   const lockBadge = item.locked && (
@@ -131,8 +173,9 @@ export const ItemView = memo(function ItemView({ item, editing, part = null, sta
         <div className="section-edge bottom" />
         <div className="section-edge left" />
         {badge}
-        {linkBadge}
+        {corner}
         {lockBadge}
+        {chips}
       </div>
     )
   }
@@ -152,8 +195,9 @@ export const ItemView = memo(function ItemView({ item, editing, part = null, sta
         words
       )}
       {badge}
-      {linkBadge}
+      {corner}
       {lockBadge}
+      {chips}
     </div>
   )
 })

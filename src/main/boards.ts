@@ -91,7 +91,11 @@ export async function createBoard(root: string, name: string, tabId: string): Pr
   return dir
 }
 
-export async function openBoard(dir: string): Promise<OpenedBoard> {
+/**
+ * Reads a board. Normally a tab file that's missing or unreadable is an empty tab; with `strict`
+ * (re-reading after a change from outside) it's an error instead, as the file may be half-written.
+ */
+export async function openBoard(dir: string, { strict = false } = {}): Promise<OpenedBoard> {
   const file = path.join(dir, BOARD_FILE)
   const board = await readJson<BoardFile>(file)
   checkFormat(board.format, file)
@@ -106,21 +110,30 @@ export async function openBoard(dir: string): Promise<OpenedBoard> {
       if (tab.view) views[id] = tab.view
     } catch (err) {
       // A tab file that's missing (e.g. never saved) is an empty tab; a newer one stops the open.
+      if (strict) throw new Error(`tabs/${id}.json couldn’t be read`)
       if (err instanceof Error && err.message.includes('newer version')) throw err
     }
     tabs.push({ id, name, items })
   }
-  return { name: path.basename(dir), path: dir, doc: { tabs, statuses: board.statuses ?? DEFAULT_STATUSES }, views }
+  const doc = { tabs, statuses: board.statuses ?? DEFAULT_STATUSES, ...(board.tags?.length ? { tags: board.tags } : {}) }
+  return { name: path.basename(dir), path: dir, doc, views }
 }
 
 /**
  * Saves changed tabs first and board.json after, so board.json never lists a tab whose file
  * is still being written. Tab files that were removed go last.
  */
-export async function saveBoard(dir: string, request: SaveRequest): Promise<void> {
-  for (const tab of request.tabs) await writeFileAtomic(tabPath(dir, tab.id), json(tab))
-  if (request.board) await writeFileAtomic(path.join(dir, BOARD_FILE), json(request.board))
-  for (const id of request.removed) await fs.rm(tabPath(dir, id), { force: true })
+export async function saveBoard(dir: string, request: SaveRequest, wrote: (file: string, text: string | null) => void = () => {}): Promise<void> {
+  const write = async (file: string, text: string): Promise<void> => {
+    wrote(file, text)
+    await writeFileAtomic(file, text)
+  }
+  for (const tab of request.tabs) await write(tabPath(dir, tab.id), json(tab))
+  if (request.board) await write(path.join(dir, BOARD_FILE), json(request.board))
+  for (const id of request.removed) {
+    wrote(tabPath(dir, id), null)
+    await fs.rm(tabPath(dir, id), { force: true })
+  }
 }
 
 /** Renames a board's folder (keeping the name free) and returns the new path. */

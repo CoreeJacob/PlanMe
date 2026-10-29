@@ -14,6 +14,7 @@ import { ShortcutsSheet } from './ShortcutsSheet'
 import { PromptDialog, Toasts } from './Overlays'
 import { toolForKey } from './SidePanel'
 import { StatusEditor } from './StatusEditor'
+import { TagEditor } from './TagEditor'
 import { Tooltips } from './Tooltips'
 import { dialogOpen, useApp } from './store'
 
@@ -46,6 +47,10 @@ function runBoardCommand(command: MenuCommand): void {
       return toggleLockOnSelected()
     case 'togglePanel':
       return app.setPanelOpen(!app.panelOpen)
+    case 'toggleTags':
+      return app.setShowTags(!app.showTags)
+    case 'details':
+      return app.setDetailsOpen(!app.detailsOpen)
     case 'selectAll':
       return selectAll()
     case 'duplicate':
@@ -92,7 +97,7 @@ export function App() {
         if (command === 'shortcuts') return useApp.getState().setShortcutsOpen(!useApp.getState().shortcutsOpen)
         if (command === 'undo' || command === 'redo' || command === 'selectAll') {
           if (isTyping() || dialogOpen()) return void document.execCommand(command)
-        } else if (isTyping() && command !== 'find') {
+        } else if (isTyping() && command !== 'find' && command !== 'details') {
           // Other board commands (⌘D, ⌘]…) wait until typing is finished. ⌘F doesn't: the search
           // takes the keyboard, which finishes the typing.
           return
@@ -130,6 +135,7 @@ export function App() {
       {screen === 'board' && <BoardScreen />}
       <PromptDialog />
       <StatusEditor />
+      <TagEditor />
       <LinkPicker />
       <ShortcutsSheet />
       <BackupsDialog />

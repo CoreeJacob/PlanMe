@@ -232,7 +232,7 @@ export function besideRect(source: Rect, at: Point): Rect {
 export function newLike(source: Shape, id: string, rect: Rect): Shape {
   // Building out from a picture makes a note beside it (a second copy of the picture wouldn't help).
   if (source.type === 'image') return newItem('note', id, rect)
-  const { status: _status, link: _link, locked: _locked, ...look } = source
+  const { status: _status, link: _link, locked: _locked, tags: _tags, details: _details, ...look } = source
   const fresh = { ...look, id, text: '', x: rect.x, y: rect.y, w: rect.w, h: rect.h } as Shape
   return fresh.type === 'todo' ? { ...fresh, entries: [newEntry()], auto: true } : fresh
 }

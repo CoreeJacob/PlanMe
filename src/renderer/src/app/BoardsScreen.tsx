@@ -23,8 +23,10 @@ export function BoardsScreen() {
   const root = useApp((s) => s.root)
   const menu = useContextMenu()
 
+  // Boards added or removed in the boards folder (in Finder, or by another app) show up too.
   useEffect(() => {
     void refreshBoards()
+    return window.api.onBoardListChanged(() => void refreshBoards())
   }, [])
 
   return (

@@ -20,6 +20,10 @@ My Game/
   images/          pictures added to the board (copies; very large ones shrunk to 4000 pixels)
 ```
 
+## Changes from outside PlanMe
+
+Another app or assistant can read and change boards while PlanMe is open. `.planme/file-format.md` in the boards folder (hidden in Finder; PlanMe writes it and keeps it up to date) explains the files for it. When a board's files change, the open board updates within a second: what changed flashes, a message says where, and ⌘Z takes the change back. Anything being dragged or typed is finished first. Changes made in the app are kept too (if both changed the same item, the outside change wins), and PlanMe never saves over a change from outside before bringing it in. New boards appear on the Boards screen.
+
 ## Backups
 
 Before a board changes, it's backed up into a `PlanMe Backups` folder next to your boards folder (so `~/Documents/PlanMe Backups/My Game/2026-10-28 21.07.31/`), at most once an hour. The newest 24 are kept, plus one a day for 30 days. Pictures are copied as clones, which take no extra space until they change. To get one back: Boards screen → Backups… (or right-click a board → Restore from Backup…). It comes back as a new board, so nothing is overwritten. Backups of deleted boards are listed too.
@@ -47,6 +51,8 @@ Changes are saved a moment after you make them, and straight away when the windo
 | Images (side panel) | The board's images folder as a tree: make folders, drag pictures between them (the board follows), drag one onto the board to use it again, remove unused ones. Pictures moved in Finder are found again |
 | Click a status badge | Change the status right there |
 | ⌘K, or right-click → Link to… | Link the selected item to a tab, an item on any tab, or a web page (type its address). A link badge shows on its bottom edge: click it to go there (web pages open in your browser). A link to something deleted shows as broken until changed |
+| Tags (toolbar or right-click) | Labels like Art, Audio or Combat, per board; an item can have several, shown as chips along its top edge. "New tag…" and "Edit tags…" are in the same menu. The Tasks panel filters by tag as well as by status; ⌥⌘T (or "Show on board" in the Tasks panel) shows or hides the chips |
+| ⌘E, or Details (toolbar or right-click) | The Details pane on the right: longer notes behind the selected item, with bold, italic, underline and bullet lists. Items with details show a ≡ badge on their bottom edge (click it to open them). Search finds words in details |
 | ← Back chip | After following a link, goes back to where you were (× hides it) |
 | ⌘F, or the field at the top of the side panel | Search every tab: words on notes, text, shapes, to-do lists (and their lines), section titles, picture names, arrow labels and tab names. ↑ ↓ and Return (or click) go to a result; Escape clears. With the side panel hidden, ⌘F drops a search box over the board |
 | Double-click | Empty space: a new sticky note. An item: type in it |

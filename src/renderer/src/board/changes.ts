@@ -16,9 +16,11 @@ export function changes(before: Saved, after: Saved): SaveRequest | null {
     .filter((t) => old.get(t.id) !== t || before.views[t.id] !== after.views[t.id])
     .map((t) => ({ format: FORMAT, id: t.id, view: after.views[t.id] ?? DEFAULT_VIEW, items: t.items }))
 
-  // board.json holds the tab list and the statuses.
-  const boardChanged = before.doc.statuses !== after.doc.statuses || JSON.stringify(tabList(before.doc)) !== JSON.stringify(tabList(after.doc))
-  const board = boardChanged ? { format: FORMAT, tabs: tabList(after.doc), statuses: after.doc.statuses } : undefined
+  // board.json holds the tab list, the statuses and the tags.
+  const boardChanged =
+    before.doc.statuses !== after.doc.statuses || before.doc.tags !== after.doc.tags || JSON.stringify(tabList(before.doc)) !== JSON.stringify(tabList(after.doc))
+  const tags = after.doc.tags?.length ? { tags: after.doc.tags } : {}
+  const board = boardChanged ? { format: FORMAT, tabs: tabList(after.doc), statuses: after.doc.statuses, ...tags } : undefined
 
   const kept = new Set(after.doc.tabs.map((t) => t.id))
   const removed = before.doc.tabs.filter((t) => !kept.has(t.id)).map((t) => t.id)

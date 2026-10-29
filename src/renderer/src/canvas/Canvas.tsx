@@ -22,6 +22,7 @@ import { besideRect, isLocked, itemsOf, moveItems, resizeRect, updateItems, type
 import { linkTarget, linkTip } from '@/board/links'
 import { drawingOrder, isSection, movable } from '@/board/sections'
 import { statusOf } from '@/board/statuses'
+import { hasTag, tagsOf, tagState } from '@/board/tags'
 import { NO_SELECTION, selectTab, useBoard } from '@/board/store'
 import { boundsOf, overlaps, rectFrom, within, type Point } from '@/lib/geometry'
 import { useElementSize } from '@/lib/useElementSize'
@@ -36,14 +37,17 @@ import {
   finishEditing,
   followLink,
   linkSelected,
+  newTagForSelected,
   selectAll,
   sendSelectedToBack,
   setLink,
   setOnSelected,
   setStatusOnSelected,
+  showDetails,
   startEditing,
   tickEntry,
-  toggleLockOnSelected
+  toggleLockOnSelected,
+  toggleTagOnSelected
 } from './actions'
 import { ArrowView } from './ArrowView'
 import { addImageFiles, chooseImages, placeImages } from './images'
@@ -106,7 +110,8 @@ export function Canvas() {
   // Links can go to other tabs, so whether one still works depends on the whole board.
   const doc = useBoard((s) => s.doc)
   const dimFilter = useDimFilter()
-  const flashId = useApp((s) => s.flashId)
+  const showTags = useApp((s) => s.showTags)
+  const flashIds = useApp((s) => s.flashIds)
   const tool = useApp((s) => s.tool)
   const [spaceDown, setSpaceDown] = useState(false)
   const [drag, setDrag] = useState<Drag | null>(null)
@@ -229,6 +234,13 @@ export function Canvas() {
       useBoard.getState().select([badgeOf.id])
       const r = badge.getBoundingClientRect()
       menu.show(r.left, r.bottom + 4, statusMenu([badgeOf]) ?? [])
+      return
+    }
+    // An item's details badge: open the Details pane on it.
+    const detailsOf = target.closest('[data-details-badge]')?.closest<HTMLElement>('[data-item-id]')?.dataset.itemId
+    if (detailsOf) {
+      e.preventDefault()
+      showDetails(detailsOf)
       return
     }
     // An item's link badge: follow the link.
@@ -484,7 +496,7 @@ export function Canvas() {
     // Look at what's really under the pointer.
     const target = document.elementFromPoint(e.clientX, e.clientY)
     // Handles (for resizing, or an arrow's ends) aren't empty space: no new note there.
-    if (!target || target.closest('.item-editor, .zoom-controls, .item-toolbar, [data-handle], [data-end], [data-dot], [data-status-badge], [data-link-badge], [data-grip]')) return
+    if (!target || target.closest('.item-editor, .zoom-controls, .item-toolbar, [data-handle], [data-end], [data-dot], [data-status-badge], [data-link-badge], [data-details-badge], [data-grip]')) return
     const hit = target.closest<HTMLElement>('[data-item-id]')?.dataset.itemId
     // Double-click an item to type in it (in a to-do list, the line or title clicked), or empty
     // space for a new sticky note.
@@ -541,6 +553,20 @@ export function Canvas() {
     }
     const statusEntries = statusMenu(chosen)
     if (statusEntries) entries.push({ label: 'Status', icon: 'flag', submenu: statusEntries })
+    if (chosen.some(isShape)) {
+      const state = (id: string): string | undefined => ({ all: '✓', some: '–', none: undefined })[tagState(chosen, id)]
+      entries.push({
+        label: 'Tags',
+        icon: 'tag',
+        submenu: [
+          ...tagsOf(board.doc).map((t) => ({ label: t.name, hint: state(t.id), onSelect: () => toggleTagOnSelected(t.id) })),
+          ...(tagsOf(board.doc).length ? ['separator' as const] : []),
+          { label: 'New Tag…', onSelect: () => void newTagForSelected() },
+          { label: 'Edit Tags…', onSelect: () => useApp.getState().setTagEditorOpen(true) }
+        ]
+      })
+      if (chosen.length === 1) entries.push({ label: 'Details', icon: 'details', hint: '⌘E', onSelect: () => showDetails(chosen[0].id) })
+    }
     // Links (arrows can't have them).
     const linkable = chosen.filter(isShape)
     if (linkable.length) {
@@ -655,8 +681,9 @@ export function Canvas() {
               editing={item.id === editingId}
               part={item.id === editingId ? editingPart : null}
               status={statusOf(item, statuses)}
-              dimmed={!!dimFilter && statusOf(item, statuses)?.id !== dimFilter}
-              flashing={item.id === flashId}
+              dimmed={!!dimFilter && !((!dimFilter.status || statusOf(item, statuses)?.id === dimFilter.status) && hasTag(item, dimFilter.tag))}
+              tags={showTags ? tagsOf(doc) : undefined}
+              flashing={flashIds.includes(item.id)}
               {...linkProps(item)}
             />
           )
@@ -679,7 +706,7 @@ export function Canvas() {
         gripped={gripped}
       />
 
-      {selectedItems.length > 0 && !busy && <ItemToolbar view={view} size={size} items={selectedItems} lookup={lookup} editing={editingId !== null} statuses={statuses} />}
+      {selectedItems.length > 0 && !busy && <ItemToolbar view={view} size={size} items={selectedItems} lookup={lookup} editing={editingId !== null} statuses={statuses} tags={tagsOf(doc)} />}
 
       {items.length === 0 && (
         <div className="canvas-hint muted">

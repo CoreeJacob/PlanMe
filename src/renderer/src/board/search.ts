@@ -1,5 +1,5 @@
 // Finding words anywhere on the board: in notes, text, shapes, to-do titles and lines, section
-// titles, picture names, arrow labels and tab names, on every tab.
+// titles, picture names, arrow labels, items' details and tags, and tab names, on every tab.
 
 import type { BoardDoc, Item } from '@shared/types'
 import { plainText } from './richtext'
@@ -18,11 +18,15 @@ export interface SearchHit {
 /** The words searched for, in lower case. */
 export const searchWords = (query: string): string[] => query.toLowerCase().split(/\s+/).filter(Boolean)
 
-/** An item's lines of words. */
-function linesOf(item: Item): string[] {
+/** An item's lines of words (its tags by name from `tagNames`). */
+function linesOf(item: Item, tagNames: ReadonlyMap<string, string>): string[] {
   const lines = plainText(item.text).split('\n')
   if (item.type === 'todo') lines.push(...item.entries.map((e) => e.text))
   if (item.type === 'image') lines.push(item.name)
+  if (item.type !== 'arrow') {
+    if (item.details) lines.push(...plainText(item.details).split('\n'))
+    for (const id of item.tags ?? []) if (tagNames.has(id)) lines.push(`#${tagNames.get(id)}`)
+  }
   return lines.map((l) => l.trim()).filter(Boolean)
 }
 
@@ -87,6 +91,7 @@ export function searchBoard(doc: BoardDoc, query: string, limit = 100): SearchHi
   const words = searchWords(query)
   if (!words.length) return []
   const hits: SearchHit[] = []
+  const tagNames = new Map((doc.tags ?? []).map((t) => [t.id, t.name]))
   for (const tab of doc.tabs) {
     const found = match([tab.name], words)
     if (found) hits.push({ tabId: tab.id, tabName: tab.name, ...found })
@@ -94,7 +99,7 @@ export function searchBoard(doc: BoardDoc, query: string, limit = 100): SearchHi
   for (const tab of doc.tabs) {
     const found: SearchHit[] = []
     for (const item of tab.items) {
-      const m = match(linesOf(item), words)
+      const m = match(linesOf(item, tagNames), words)
       if (m) found.push({ tabId: tab.id, tabName: tab.name, item, ...m })
     }
     hits.push(...inReadingOrder(found, (h) => h.item!))

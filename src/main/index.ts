@@ -6,6 +6,7 @@ import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, nativeTheme, ne
 import { IMAGE_EXTENSIONS, type MenuCommand, type SaveRequest, type Startup, type Theme } from '@shared/types'
 import { backupsRoot, backUpIfDue, listBackups, renameBackups, restoreBackup } from './backups'
 import { createBoard, isBoard, listBoards, openBoard, renameBoard, saveBoard } from './boards'
+import { writeGuide } from './guide'
 import {
   createImageFolder,
   importImage,
@@ -19,6 +20,7 @@ import {
   type Shrink
 } from './images'
 import { SettingsStore, type Settings } from './settings'
+import { BoardWatcher } from './watch'
 
 // A board's images are shown as board://image/<path in the board>?board=<the board's folder>.
 protocol.registerSchemesAsPrivileged([{ scheme: 'board', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } }])
@@ -72,6 +74,24 @@ async function watchImages(board: string | null): Promise<void> {
     imageWatchTimer = setTimeout(() => mainWindow?.webContents.send('images:changed'), 250)
   })
 }
+/** The open board's files, so changes made outside PlanMe (say, by an assistant) show up. */
+const boardWatcher = new BoardWatcher(() => mainWindow?.webContents.send('board:changedOutside'))
+
+/** The boards folder, so boards added or removed in Finder show up on the Boards screen. */
+let rootWatcher: FSWatcher | null = null
+let rootWatchTimer: ReturnType<typeof setTimeout> | undefined
+
+/** Watches the boards folder, and puts the file-format guide in it for other apps. */
+async function adoptRoot(root: string): Promise<void> {
+  await fs.mkdir(root, { recursive: true })
+  await writeGuide(root).catch((err) => console.error('Could not write the file-format guide', err))
+  rootWatcher?.close()
+  rootWatcher = watch(root, () => {
+    clearTimeout(rootWatchTimer)
+    rootWatchTimer = setTimeout(() => mainWindow?.webContents.send('boards:listChanged'), 300)
+  })
+}
+
 /** Set by ⌘Q. Holding the window open to save cancels quitting, so quit again once it's closed. */
 let quitting = false
 app.on('before-quit', () => {
@@ -198,6 +218,8 @@ function buildMenu(theme: Theme): void {
           },
           { type: 'separator' },
           { label: 'Show/Hide Side Panel', accelerator: 'CmdOrCtrl+\\', click: send('togglePanel') },
+          { label: 'Show/Hide Tags', accelerator: 'Alt+CmdOrCtrl+T', click: send('toggleTags') },
+          { label: 'Show/Hide Details', accelerator: 'CmdOrCtrl+E', click: send('details') },
           { label: 'Next Tab', accelerator: 'Ctrl+Tab', click: send('nextTab') },
           { label: 'Previous Tab', accelerator: 'Ctrl+Shift+Tab', click: send('prevTab') },
           { type: 'separator' },
@@ -220,7 +242,7 @@ function registerIpc(): void {
   handle('app:startup', async (): Promise<Startup> => {
     const { lastBoard } = await settings.get()
     const root = await boardsRoot()
-    await fs.mkdir(root, { recursive: true })
+    await adoptRoot(root)
     let board = null
     if (lastBoard && (await isBoard(lastBoard))) {
       // A damaged or too-new board shouldn't stop the app starting: show the Boards screen instead.
@@ -253,13 +275,19 @@ function registerIpc(): void {
     })
     if (result.canceled || !result.filePaths[0]) return null
     await updateSettings({ boardsRoot: result.filePaths[0] })
+    await adoptRoot(result.filePaths[0])
     return result.filePaths[0]
   })
   handle('boards:save', async (dir: string, request: SaveRequest) => {
     // Before the first save in an hour, back the board up as it was. A backup that fails mustn't stop the save.
     await backUpIfDue(dir).catch((err) => console.error('Could not back up', err))
-    await saveBoard(dir, request)
+    // The watcher is told what PlanMe writes, so its own saves don't look like outside changes,
+    // and it holds the save back if there's an outside change to bring in first.
+    return boardWatcher.whileSaving(dir, () => saveBoard(dir, request, (file, text) => boardWatcher.wrote(file, text)))
   })
+  handle('board:watch', (dir: string | null) => boardWatcher.watch(dir))
+  // Read again after a change from outside: strict, as a file may still be half-written.
+  handle('boards:read', (dir: string) => boardWatcher.read(dir, () => openBoard(dir, { strict: true })))
   handle('backups:list', async () => listBackups(await boardsRoot()))
   handle('backups:restore', async (board: string, id: string) => path.basename(await restoreBackup(await boardsRoot(), board, id)))
   handle('backups:reveal', async (board?: string) => {

@@ -179,7 +179,9 @@ test('the right-click menu closes when you go back to the board', async ({ app }
   const box = (await app.lastItem()).id
   await app.rightClick(`document.querySelector('[data-item-id="${box}"]')`)
   await check('the menu is open', (await app.menuLabels()).length > 0)
-  await app.doubleClickAt(await app.itemCentre(box))
+  // The left of the box: the menu opens to the right of where it was asked for.
+  const b = await app.item(box)
+  await app.doubleClickAt(await app.screenOf(b.x + 25, b.y + b.h / 2))
   await check('double-clicking the box closes it, and you can type', (await app.untilEditing()) && (await app.menuLabels()).length === 0, await app.menuLabels())
   await app.type('Visible')
   await app.key('Escape', 'Escape')

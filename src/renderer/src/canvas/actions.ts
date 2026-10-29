@@ -1,7 +1,7 @@
 // What can be done to items on the tab showing: adding, typing, deleting, copying, colouring…
 // Shared by the keys, the menus, the floating toolbar and the right-click menu.
 
-import { DEFAULT_VIEW, type ArrowEnd, type BoardDoc, type BoxShape, type Item, type Link, type Rect, type Shape, type Status, type TodoItem } from '@shared/types'
+import { DEFAULT_VIEW, type ArrowEnd, type BoardDoc, type BoxShape, type Item, type Link, type Rect, type Shape, type Status, type Tag, type TodoItem } from '@shared/types'
 import { upgradeItem } from '@shared/upgrade'
 import { attempt, useApp } from '@/app/store'
 import { arrowsAttached, boxOf, detach, isArrow, isShape, lookupIn } from '@/board/arrows'
@@ -26,6 +26,7 @@ import { linkKey, linkTarget } from '@/board/links'
 import { cleanHtml, fromPlainText, isAllStyled, plainText, setWholeStyle, type TextStyle } from '@/board/richtext'
 import { movable, withContents } from '@/board/sections'
 import { autoKind, withStatuses } from '@/board/statuses'
+import { nextTagColor, tagState, tagsOf, withTag, withTags } from '@/board/tags'
 import { useBoard } from '@/board/store'
 import { count, plural } from '@/lib/format'
 import { boundsOf, overlaps } from '@/lib/geometry'
@@ -183,6 +184,55 @@ export function saveStatuses(statuses: Status[]): void {
   state().commit(withStatuses(state().doc, statuses))
 }
 
+// ---------- tags and details ----------
+
+/** Adds a tag to the selected items, or takes it off if they all have it. One undo step. */
+export function toggleTagOnSelected(id: string): void {
+  const on = tagState(selectedItems(), id) !== 'all'
+  change((doc, tabId) => updateItems(doc, tabId, state().selected, (i) => withTag(i, id, on)))
+}
+
+/** Makes a new tag (asking its name) and puts it on the selected items. One undo step. */
+export async function newTagForSelected(): Promise<void> {
+  const ids = state().selected
+  const name = (await useApp.getState().ask({ title: 'New Tag', label: 'What area is it? Art, Audio, Combat…', value: '', confirmLabel: 'Add' }))?.trim()
+  if (!name) return
+  const tags = tagsOf(state().doc)
+  // A tag by that name already: use it.
+  const existing = tags.find((t) => t.name.toLowerCase() === name.toLowerCase())
+  const tag: Tag = existing ?? { id: newId().slice(0, 8), name, color: nextTagColor(tags) }
+  change((doc, tabId) => updateItems(existing ? doc : { ...doc, tags: [...tags, tag] }, tabId, ids, (i) => withTag(i, tag.id, true)))
+}
+
+/** The board's list of tags changed (from the tag editor): one undo step. */
+export function saveTags(tags: Tag[]): void {
+  state().commit(withTags(state().doc, tags))
+}
+
+/** Typing in an item's details (one undo step from starting to stopping, like typing on the board). */
+export function editDetails(id: string, html: string): void {
+  const { doc, tabId, preview } = state()
+  const details = cleanHtml(html, { lists: true })
+  const empty = !plainText(details).trim()
+  preview(
+    updateItems(doc, tabId, [id], (i) => {
+      if (i.type === 'arrow') return i
+      if (empty) {
+        const { details: _gone, ...rest } = i
+        return i.details === undefined ? i : (rest as Shape)
+      }
+      return i.details === details ? i : { ...i, details }
+    })
+  )
+}
+
+/** Opens the Details pane for an item. */
+export function showDetails(id: string): void {
+  finishEditing()
+  state().select([id])
+  useApp.getState().setDetailsOpen(true)
+}
+
 // ---------- going to things ----------
 
 /** Shows a tab, where it was last looking. */
@@ -201,7 +251,7 @@ export function goToItem(tabId: string, id: string): void {
   const zoom = (state().views[tabId] ?? DEFAULT_VIEW).zoom
   state().setView(tabId, { x: box.x + box.w / 2, y: box.y + box.h / 2, zoom })
   state().select([id])
-  useApp.getState().flash(id)
+  useApp.getState().flash([id])
 }
 
 // ---------- links ----------

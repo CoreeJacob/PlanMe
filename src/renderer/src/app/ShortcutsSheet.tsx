@@ -51,6 +51,7 @@ const GROUPS: Array<{ title: string; keys: Array<[string, string]> }> = [
       ['⌘]  ⌘[', 'Bring to front, send to back'],
       ['⇧⌘L', 'Lock or unlock'],
       ['⌘K', 'Link to a tab, item or web page'],
+      ['⌘E', 'Show or hide the details pane'],
       ['⌫', 'Delete'],
       ['⌘Z  ⇧⌘Z', 'Undo, redo']
     ]
@@ -62,6 +63,7 @@ const GROUPS: Array<{ title: string; keys: Array<[string, string]> }> = [
       ['⌘T', 'New tab'],
       ['⌃⇥  ⌃⇧⇥', 'Next, previous tab'],
       ['⌘\\', 'Show or hide the side panel'],
+      ['⌥⌘T', 'Show or hide tags on the board'],
       ['⇧⌘B', 'All boards'],
       ['⇧⌘N', 'New board'],
       ['⌘/', 'This list']
