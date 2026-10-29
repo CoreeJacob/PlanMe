@@ -16,6 +16,7 @@ function TaskRow({ task, showTab }: { task: Task; showTab?: boolean }) {
       <span className={`task-dot status-${task.status.color}`} />
       <span className="task-label">{task.label}</span>
       {task.progress && <span className="task-progress">{task.progress}</span>}
+      {task.copies && <span className="task-progress" title={`Part of a linked group: the same task in ${task.copies} copies`}>×{task.copies}</span>}
       <span className="task-meta">{showTab ? task.tabName : task.status.name}</span>
     </button>
   )

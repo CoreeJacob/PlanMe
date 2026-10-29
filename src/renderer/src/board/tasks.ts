@@ -16,6 +16,8 @@ export interface Task {
   label: string
   /** For a to-do list, how many lines are ticked, like "2/5". */
   progress?: string
+  /** For a part of a linked group: how many copies it has (it's listed once, where it's first found). */
+  copies?: number
 }
 
 const UNTITLED: Record<Shape['type'], string> = {
@@ -43,12 +45,21 @@ export interface TaskLists {
 export function tasksOf(doc: BoardDoc): TaskLists {
   const active: TaskLists['active'] = []
   const done: Task[] = []
+  // A part of a linked group is the same task in every copy: list it once.
+  const linked = new Map<string, Task>()
   for (const tab of doc.tabs) {
     const open: Task[] = []
     for (const item of tab.items) {
       const status = statusOf(item, doc.statuses)
       if (!status || item.type === 'arrow') continue
+      const key = item.group && `${item.group.id}/${item.group.member}`
+      const seen = key && linked.get(key)
+      if (seen) {
+        seen.copies = (seen.copies ?? 1) + 1
+        continue
+      }
       const task: Task = { item, tabId: tab.id, tabName: tab.name, status, label: labelOf(item) }
+      if (key) linked.set(key, task)
       if (item.type === 'todo') {
         const { done: ticked, total } = progressOf(item)
         task.progress = `${ticked}/${total}`

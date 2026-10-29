@@ -3,6 +3,7 @@
 import { create } from 'zustand'
 import type { BoardDoc, ImageMoves, OpenedBoard, View } from '@shared/types'
 import { readPref, writePref } from '@/lib/prefs'
+import { syncGroups } from './groups'
 import { EMPTY_HISTORY, record, redo, undo, type History, type Step } from './history'
 import { remapDoc } from './images'
 
@@ -38,6 +39,8 @@ interface BoardState {
   editingPart: string | null
   /** The board as it was when the current drag or typing began, or null between them. */
   gesture: Step | null
+  /** The copy of a linked group being worked inside (double-clicked into): its parts are picked one at a time. */
+  openGroup: string | null
 
   load(opened: OpenedBoard): void
   unload(): void
@@ -50,6 +53,7 @@ interface BoardState {
   redo(): void
 
   select(ids: string[]): void
+  setOpenGroup(copy: string | null): void
   setEditing(id: string | null, part?: string | null): void
   /**
    * A drag or a stretch of typing: `preview` shows each change as it happens, and `endGesture`
@@ -84,7 +88,7 @@ export const useBoard = create<BoardState>((set, get) => {
     set({ doc: step.doc, tabId, history, editingId: null, selected: tabId === get().tabId && selected.length ? selected : NO_SELECTION })
   }
   const current = (): Step => ({ doc: get().doc, tabId: get().tabId })
-  const cleared = { selected: NO_SELECTION, editingId: null, editingPart: null, gesture: null }
+  const cleared = { selected: NO_SELECTION, editingId: null, editingPart: null, gesture: null, openGroup: null }
 
   return {
     board: null,
@@ -106,9 +110,11 @@ export const useBoard = create<BoardState>((set, get) => {
 
     unload: () => set({ board: null, doc: NO_DOC, views: NO_VIEWS, tabId: '', history: EMPTY_HISTORY, ...cleared }),
 
-    commit: (doc, tabId) => {
+    commit: (next, tabId) => {
       get().endGesture()
-      if (doc === get().doc && (tabId === undefined || tabId === get().tabId)) return
+      if (next === get().doc && (tabId === undefined || tabId === get().tabId)) return
+      // Every copy of a linked group follows a change to one of them.
+      const doc = syncGroups(get().doc, next)
       const switching = tabId !== undefined && tabId !== get().tabId
       set({ doc, tabId: tabId ?? get().tabId, history: record(get().history, current()), ...(switching ? cleared : {}) })
     },
@@ -138,6 +144,10 @@ export const useBoard = create<BoardState>((set, get) => {
       if (!same) set({ selected: ids.length ? ids : NO_SELECTION })
     },
 
+    setOpenGroup: (openGroup) => {
+      if (openGroup !== get().openGroup) set({ openGroup })
+    },
+
     setEditing: (editingId, part = null) => set({ editingId, editingPart: editingId ? part : null }),
 
     beginGesture: () => {
@@ -152,7 +162,9 @@ export const useBoard = create<BoardState>((set, get) => {
     endGesture: () => {
       const before = get().gesture
       if (!before) return
-      set({ gesture: null, ...(before.doc !== get().doc ? { history: record(get().history, before) } : {}) })
+      // A drag or typing in one copy of a linked group is made in the others when it's done.
+      const doc = before.doc !== get().doc ? syncGroups(before.doc, get().doc) : get().doc
+      set({ gesture: null, doc, ...(before.doc !== doc ? { history: record(get().history, before) } : {}) })
     },
 
     cancelGesture: () => {
@@ -161,7 +173,7 @@ export const useBoard = create<BoardState>((set, get) => {
     },
 
     fixLayout: (doc) => {
-      if (doc !== get().doc) set({ doc })
+      if (doc !== get().doc) set({ doc: syncGroups(get().doc, doc) })
     },
 
     applyOutside: (doc, views) => {

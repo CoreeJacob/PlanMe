@@ -19,8 +19,10 @@ import {
   newTagForSelected,
   sendSelectedToBack,
   setOnSelected,
+  setRouteOnSelected,
   setStatusOnSelected,
   showDetails,
+  straightenSelected,
   toggleLockOnSelected,
   toggleStyleOnSelected,
   toggleTagOnSelected
@@ -91,18 +93,34 @@ const HEADS_SAID = { end: 'at the end', both: 'at both ends', none: 'none' }
 const WIDTHS = [2, 3.5, 5]
 const WIDTH_SAID = ['thin', 'medium', 'thick']
 
-/** The arrow-only buttons: line shape, heads, dashes and thickness. */
-function ArrowButtons({ arrow }: { arrow: ArrowItem }) {
+const ROUTES: Array<{ route: ArrowItem['route']; label: string; icon: 'straight' | 'elbow' | 'curve' }> = [
+  { route: 'straight', label: 'Straight — straight lines (drag the dots on it to bend it)', icon: 'straight' },
+  { route: 'elbow', label: 'Right-angled — across and down (drag its middle to move the turn)', icon: 'elbow' },
+  { route: 'curve', label: 'Curved — a smooth curve (drag the dots on it to shape it)', icon: 'curve' }
+]
+
+/** The arrow-only buttons: line style, straighten, heads, dashes and thickness. */
+function ArrowButtons({ arrow, open, onOpen }: { arrow: ArrowItem; open: boolean; onOpen: (open: boolean) => void }) {
   const widthIndex = Math.max(0, WIDTHS.indexOf(arrow.width))
+  const route = ROUTES.find((r) => r.route === arrow.route) ?? ROUTES[0]
   return (
     <>
-      <button
-        className={`toolbar-btn ${arrow.route === 'elbow' ? 'active' : ''}`}
-        title="Right-angled — the line goes across and down instead of straight"
-        onClick={() => setOnSelected('route', arrow.route === 'elbow' ? 'straight' : 'elbow')}
-      >
-        <Icon name="elbow" size={16} />
-      </button>
+      <Picker
+        label="Line — straight, right-angled or curved"
+        face={<Icon name={route.icon} size={16} />}
+        choices={ROUTES.map((r) => ({ value: r.route, label: r.label, face: <Icon name={r.icon} size={18} /> }))}
+        current={arrow.route}
+        open={open}
+        onOpen={onOpen}
+        onPick={(value) => setRouteOnSelected(value as ArrowItem['route'])}
+        className="shape-popover"
+      />
+      {!!arrow.bends?.length && arrow.route !== 'elbow' && (
+        <button className="toolbar-btn" title="Straighten — take out its bends" onClick={straightenSelected}>
+          <Icon name="straight" size={16} />
+          <span className="toolbar-note">×</span>
+        </button>
+      )}
       <button
         className="toolbar-btn"
         title={`Arrowheads — ${HEADS_SAID[arrow.heads]}. Click for ${HEADS_SAID[HEADS[(HEADS.indexOf(arrow.heads) + 1) % HEADS.length]]}`}
@@ -241,7 +259,7 @@ export function ItemToolbar({ view, size, items, lookup, editing, statuses, tags
           className="shape-popover"
         />
       )}
-      {arrow && isArrow(arrow) && <ArrowButtons arrow={arrow} />}
+      {arrow && isArrow(arrow) && <ArrowButtons arrow={arrow} open={open === 'route'} onOpen={opener('route')} />}
       {statusChoices && (
         <Picker
           label="Status — for tracking it: To do, Doing, Done…"

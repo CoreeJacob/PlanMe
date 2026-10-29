@@ -3,6 +3,8 @@
 
 import { useEffect, useRef } from 'react'
 import { dialogOpen, useApp } from '@/app/store'
+import { withGroupMates } from '@/board/groups'
+import { itemsOf } from '@/board/items'
 import { useBoard } from '@/board/store'
 import { isTyping } from '@/lib/dom'
 import { copySelected, deleteSelected, nudgeSelected, paste, startEditing } from './actions'
@@ -30,9 +32,15 @@ export function useCanvasKeys(onSpace: (down: boolean) => void, cancelDrag: () =
         e.preventDefault()
         latest.current.onSpace(true)
       } else if (e.key === 'Escape') {
-        // Escape backs out one thing at a time: a drag, then the tool, then the selection.
+        // Escape backs out one thing at a time: a drag, the tool, working inside a group, then the selection.
         if (latest.current.cancelDrag()) return
         if (useApp.getState().tool !== 'select') useApp.getState().setTool('select')
+        else if (useBoard.getState().openGroup) {
+          // Out of the group: what was picked inside it becomes the whole group again.
+          const { selected: inside, doc, tabId, setOpenGroup } = useBoard.getState()
+          setOpenGroup(null)
+          select(withGroupMates(inside, itemsOf(doc, tabId), null))
+        }
         else select([])
       } else if ((e.key === 'Backspace' || e.key === 'Delete') && selected.length) {
         e.preventDefault()

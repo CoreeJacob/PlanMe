@@ -18,6 +18,7 @@ export interface OutsideChange {
   /** The statuses, the tags, or the tabs' names or order, changed outside. */
   statuses: boolean
   tags: boolean
+  groups: boolean
   tabList: boolean
 }
 
@@ -50,7 +51,7 @@ export function mergeOutside(base: BoardDoc, mine: BoardDoc, theirs: BoardDoc): 
   const baseTabs = new Map(base.tabs.map((t) => [t.id, t]))
   const mineTabs = new Map(mine.tabs.map((t) => [t.id, t]))
   const theirIds = new Set(theirs.tabs.map((t) => t.id))
-  const result: OutsideChange = { doc: mine, tabs: new Map(), addedTabs: [], removedTabs: [], statuses: false, tags: false, tabList: false }
+  const result: OutsideChange = { doc: mine, tabs: new Map(), addedTabs: [], removedTabs: [], statuses: false, tags: false, groups: false, tabList: false }
 
   const tabs: Tab[] = []
   for (const t of theirs.tabs) {
@@ -79,11 +80,13 @@ export function mergeOutside(base: BoardDoc, mine: BoardDoc, theirs: BoardDoc): 
   result.statuses = statuses !== mine.statuses && !same(statuses, mine.statuses)
   const tags = same(theirs.tags ?? [], base.tags ?? []) ? mine.tags : theirs.tags
   result.tags = tags !== mine.tags && !same(tags ?? [], mine.tags ?? [])
+  const groups = same(theirs.groups ?? [], base.groups ?? []) ? mine.groups : theirs.groups
+  result.groups = groups !== mine.groups && !same(groups ?? [], mine.groups ?? [])
   const names = (list: readonly Tab[]): string => JSON.stringify(list.map((t) => [t.id, t.name]))
   result.tabList = names(tabs) !== names(mine.tabs) && !result.addedTabs.length && !result.removedTabs.length
 
-  const unchanged = tabs.length === mine.tabs.length && tabs.every((t, k) => t === mine.tabs[k]) && statuses === mine.statuses && tags === mine.tags
+  const unchanged = tabs.length === mine.tabs.length && tabs.every((t, k) => t === mine.tabs[k]) && statuses === mine.statuses && tags === mine.tags && groups === mine.groups
   if (unchanged) return null
-  result.doc = { ...mine, tabs, statuses, tags }
+  result.doc = { ...mine, tabs, statuses, tags, groups }
   return result
 }

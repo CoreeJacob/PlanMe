@@ -72,16 +72,30 @@ export function unlocked<T extends Item>(item: T): T {
 /** An arrow end moved by (dx, dy) if it's loose. Attached ends go wherever their item goes. */
 const moveEnd = (end: ArrowEnd, dx: number, dy: number): ArrowEnd => (end.item ? end : { ...end, x: end.x + dx, y: end.y + dy })
 
-/** An item moved by (dx, dy). An arrow moves only its loose ends. */
+/** An item moved by (dx, dy). An arrow moves its bends and loose ends (joined ends go with their items). */
 export function moved(item: Item, dx: number, dy: number): Item {
   if (item.type !== 'arrow') return { ...item, x: item.x + dx, y: item.y + dy }
-  if (item.from.item && item.to.item) return item
-  return { ...item, from: moveEnd(item.from, dx, dy), to: moveEnd(item.to, dx, dy) }
+  if (item.from.item && item.to.item && !item.bends?.length) return item
+  const bends = item.bends?.map((b) => ({ x: b.x + dx, y: b.y + dy }))
+  return { ...item, from: moveEnd(item.from, dx, dy), to: moveEnd(item.to, dx, dy), ...(bends ? { bends } : {}) }
 }
 
+/**
+ * Moves items. A bent arrow between two of them goes along too (its bends would otherwise stay
+ * behind); with only one of its ends moving, its bends stay where they are.
+ */
 export function moveItems(doc: BoardDoc, tabId: string, ids: readonly string[], dx: number, dy: number): BoardDoc {
   if (!dx && !dy) return doc
-  return updateItems(doc, tabId, ids, (i) => moved(i, dx, dy))
+  return updateItems(doc, tabId, withBentArrows(doc, tabId, ids), (i) => moved(i, dx, dy))
+}
+
+/** `ids`, plus bent arrows joining two of them (which go along when they're moved or resized together). */
+export function withBentArrows(doc: BoardDoc, tabId: string, ids: readonly string[]): string[] {
+  const moving = new Set(ids)
+  const along = itemsOf(doc, tabId)
+    .filter((i) => i.type === 'arrow' && !moving.has(i.id) && i.bends?.length && i.from.item && i.to.item && moving.has(i.from.item) && moving.has(i.to.item))
+    .map((i) => i.id)
+  return along.length ? [...ids, ...along] : (ids as string[])
 }
 
 /**
@@ -115,7 +129,8 @@ export function copiesOf(
   return items.map((i) => {
     const id = ids.get(i.id)!
     if (i.type !== 'arrow') return { ...i, id, x: i.x + dx, y: i.y + dy }
-    return { ...i, id, from: copyEnd(i.from), to: copyEnd(i.to) } satisfies ArrowItem
+    const bends = i.bends?.map((b) => ({ x: b.x + dx, y: b.y + dy }))
+    return { ...i, id, from: copyEnd(i.from), to: copyEnd(i.to), ...(bends ? { bends } : {}) } satisfies ArrowItem
   })
 }
 
@@ -232,7 +247,7 @@ export function besideRect(source: Rect, at: Point): Rect {
 export function newLike(source: Shape, id: string, rect: Rect): Shape {
   // Building out from a picture makes a note beside it (a second copy of the picture wouldn't help).
   if (source.type === 'image') return newItem('note', id, rect)
-  const { status: _status, link: _link, locked: _locked, tags: _tags, details: _details, ...look } = source
+  const { status: _status, link: _link, locked: _locked, tags: _tags, details: _details, group: _group, ...look } = source
   const fresh = { ...look, id, text: '', x: rect.x, y: rect.y, w: rect.w, h: rect.h } as Shape
   return fresh.type === 'todo' ? { ...fresh, entries: [newEntry()], auto: true } : fresh
 }

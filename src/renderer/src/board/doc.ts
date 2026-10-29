@@ -2,6 +2,7 @@
 // can keep earlier versions cheaply (unchanged tabs are shared, not copied).
 
 import type { BoardDoc, Tab } from '@shared/types'
+import { relinkCopies } from './groups'
 import { copiesOf } from './items'
 
 export const tabIndex = (doc: BoardDoc, id: string): number => doc.tabs.findIndex((t) => t.id === id)
@@ -44,12 +45,14 @@ export function duplicateTab(doc: BoardDoc, id: string, copy: Pick<Tab, 'id' | '
   const tab = doc.tabs.find((t) => t.id === id)
   if (!tab) return doc
   const ids = new Map(tab.items.map((i) => [i.id, newId()]))
-  const items = copiesOf(tab.items, 0, 0, newId, ids).map((i) =>
+  const copied = copiesOf(tab.items, 0, 0, newId, ids).map((i) =>
     i.type !== 'arrow' && i.link?.type === 'item' && ids.has(i.link.item) ? { ...i, link: { type: 'item' as const, item: ids.get(i.link.item)! } } : i
   )
-  const tabs = doc.tabs.slice()
-  tabs.splice(tabIndex(doc, id) + 1, 0, { ...copy, items })
-  return { ...doc, tabs }
+  // Copies of linked groups on it are new copies on the new tab, still linked.
+  const { items, doc: linked } = relinkCopies(doc, copy.id, copied, newId)
+  const tabs = linked.tabs.slice()
+  tabs.splice(tabIndex(linked, id) + 1, 0, { ...copy, items })
+  return { ...linked, tabs }
 }
 
 /** Removes a tab. The last tab can't be removed (a board always has one). */

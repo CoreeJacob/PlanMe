@@ -1,11 +1,12 @@
 // What can be done to items on the tab showing: adding, typing, deleting, copying, colouring…
 // Shared by the keys, the menus, the floating toolbar and the right-click menu.
 
-import { DEFAULT_VIEW, type ArrowEnd, type BoardDoc, type BoxShape, type Item, type Link, type Rect, type Shape, type Status, type Tag, type TodoItem } from '@shared/types'
+import { DEFAULT_VIEW, type ArrowEnd, type ArrowItem, type BoardDoc, type BoxShape, type Item, type Link, type Rect, type Shape, type Status, type Tag, type TodoItem } from '@shared/types'
 import { upgradeItem } from '@shared/upgrade'
 import { attempt, useApp } from '@/app/store'
 import { arrowsAttached, boxOf, detach, isArrow, isShape, lookupIn } from '@/board/arrows'
 import { arrange, type Alignment, type Spread } from '@/board/arrange'
+import { addToCopy, copyBounds, groupsOf, makeGroup, placeCopy, relinkCopies, renameGroup, ungrouped, unlinkCopies, withGroupMates } from '@/board/groups'
 import {
   addItems,
   copiesOf,
@@ -184,6 +185,44 @@ export function saveStatuses(statuses: Status[]): void {
   state().commit(withStatuses(state().doc, statuses))
 }
 
+// ---------- arrows ----------
+
+/** Straight, right-angled or curved. Bends carry over between straight and curved; a right-angled arrow's are its own. */
+export function setRouteOnSelected(route: ArrowItem['route']): void {
+  change((doc, tabId) =>
+    updateItems(doc, tabId, state().selected, (i) => {
+      if (i.type !== 'arrow' || i.route === route) return i
+      if (i.route !== 'elbow' && route !== 'elbow') return { ...i, route }
+      const { bends: _dropped, ...rest } = i
+      return { ...rest, route }
+    })
+  )
+}
+
+/** Takes all the bends out of the selected arrows. */
+export function straightenSelected(): void {
+  change((doc, tabId) =>
+    updateItems(doc, tabId, state().selected, (i) => {
+      if (i.type !== 'arrow' || !i.bends) return i
+      const { bends: _dropped, ...rest } = i
+      return rest
+    })
+  )
+}
+
+/** Takes one bend out of an arrow (double-clicking it). */
+export function removeBend(id: string, index: number): void {
+  change((doc, tabId) =>
+    updateItems(doc, tabId, [id], (i) => {
+      if (i.type !== 'arrow' || !i.bends?.[index]) return i
+      const bends = i.bends.filter((_, k) => k !== index)
+      if (bends.length) return { ...i, bends }
+      const { bends: _dropped, ...rest } = i
+      return rest
+    })
+  )
+}
+
 // ---------- tags and details ----------
 
 /** Adds a tag to the selected items, or takes it off if they all have it. One undo step. */
@@ -314,7 +353,71 @@ export function goBack(): void {
 
 /** Selects everything on the tab except locked things (like dragging across the whole tab). */
 export function selectAll(): void {
-  state().select(currentItems().filter((i) => !isLocked(i)).map((i) => i.id))
+  const items = currentItems()
+  state().select(withGroupMates(items.filter((i) => !isLocked(i)).map((i) => i.id), items, state().openGroup))
+}
+
+// ---------- linked groups ----------
+
+/** The copies (of linked groups) the selection is part of. */
+export const selectedCopies = (): Set<string> => new Set(selectedItems().flatMap((i) => (i.group ? [i.group.copy] : [])))
+
+/** Makes a linked group of the selection, asking its name. One undo step. */
+export async function groupSelected(): Promise<void> {
+  finishEditing()
+  const ids = state().selected
+  if (!ids.length) return
+  const name = (await useApp.getState().ask({ title: 'Make Group', label: 'A name for it, like “Hero” or “Shop”. Copies of it on other tabs stay linked.', value: '', confirmLabel: 'Make Group' }))?.trim()
+  if (!name) return
+  change((doc, tabId) => makeGroup(doc, tabId, ids, name, () => newId().slice(0, 8)), ids)
+}
+
+/** Unlinks the copies the selection is part of: their parts become ordinary items (other copies stay linked). */
+export function ungroupSelected(): void {
+  const copies = selectedCopies()
+  if (!copies.size) return
+  state().setOpenGroup(null)
+  change((doc) => unlinkCopies(doc, copies))
+}
+
+/** Adds the selected things that aren't in a group to the one copy that is selected (and so to every copy). */
+export function addSelectedToGroup(): void {
+  const [copy] = selectedCopies()
+  if (!copy) return
+  change((doc, tabId) => addToCopy(doc, tabId, copy, state().selected))
+}
+
+/** Takes the selected parts out of their group: here they become ordinary items, and they go from every other copy. */
+export function takeOutOfGroup(): void {
+  change((doc, tabId) => updateItems(doc, tabId, state().selected, (i) => ungrouped(i)))
+}
+
+/** Puts a copy of a group on the tab showing, its middle at `at` (or the middle of the screen). */
+export function placeGroupCopy(groupId: string, at?: { x: number; y: number }): void {
+  const { doc, tabId } = state()
+  const group = groupsOf(doc).find((g) => g.id === groupId)
+  const first = group?.copies[0]
+  const size = first && copyBounds(itemsOf(doc, first.tab), first.id)
+  if (!size) return
+  const area = visibleArea()
+  const middle = at ?? { x: area.x + area.w / 2, y: area.y + area.h / 2 }
+  const placed = placeCopy(doc, tabId, groupId, { x: middle.x - size.w / 2, y: middle.y - size.h / 2 }, () => newId().slice(0, 8))
+  finishEditing()
+  state().setOpenGroup(null)
+  state().commit(placed.doc)
+  state().select(placed.ids)
+}
+
+export async function renameGroupAsked(groupId: string): Promise<void> {
+  const group = groupsOf(state().doc).find((g) => g.id === groupId)
+  const name = group && (await useApp.getState().ask({ title: 'Rename Group', value: group.name, confirmLabel: 'Rename' }))?.trim()
+  if (name && name !== group.name) state().commit(renameGroup(state().doc, groupId, name))
+}
+
+/** Unlinks every copy of a group: they all become ordinary items, and the group goes. */
+export function deleteGroup(groupId: string): void {
+  const group = groupsOf(state().doc).find((g) => g.id === groupId)
+  if (group) state().commit(unlinkCopies(state().doc, new Set(group.copies.map((c) => c.id))))
 }
 
 /** Locks the selected items, or unlocks them if they're all locked already. One undo step. */
@@ -400,9 +503,12 @@ function selectionToCopy(): Item[] {
 const COPY_STEP = 24
 
 export function duplicateSelected(): void {
-  // Copies aren't locked, so they can be moved off the original.
+  // Copies aren't locked, so they can be moved off the original. A whole copy of a group is a new linked copy.
   const copies = copiesOf(selectionToCopy(), COPY_STEP, COPY_STEP, newId).map(unlocked)
-  if (copies.length) change((doc, tabId) => addItems(doc, tabId, copies), copies.map((c) => c.id))
+  if (!copies.length) return
+  const { doc, tabId } = state()
+  const relinked = relinkCopies(doc, tabId, copies, () => newId().slice(0, 8))
+  change(() => addItems(relinked.doc, tabId, relinked.items), relinked.items.map((c) => c.id))
 }
 
 export function nudgeSelected(dx: number, dy: number): void {
@@ -520,5 +626,8 @@ async function pasteItems(copied: Copied, key: string): Promise<void> {
     dy = Math.round(area.y + area.h / 2 - (bounds.y + bounds.h / 2))
   }
   const copies = copiesOf(copied.items, dx, dy, newId).map(unlocked)
-  change((doc, tabId) => addItems(doc, tabId, copies), copies.map((c) => c.id))
+  // From another board, groups don't come along: the parts are ordinary items.
+  const { doc, tabId } = state()
+  const relinked = copied.board && copied.board !== here ? { items: copies.map(ungrouped), doc } : relinkCopies(doc, tabId, copies, () => newId().slice(0, 8))
+  change(() => addItems(relinked.doc, tabId, relinked.items), relinked.items.map((c) => c.id))
 }

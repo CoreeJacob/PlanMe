@@ -3,7 +3,8 @@
 
 import { Icon, type IconName } from './Icon'
 import { SHAPE_CHOICES, shapeChoice } from './shapes'
-import { useApp, type Tool } from './store'
+import { useApp, type LowerPanel, type Tool } from './store'
+import { GroupsPanel } from './GroupsPanel'
 import { ImagesPanel } from './ImagesPanel'
 import { SearchField, SearchResults, useSearch } from './Search'
 import { TasksPanel } from './TasksPanel'
@@ -18,6 +19,12 @@ const TOOLS: Array<{ tool: Tool; label: string; tip?: string; key: string; icon:
   { tool: 'image', label: 'Image', tip: 'Image — click where it should go and pick a picture (or drop pictures from Finder)', key: 'I', icon: 'image' },
   { tool: 'arrow', label: 'Arrow', tip: 'Arrow — drag from one item to another to join them', key: 'A', icon: 'arrow' },
   { tool: 'section', label: 'Section', tip: 'Section — drag out a labelled area; whatever’s inside moves with it', key: 'S', icon: 'section' }
+]
+
+const LOWER_PANELS: Array<{ which: LowerPanel; label: string; icon: IconName }> = [
+  { which: 'tasks', label: 'Tasks', icon: 'tasks' },
+  { which: 'images', label: 'Images', icon: 'image' },
+  { which: 'groups', label: 'Groups', icon: 'group' }
 ]
 
 export function SidePanel() {
@@ -71,14 +78,14 @@ export function SidePanel() {
         <>
           {/* Below the tools: the board's tasks, or its pictures. */}
           <div className="panel-switch" role="tablist">
-            {(['tasks', 'images'] as const).map((which) => (
+            {LOWER_PANELS.map(({ which, label, icon }) => (
               <button key={which} role="tab" aria-selected={lower === which} className={`panel-tab ${lower === which ? 'active' : ''}`} onClick={() => setLower(which)}>
-                <Icon name={which === 'tasks' ? 'tasks' : 'image'} size={14} />
-                {which === 'tasks' ? 'Tasks' : 'Images'}
+                <Icon name={icon} size={14} />
+                {label}
               </button>
             ))}
           </div>
-          {lower === 'tasks' ? <TasksPanel /> : <ImagesPanel />}
+          {lower === 'tasks' ? <TasksPanel /> : lower === 'images' ? <ImagesPanel /> : <GroupsPanel />}
         </>
       )}
     </aside>

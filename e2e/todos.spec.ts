@@ -63,7 +63,11 @@ test('to-do lists: type lines, tick them, and their status follows (unless you p
   await app.click(`document.querySelector('[data-item-id="${list}"] .todo-title')`)
   await check('a list has only side handles', (await app.js<string>(`[...document.querySelectorAll('.handle')].map(h => h.dataset.handle).join()`)) === 'e,w')
 
-  const saved = await app.savedItems('Game', 0, 1)
+  // (Wait for the last tick to be saved: the item was saved before it.)
+  const saved = (await app.until(async () => {
+    const items = await app.savedItems('Game', 0, 1)
+    return items[0]?.entries?.length === 3 && items[0].entries.every((e: any) => e.done) ? items : null
+  })) ?? []
   await check('saved with its lines and ticks', saved[0]?.entries?.map((e: any) => (e.done ? '✓' : '') + e.text).join() === '✓Map,✓Enemies,✓Boss door', saved[0])
   await app.relaunch()
   await app.untilJs(`!!document.querySelector('.item-todo')`)

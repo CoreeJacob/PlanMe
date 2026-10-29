@@ -115,7 +115,12 @@ export async function openBoard(dir: string, { strict = false } = {}): Promise<O
     }
     tabs.push({ id, name, items })
   }
-  const doc = { tabs, statuses: board.statuses ?? DEFAULT_STATUSES, ...(board.tags?.length ? { tags: board.tags } : {}) }
+  const doc = {
+    tabs,
+    statuses: board.statuses ?? DEFAULT_STATUSES,
+    ...(board.tags?.length ? { tags: board.tags } : {}),
+    ...(board.groups?.length ? { groups: board.groups } : {})
+  }
   return { name: path.basename(dir), path: dir, doc, views }
 }
 

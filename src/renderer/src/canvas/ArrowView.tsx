@@ -2,7 +2,7 @@
 
 import { memo, useRef } from 'react'
 import type { ArrowItem, Shape } from '@shared/types'
-import { arrowPoints, halfway } from '@/board/arrows'
+import { arrowPoints, pointAlong } from '@/board/arrows'
 import { cleanHtml } from '@/board/richtext'
 import type { Point } from '@/lib/geometry'
 import { Editor } from './ItemView'
@@ -48,7 +48,7 @@ export const ArrowView = memo(function ArrowView({ arrow, from, to, editing, dim
   const startHead = arrow.heads === 'both'
   const endHead = arrow.heads !== 'none'
   const line = shorten(points, startHead, endHead, arrow.width * 1.5).map((p) => `${p.x},${p.y}`).join(' ')
-  const mid = halfway(points)
+  const mid = pointAlong(points, arrow.labelAt)
   const hasLabel = editing || arrow.text !== ''
 
   return (

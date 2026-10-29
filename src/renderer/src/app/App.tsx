@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import type { MenuCommand } from '@shared/types'
 import { flushSave, startSaving } from '@/board/saver'
 import { useBoard } from '@/board/store'
-import { bringSelectedToFront, duplicateSelected, linkSelected, selectAll, sendSelectedToBack, toggleLockOnSelected } from '@/canvas/actions'
+import { bringSelectedToFront, duplicateSelected, groupSelected, linkSelected, selectAll, sendSelectedToBack, toggleLockOnSelected, ungroupSelected } from '@/canvas/actions'
 import { zoomReset, zoomStep, zoomToFit, zoomToSelection } from '@/canvas/current'
 import { isTyping } from '@/lib/dom'
 import { cycleTab, goToBoards, newBoard, newTab } from './actions'
@@ -45,6 +45,10 @@ function runBoardCommand(command: MenuCommand): void {
       return zoomToSelection()
     case 'lock':
       return toggleLockOnSelected()
+    case 'group':
+      return void groupSelected()
+    case 'ungroup':
+      return ungroupSelected()
     case 'togglePanel':
       return app.setPanelOpen(!app.panelOpen)
     case 'toggleTags':

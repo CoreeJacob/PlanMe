@@ -6,6 +6,7 @@ import type { BoardSummary, BoxShape, Theme, View } from '@shared/types'
 import { readPref, writePref } from '@/lib/prefs'
 
 export type Screen = 'loading' | 'boards' | 'board'
+export type LowerPanel = 'tasks' | 'images' | 'groups'
 export type Tool = 'select' | 'hand' | 'note' | 'text' | 'box' | 'arrow' | 'section' | 'todo' | 'image'
 export type PlacingTool = Extract<Tool, 'note' | 'text' | 'box' | 'section' | 'todo' | 'image'>
 
@@ -66,7 +67,7 @@ interface AppState {
   /** Items that flash briefly: one just gone to (from the Tasks panel, search or a link), or ones changed from outside. */
   flashIds: readonly string[]
   /** What the side panel shows below the tools. */
-  lowerPanel: 'tasks' | 'images'
+  lowerPanel: LowerPanel
   /** The words being searched for (in the side panel, or the ⌘F box when the panel is hidden). */
   search: string
   /** The ⌘F box at the top of the board is open (only while the side panel is hidden). */
@@ -100,7 +101,7 @@ interface AppState {
   setDimRest(dim: boolean): void
   setDoneOpen(open: boolean): void
   flash(ids: readonly string[]): void
-  setLowerPanel(which: 'tasks' | 'images'): void
+  setLowerPanel(which: LowerPanel): void
   setSearch(search: string): void
   setFindOpen(open: boolean): void
   /** ⌘F: the side panel's search field if the panel is showing, otherwise the box at the top of the board. */
@@ -150,7 +151,7 @@ export const useApp = create<AppState>((set, get) => ({
   dimRest: false,
   doneOpen: readPref(DONE_KEY) === 'true',
   flashIds: [],
-  lowerPanel: readPref(LOWER_KEY) === 'images' ? 'images' : 'tasks',
+  lowerPanel: (['images', 'groups'] as const).find((p) => p === readPref(LOWER_KEY)) ?? 'tasks',
   search: '',
   findOpen: false,
   findRequest: 0,

@@ -3,7 +3,8 @@
 // new-item outlines, and the arrow being drawn.
 
 import type { Item, Rect, Shape, View } from '@shared/types'
-import { arrowPoints, isArrow, pinsOf, type Lookup, type Pin } from '@/board/arrows'
+import { arrowPoints, bendHandles, isArrow, pinsOf, pointAlong, type Lookup, type Pin } from '@/board/arrows'
+import { plainText } from '@/board/richtext'
 import type { Handle } from '@/board/items'
 import { boundsOf, type Point } from '@/lib/geometry'
 import type { Guide } from './snap'
@@ -51,9 +52,11 @@ interface Props {
   activeDot: ActiveDot | null
   /** The item showing its move grip (the one under the pointer). */
   gripped: Shape | null
+  /** Copies of linked groups to outline (selected, or being worked inside), with their names. */
+  groups: Array<{ copy: string; rect: Rect; name: string; open: boolean }>
 }
 
-export function Overlay({ view, size, selected, lookup, editingId, marquee, ghost, guides, target, drawing, dotted, activeDot, gripped }: Props) {
+export function Overlay({ view, size, selected, lookup, editingId, marquee, ghost, guides, target, drawing, dotted, activeDot, gripped, groups }: Props) {
   const screen = (r: Rect): { left: number; top: number; width: number; height: number } => {
     const p = toScreen(view, size, r)
     return { left: p.x, top: p.y, width: r.w * view.zoom, height: r.h * view.zoom }
@@ -83,6 +86,11 @@ export function Overlay({ view, size, selected, lookup, editingId, marquee, ghos
       ))}
       {group && <div className="selection-outline group" style={screen(group)} />}
       {target && <div className="attach-target" style={screen(target)} />}
+      {groups.map((g) => (
+        <div key={g.copy} className={`group-outline ${g.open ? 'open' : ''}`} style={screen(g.rect)}>
+          <span className="group-label">{g.open ? `Inside “${g.name}” — Esc to leave` : g.name}</span>
+        </div>
+      ))}
       {single && !isArrow(single) && !single.locked && single.id !== editingId && (
         <div className="handles" style={screen(single)}>
           {handlesFor(single).map((h) => (
@@ -97,6 +105,22 @@ export function Overlay({ view, size, selected, lookup, editingId, marquee, ghos
           ))}
         </div>
       )}
+      {/* A selected arrow's bends, and places to add one (or a right-angled arrow's middle run). */}
+      {single &&
+        isArrow(single) &&
+        !single.locked &&
+        single.id !== editingId &&
+        bendHandles(
+          single,
+          lookup,
+          // Keep clear of its label (roughly as wide as its words), so the label can be grabbed.
+          single.text ? { p: pointAlong(arrowPoints(single, lookup), single.labelAt), reach: Math.min(220, plainText(single.text).length * 8 + 12) / 2 + 10 } : undefined
+        ).map((h, k) => {
+          const p = toScreen(view, size, h.p)
+          const data = h.kind === 'bend' ? { 'data-bend': h.index } : h.kind === 'add' ? { 'data-bend-add': h.index } : { 'data-elbow': '' }
+          const tip = h.kind === 'bend' ? 'Bend — drag to move it, double-click to take it out' : h.kind === 'add' ? 'Drag to bend the arrow here' : 'Drag to move the middle of the arrow'
+          return <div key={k} className={`bend-handle ${h.kind}`} title={tip} style={{ left: p.x, top: p.y }} {...data} />
+        })}
       {single && isArrow(single) && !single.locked &&
         (() => {
           const points = arrowPoints(single, lookup)

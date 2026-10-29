@@ -50,6 +50,8 @@ const GROUPS: Array<{ title: string; keys: Array<[string, string]> }> = [
       ['⌘C  ⌘X  ⌘V  ⌘D', 'Copy, cut, paste, duplicate'],
       ['⌘]  ⌘[', 'Bring to front, send to back'],
       ['⇧⌘L', 'Lock or unlock'],
+      ['⌘G  ⇧⌘G', 'Make a linked group, ungroup'],
+      ['Double-click a group', 'Work inside it (Esc to leave)'],
       ['⌘K', 'Link to a tab, item or web page'],
       ['⌘E', 'Show or hide the details pane'],
       ['⌫', 'Delete'],

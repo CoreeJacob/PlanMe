@@ -15,8 +15,10 @@ import { useContextMenu, type MenuEntry } from '@/app/ContextMenu'
 import { Icon } from '@/app/Icon'
 import { isPlacingTool, useApp, type PlacingTool } from '@/app/store'
 import { IMAGE_DRAG } from '@/app/ImagesPanel'
+import { GROUP_DRAG } from '@/app/GroupsPanel'
+import { copyBounds, groupOf, groupsOf, withGroupMates } from '@/board/groups'
 import { useDimFilter } from '@/app/TasksPanel'
-import { arrowPoints, boxOf, crossesBox, isArrow, isShape, lookupIn, nearestPin, pinPoint } from '@/board/arrows'
+import { arrowPoints, boxOf, controlPoints, crossesBox, fractionAlong, isArrow, isShape, lookupIn, nearestPin, pinPoint } from '@/board/arrows'
 import { scaleItems } from '@/board/arrange'
 import { besideRect, isLocked, itemsOf, moveItems, resizeRect, updateItems, type Handle } from '@/board/items'
 import { linkTarget, linkTip } from '@/board/links'
@@ -36,8 +38,14 @@ import {
   duplicateSelected,
   finishEditing,
   followLink,
+  groupSelected,
+  placeGroupCopy,
+  takeOutOfGroup,
+  ungroupSelected,
+  addSelectedToGroup,
   linkSelected,
   newTagForSelected,
+  removeBend,
   selectAll,
   sendSelectedToBack,
   setLink,
@@ -86,6 +94,13 @@ type Drag =
   | { kind: 'select'; start: Point; keep: string[]; from?: Point }
   | { kind: 'move'; start: Point; startScreen: Point; base: BoardDoc; ids: string[]; moving: boolean }
   | { kind: 'resize'; start: Point; base: BoardDoc; item: Shape; handle: Handle }
+  /**
+   * Dragging a bend on an arrow (`index` among its bends), or a place to add one (`insert`), or a
+   * right-angled arrow's middle run (`elbow`).
+   */
+  | { kind: 'bend'; base: BoardDoc; arrow: ArrowItem; index: number; insert: boolean; elbow: boolean; startScreen: Point; moving: boolean }
+  /** Sliding an arrow's label along it. */
+  | { kind: 'label'; base: BoardDoc; arrow: ArrowItem; startScreen: Point; moving: boolean }
   /** Resizing several things together, by a handle on the box round them all. */
   | { kind: 'groupResize'; start: Point; base: BoardDoc; box: Rect; ids: string[]; handle: Handle }
 
@@ -107,6 +122,7 @@ export function Canvas() {
   const editingId = useBoard((s) => s.editingId)
   const editingPart = useBoard((s) => s.editingPart)
   const statuses = useBoard((s) => s.doc.statuses)
+  const openGroup = useBoard((s) => s.openGroup)
   // Links can go to other tabs, so whether one still works depends on the whole board.
   const doc = useBoard((s) => s.doc)
   const dimFilter = useDimFilter()
@@ -209,7 +225,7 @@ export function Canvas() {
   /** Escape during a drag puts things back as they were. */
   const cancelDrag = (): void => {
     const d = dragRef.current
-    if (d?.kind === 'move' || d?.kind === 'resize' || d?.kind === 'groupResize' || d?.kind === 'arrowEnd') useBoard.getState().cancelGesture()
+    if (d && d.kind !== 'pan' && d.kind !== 'place' && d.kind !== 'arrow' && d.kind !== 'select') useBoard.getState().cancelGesture()
     endDrag()
   }
 
@@ -297,6 +313,14 @@ export function Canvas() {
       setDrag({ kind: 'arrowEnd', base: board.doc, arrow: only, end })
       return
     }
+    // A selected arrow's bends: drag one, or a place between them to add one.
+    const bend = target.closest<HTMLElement>('[data-bend], [data-bend-add], [data-elbow]')
+    if (bend && only && isArrow(only)) {
+      const { bend: at, bendAdd } = bend.dataset
+      const index = Number(at ?? bendAdd ?? 0)
+      setDrag({ kind: 'bend', base: board.doc, arrow: only, index, insert: bendAdd !== undefined, elbow: 'elbow' in bend.dataset, startScreen: { x: e.clientX, y: e.clientY }, moving: false })
+      return
+    }
     const handle = target.closest<HTMLElement>('[data-handle]')?.dataset.handle as Handle | undefined
     if (handle && only && isShape(only)) {
       setDrag({ kind: 'resize', start, base: board.doc, item: only, handle })
@@ -316,12 +340,24 @@ export function Canvas() {
     // An item's move grip, or the item itself.
     const hit = target.closest<HTMLElement>('[data-grip]')?.dataset.grip ?? target.closest<HTMLElement>('[data-item-id]')?.dataset.itemId
     if (hit) {
+      // A part of a linked group picks the whole copy, unless that copy is being worked inside.
+      const tabItems = itemsOf(board.doc, board.tabId)
+      if (board.openGroup && itemById(hit)?.group?.copy !== board.openGroup) board.setOpenGroup(null)
+      const mates = withGroupMates([hit], tabItems, useBoard.getState().openGroup)
       if (e.shiftKey) {
         // Shift-click adds to (or takes away from) the selection.
-        if (board.selected.includes(hit)) return board.select(board.selected.filter((id) => id !== hit))
-        board.select([...board.selected, hit])
-      } else if (!board.selected.includes(hit)) {
-        board.select([hit])
+        if (board.selected.includes(hit)) return board.select(board.selected.filter((id) => !mates.includes(id)))
+        board.select([...board.selected, ...mates.filter((id) => !board.selected.includes(id))])
+      } else if (mates.some((id) => !board.selected.includes(id))) {
+        // (Including when only part of a group was selected, from working inside it.)
+        board.select(mates)
+      }
+      // An arrow's label: slide it along the arrow.
+      const labelled = itemById(hit)
+      if (target.closest('.arrow-label') && labelled && isArrow(labelled) && !labelled.locked && !e.shiftKey) {
+        board.select(mates)
+        setDrag({ kind: 'label', base: board.doc, arrow: labelled, startScreen: { x: e.clientX, y: e.clientY }, moving: false })
+        return
       }
       // A locked item doesn't move: dragging from it selects things across the board instead, as
       // if it were empty space (and a click just selects it).
@@ -347,7 +383,10 @@ export function Canvas() {
 
     // Empty space: drag across items to select them.
     const keep = e.shiftKey ? board.selected : NO_SELECTION
-    if (!e.shiftKey) board.select([])
+    if (!e.shiftKey) {
+      board.select([])
+      board.setOpenGroup(null)
+    }
     setDrag({ kind: 'select', start, keep })
   }
 
@@ -407,7 +446,8 @@ export function Canvas() {
       const lookup = lookupIn(all)
       // Anything the box touches, except sections, which it must go all the way round, and locked things.
       const crossed = all.filter((i) => !i.locked && (isSection(i) ? within(i, r) : overlaps(boxOf(i, lookup), r))).map((i) => i.id)
-      board.select([...d.keep, ...crossed.filter((id) => !d.keep.includes(id))])
+      const picked = withGroupMates(crossed, all, board.openGroup)
+      board.select([...d.keep, ...picked.filter((id) => !d.keep.includes(id))])
     } else if (d.kind === 'move') {
       if (!d.moving) {
         if (Math.hypot(e.clientX - d.startScreen.x, e.clientY - d.startScreen.y) < DRAG_START) return
@@ -427,6 +467,34 @@ export function Canvas() {
         setGuides(snap.guides)
       } else setGuides(NO_GUIDES)
       board.preview(moveItems(d.base, board.tabId, d.ids, dx, dy))
+    } else if (d.kind === 'bend' || d.kind === 'label') {
+      if (!d.moving) {
+        if (Math.hypot(e.clientX - d.startScreen.x, e.clientY - d.startScreen.y) < DRAG_START) return
+        setDrag({ ...d, moving: true })
+      }
+      const lookup = lookupIn(itemsOf(d.base, board.tabId))
+      if (d.kind === 'label') {
+        const labelAt = Math.round(fractionAlong(arrowPoints(d.arrow, lookup), p) * 1000) / 1000
+        board.preview(updateItems(d.base, board.tabId, [d.arrow.id], (a) => ({ ...a, labelAt })))
+        return
+      }
+      let at = p
+      const bends = [...(d.arrow.bends ?? [])]
+      if (!d.elbow) {
+        // Lines up with the points either side (so a bend can square a line off), unless ⌘ is held.
+        const points = controlPoints({ ...d.arrow, bends: d.insert ? [...bends.slice(0, d.index), p, ...bends.slice(d.index)] : bends }, lookup)
+        const [before, after] = [points[d.index], points[d.index + 2]]
+        const near = SNAP_DISTANCE / zoom
+        if (!e.metaKey) {
+          const x = [before.x, after.x].find((v) => Math.abs(v - p.x) < near)
+          const y = [before.y, after.y].find((v) => Math.abs(v - p.y) < near)
+          at = { x: x ?? p.x, y: y ?? p.y }
+        }
+      }
+      if (d.elbow) bends.splice(0, bends.length, at)
+      else if (d.insert) bends.splice(d.index, 0, at)
+      else bends[d.index] = at
+      board.preview(updateItems(d.base, board.tabId, [d.arrow.id], (a) => ({ ...a, bends })))
     } else if (d.kind === 'groupResize') {
       // Corners keep the shape (Shift stretches); sides stretch.
       const keepShape = d.handle.length === 2 && !e.shiftKey
@@ -484,7 +552,7 @@ export function Canvas() {
         addArrow(d.from, d.to)
       }
       useApp.getState().setTool('select')
-    } else if (d.kind === 'move' || d.kind === 'resize' || d.kind === 'groupResize' || d.kind === 'arrowEnd') {
+    } else if (d.kind === 'move' || d.kind === 'resize' || d.kind === 'groupResize' || d.kind === 'arrowEnd' || d.kind === 'bend' || d.kind === 'label') {
       useBoard.getState().endGesture()
     }
     endDrag()
@@ -495,12 +563,21 @@ export function Canvas() {
     // The canvas holds on to the pointer during a press, so the event says it was on the canvas.
     // Look at what's really under the pointer.
     const target = document.elementFromPoint(e.clientX, e.clientY)
+    // Double-clicking a bend takes it out.
+    const bend = target?.closest<HTMLElement>('[data-bend]')
+    const only = onlySelected()
+    if (bend && only && isArrow(only)) return removeBend(only.id, Number(bend.dataset.bend))
+    // The places to add a bend sit on the line: double-clicking one labels the arrow, like the line.
+    if (target?.closest('[data-bend-add], [data-elbow]') && only && isArrow(only)) return startEditing(only.id)
     // Handles (for resizing, or an arrow's ends) aren't empty space: no new note there.
     if (!target || target.closest('.item-editor, .zoom-controls, .item-toolbar, [data-handle], [data-end], [data-dot], [data-status-badge], [data-link-badge], [data-details-badge], [data-grip]')) return
     const hit = target.closest<HTMLElement>('[data-item-id]')?.dataset.itemId
     // Double-click an item to type in it (in a to-do list, the line or title clicked), or empty
     // space for a new sticky note.
     const part = target.closest<HTMLElement>('[data-entry]')?.dataset.entry ?? (target.closest('.todo-head') ? 'title' : null)
+    // A part of a linked group: work inside that copy, starting with typing in what was clicked.
+    const copy = hit ? itemById(hit)?.group?.copy : undefined
+    if (copy) useBoard.getState().setOpenGroup(copy)
     if (hit) startEditing(hit, part)
     else addItem('note', boardPoint(e))
   }
@@ -541,7 +618,7 @@ export function Canvas() {
     }
     if (!board.selected.includes(hit)) {
       finishEditing()
-      board.select([hit])
+      board.select(withGroupMates([hit], itemsOf(board.doc, board.tabId), board.openGroup))
     }
     const chosen = itemsOf(board.doc, board.tabId).filter((i) => useBoard.getState().selected.includes(i.id))
     const entries: MenuEntry[] = []
@@ -584,6 +661,17 @@ export function Canvas() {
       const arranging = [...ALIGN_CHOICES, ...(shapes.length > 2 ? SPREAD_CHOICES : [])]
       entries.push({ label: 'Align', icon: 'alignLeft', submenu: arranging.map((c) => ({ label: c.label.split(' — ')[0], icon: c.icon, onSelect: () => arrangeSelected(c.value) })) })
     }
+    // Linked groups: make one, add to one, take out of one, or unlink a copy.
+    const copies = new Set(chosen.flatMap((i) => (i.group ? [i.group.copy] : [])))
+    const group = copies.size === 1 ? groupOf(board.doc, chosen.find((i) => i.group)) : undefined
+    const loose = chosen.filter((i) => !i.group)
+    if (loose.length) entries.push({ label: 'Make Group…', icon: 'group', hint: '⌘G', onSelect: () => void groupSelected() })
+    if (group && loose.length) entries.push({ label: `Add to “${group.name}”`, icon: 'group', onSelect: addSelectedToGroup })
+    if (group && board.openGroup && chosen.every((i) => i.group?.copy === board.openGroup)) {
+      entries.push({ label: `Take Out of “${group.name}”`, onSelect: takeOutOfGroup })
+    } else if (copies.size) {
+      entries.push({ label: group && group.copies.length > 1 ? `Unlink from “${group.name}”` : 'Ungroup', hint: '⇧⌘G', onSelect: ungroupSelected })
+    }
     entries.push(
       { label: allLocked ? 'Unlock' : 'Lock', icon: allLocked ? 'unlock' : 'lock', hint: '⇧⌘L', onSelect: toggleLockOnSelected },
       { label: 'Zoom to Selection', icon: 'fit', hint: '⇧2', onSelect: zoomToSelection },
@@ -608,13 +696,22 @@ export function Canvas() {
   const spacing = gridSpacing(view.zoom)
   const selectedItems = selectedIds.length ? items.filter((i) => selectedIds.includes(i.id)) : NO_ITEMS
   // A press that hasn't become a drag yet (it may just be a click) doesn't count.
-  const pressOnly = (drag?.kind === 'move' && !drag.moving) || (drag?.kind === 'arrowEnd' && drag.grab && !drag.grab.moving)
+  const pressOnly =
+    ((drag?.kind === 'move' || drag?.kind === 'bend' || drag?.kind === 'label') && !drag.moving) || (drag?.kind === 'arrowEnd' && drag.grab && !drag.grab.moving)
   const busy = drag !== null && drag.kind !== 'pan' && !pressOnly
   const cursor = drag?.kind === 'pan' ? 'panning' : tool === 'hand' || spaceDown ? 'can-pan' : isPlacingTool(tool) || tool === 'arrow' ? 'placing' : ''
   const lookup = lookupIn(items)
   // The move grip shows on the item under the pointer, while nothing's being dragged or typed in it.
   const gripItem = gripId && !busy && tool === 'select' && !spaceDown && gripId !== editingId ? items.find((i) => i.id === gripId) : undefined
   const gripped = gripItem && isShape(gripItem) ? gripItem : null
+  // Outlines round the copies of linked groups that are selected (or worked inside), with their names.
+  const outlined = new Set(selectedItems.flatMap((i) => (i.group ? [i.group.copy] : [])))
+  if (openGroup) outlined.add(openGroup)
+  const groupOutlines = [...outlined].flatMap((copy) => {
+    const rect = copyBounds(items, copy)
+    const group = groupsOf(doc).find((g) => g.copies.some((c) => c.id === copy))
+    return rect && group ? [{ copy, rect, name: group.name, open: copy === openGroup }] : []
+  })
   // Dots show on every item while an arrow is being drawn or moved; otherwise on the item under
   // the pointer and the one selected (not while typing in it, or during other drags).
   const drawingArrow = drag?.kind === 'arrow' || (drag?.kind === 'arrowEnd' && !pressOnly)
@@ -645,12 +742,19 @@ export function Canvas() {
       onContextMenu={onContextMenu}
       // Pictures dropped from Finder (or another app) land where they're dropped.
       onDragOver={(e) => {
-        if (!e.dataTransfer.types.includes('Files') && !e.dataTransfer.types.includes(IMAGE_DRAG)) return
+        if (!['Files', IMAGE_DRAG, GROUP_DRAG].some((type) => e.dataTransfer.types.includes(type))) return
         e.preventDefault()
         e.dataTransfer.dropEffect = 'copy'
       }}
       onDrop={(e) => {
         // A picture from the Images panel: it's already in the board, so just place it.
+        // A group from the Groups panel: a new linked copy, centred where it's dropped.
+        const group = e.dataTransfer.getData(GROUP_DRAG)
+        if (group) {
+          e.preventDefault()
+          placeGroupCopy(group, boardPoint(e))
+          return
+        }
         const fromPanel = e.dataTransfer.getData(IMAGE_DRAG)
         if (fromPanel) {
           e.preventDefault()
@@ -704,6 +808,7 @@ export function Canvas() {
         dotted={dotted}
         activeDot={activeDot}
         gripped={gripped}
+        groups={groupOutlines}
       />
 
       {selectedItems.length > 0 && !busy && <ItemToolbar view={view} size={size} items={selectedItems} lookup={lookup} editing={editingId !== null} statuses={statuses} tags={tagsOf(doc)} />}

@@ -4,7 +4,7 @@
 import type { BoardDoc, Rect, Shape } from '@shared/types'
 import { boundsOf, type Point } from '@/lib/geometry'
 import { isShape, lookupIn } from './arrows'
-import { itemsOf, MIN_SIZE, moved, updateItems } from './items'
+import { itemsOf, MIN_SIZE, moved, updateItems, withBentArrows } from './items'
 import { contentsOf, isSection } from './sections'
 
 export type Alignment = 'left' | 'centre' | 'right' | 'top' | 'middle' | 'bottom'
@@ -78,12 +78,13 @@ export function scaleItems(doc: BoardDoc, tabId: string, ids: readonly string[],
   const sy = to.h / from.h
   const x = (v: number): number => to.x + (v - from.x) * sx
   const y = (v: number): number => to.y + (v - from.y) * sy
-  return updateItems(doc, tabId, ids, (i) => {
+  return updateItems(doc, tabId, withBentArrows(doc, tabId, ids), (i) => {
     if (i.locked) return i
     if (i.type === 'arrow') {
-      if (i.from.item && i.to.item) return i
+      if (i.from.item && i.to.item && !i.bends?.length) return i
       const end = (e: typeof i.from): typeof i.from => (e.item ? e : { ...e, x: x(e.x), y: y(e.y) })
-      return { ...i, from: end(i.from), to: end(i.to) }
+      const bends = i.bends?.map((b) => ({ x: x(b.x), y: y(b.y) }))
+      return { ...i, from: end(i.from), to: end(i.to), ...(bends ? { bends } : {}) }
     }
     const placed = { x: x(i.x), y: y(i.y), w: Math.max(MIN_SIZE, i.w * sx) }
     if (i.type === 'text') return { ...i, ...placed, fontSize: keepsShape ? Math.max(4, i.fontSize * sx) : i.fontSize }

@@ -61,6 +61,7 @@ To make a new board, make a folder with a board.json and a file for each of its 
   it fades on the board) or \`other\`. Colours: grey, blue, green, red, orange, yellow, purple, pink, teal.
 - \`tags\`: optional, the board's own tags: what area of the game something is part of. Same colours
   as statuses. To use a new tag, add it here first.
+- \`groups\`: optional, linked groups (see below).
 
 ## tabs/<tab id>.json
 
@@ -89,6 +90,7 @@ The point 0,0 is in the middle of a new tab's screen, and a laptop screen shows 
 | \`locked\` | optional: \`true\` stops the person moving, resizing or deleting it by accident |
 | \`tags\` | optional: ids of the board's tags, e.g. \`["art", "combat"]\` |
 | \`details\` | optional: longer notes behind the short \`text\`, as the same simple HTML plus \`<ul>\`/\`<ol>\` and \`<li>\` lists. Put long descriptions here and keep \`text\` short |
+| \`group\` | optional: this is part of a linked group (arrows can have this too); see below |
 
 ### The kinds, with their own fields and usual sizes
 
@@ -122,9 +124,29 @@ The point 0,0 is in the middle of a new tab's screen, and a laptop screen shows 
 - An end joined to an item has its \`item\` id (and \`x\`, \`y\` roughly where it was, as a fallback);
   it meets the item on the side facing the other end. A loose end has \`item: null\` and sits at \`x\`, \`y\`.
   Arrows join to notes, text, boxes, to-do lists and pictures, not sections.
-- \`route\`: straight or elbow. \`heads\`: end, both or none. \`color\`: a text colour. \`width\`: 2, 3.5 or 5.
+- \`route\`: straight, elbow (right angles) or curve. \`heads\`: end, both or none. \`color\`: a text colour.
+  \`width\`: 2, 3.5 or 5.
+- \`bends\`: optional points (\`[{ "x": 0, "y": -150 }]\`) a straight or curved arrow goes through, in order,
+  to route it round things in the way. An elbow arrow uses only the first: where its middle run goes.
+- \`labelAt\`: optional, where the label sits along the arrow, from 0 (start) to 1 (end); 0.5 if left out.
 - \`text\` is an optional label. An optional \`pin\` (\`{ "x": 1, "y": 0.5 }\`, fractions of the item's
   width and height) fixes an end to one spot on the item's edge.
+
+## Linked groups
+
+A group (say "Hero": a note and its gear) can have a copy on several tabs, and the copies stay
+the same: change a part in one copy and PlanMe makes the same change in every copy.
+
+- board.json \`groups\`: \`[{ "id": "g1", "name": "Hero", "copies": [{ "id": "c1", "tab": "a1", "x": 0, "y": 0 }, { "id": "c2", "tab": "b2", "x": 600, "y": 200 }] }]\`.
+  Each copy has the tab it's on and where it is (the top-left of its parts).
+- Each part of a copy is an ordinary item with \`"group": { "id": "g1", "copy": "c1", "member": "p0" }\`.
+  \`member\` names the part, and is the same in every copy; ids differ per copy. A part's place within
+  the group is its \`x\`, \`y\` minus its copy's \`x\`, \`y\`, the same in every copy.
+- **Changing a part:** if PlanMe is open, change it in one copy and PlanMe updates the others. If it
+  isn't, make the same change to that part in every copy.
+- **Moving a whole copy:** move all its parts by the same amount and change that copy's \`x\`, \`y\` to match.
+- Easiest of all: leave making, adding to or removing groups to the person; edit parts' words,
+  details, statuses and tags.
 
 ## A whole tab file
 

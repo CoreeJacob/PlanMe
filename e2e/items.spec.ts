@@ -56,7 +56,11 @@ test('place notes, text and boxes, type in them, and they are saved', async ({ a
   await app.key('Escape', 'Escape')
   await check('its words changed', (await app.item(note.id)).text === 'Final boss')
 
-  const saved = await app.savedItems('Game', 0, 4)
+  // Wait for the last change to be saved (the file already had four items before it).
+  const saved = await app.until(async () => {
+    const items = await app.savedItems('Game', 0, 4)
+    return items.some((i: any) => i.text === 'Final boss') ? items : null
+  }) ?? []
   await check('saved to the tab’s file', saved.map((i: any) => `${i.type}:${i.text}`).join() === 'note:Final boss,note:Second,text:Act 1,box:Start', saved)
   await app.relaunch()
   await app.untilJs(`document.querySelectorAll('.item').length === 4`)

@@ -46,7 +46,10 @@ test('locked things stay put but can still be clicked and typed in', async ({ ap
   await app.menuCommand('lock')
   await check('⇧⌘L locks it, showing a padlock', await app.js(`!!${lockBadge(map)}`))
   await check('no resize handles on a locked item', !(await app.js(`!!document.querySelector('[data-handle]')`)))
-  const [saved] = await app.savedItems('Game', 0, 2)
+  const [saved] = (await app.until(async () => {
+    const items = await app.savedItems('Game', 0, 2)
+    return items[0]?.locked ? items : null
+  })) ?? [{}]
   await check('the lock is saved', saved.locked === true, saved)
 
   // Dragging from it selects across the board instead of moving it.

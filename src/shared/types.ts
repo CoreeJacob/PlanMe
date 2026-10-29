@@ -36,6 +36,33 @@ interface ItemBase extends Rect {
   tags?: string[]
   /** Longer notes behind its words, as simple HTML like `text` plus bullet lists. */
   details?: string
+  /** It's part of a linked group (see Group). */
+  group?: GroupPart
+}
+
+/** Which group an item is part of, in which copy of it, and which part it is (the same in every copy). */
+export interface GroupPart {
+  id: string
+  copy: string
+  member: string
+}
+
+/** One copy of a group: the tab it's on, and where it is (its parts are placed from here). */
+export interface GroupCopy {
+  id: string
+  tab: string
+  x: number
+  y: number
+}
+
+/**
+ * A linked group, like "Hero": things that move together, with a copy on any number of tabs.
+ * A change to a part in one copy is made to that part in every copy; only where each copy is differs.
+ */
+export interface Group {
+  id: string
+  name: string
+  copies: GroupCopy[]
 }
 
 /** A label for what area of the game something belongs to ("Art", "Combat"), per board. Its colour is a name. */
@@ -159,7 +186,15 @@ export interface ArrowItem {
   text: string
   from: ArrowEnd
   to: ArrowEnd
-  route: 'straight' | 'elbow'
+  /** Straight lines, right angles, or a smooth curve. */
+  route: 'straight' | 'elbow' | 'curve'
+  /**
+   * Points it bends through, from start to end (straight and curved arrows). A right-angled arrow
+   * uses the first one only: where its middle run goes.
+   */
+  bends?: Array<{ x: number; y: number }>
+  /** Where its label sits along it, from 0 (the start) to 1 (the end); the middle if not set. */
+  labelAt?: number
   /** Which ends have arrowheads. */
   heads: 'end' | 'both' | 'none'
   dashed: boolean
@@ -168,6 +203,8 @@ export interface ArrowItem {
   width: number
   /** Locked: its ends can't be moved, and it can't be deleted. */
   locked?: boolean
+  /** It's part of a linked group. */
+  group?: GroupPart
 }
 
 /** The items that take up a box on the board (everything but arrows). */
@@ -202,6 +239,8 @@ export interface BoardDoc {
   statuses: Status[]
   /** Missing until the board has any (see board/tags.ts tagsOf). */
   tags?: Tag[]
+  /** Linked groups; missing until the board has any (see board/groups.ts groupsOf). */
+  groups?: Group[]
 }
 
 /** board.json, inside the board's folder. */
@@ -211,6 +250,7 @@ export interface BoardFile {
   /** Missing in boards made before statuses: they get the usual four. */
   statuses?: Status[]
   tags?: Tag[]
+  groups?: Group[]
 }
 
 /** tabs/<id>.json, inside the board's folder. */
@@ -299,6 +339,8 @@ export type MenuCommand =
   | 'zoomSelection'
   | 'shortcuts'
   | 'toggleTags'
+  | 'group'
+  | 'ungroup'
   | 'details'
   | 'themeSystem'
   | 'themeLight'

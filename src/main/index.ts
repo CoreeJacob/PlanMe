@@ -191,6 +191,8 @@ function buildMenu(theme: Theme): void {
           { label: 'Duplicate', accelerator: 'CmdOrCtrl+D', click: send('duplicate') },
           { label: 'Link to…', accelerator: 'CmdOrCtrl+K', click: send('link') },
           { label: 'Lock or Unlock', accelerator: 'Shift+CmdOrCtrl+L', click: send('lock') },
+          { label: 'Make Group…', accelerator: 'CmdOrCtrl+G', click: send('group') },
+          { label: 'Ungroup', accelerator: 'Shift+CmdOrCtrl+G', click: send('ungroup') },
           { type: 'separator' },
           { label: 'Find…', accelerator: 'CmdOrCtrl+F', click: send('find') },
           { type: 'separator' },

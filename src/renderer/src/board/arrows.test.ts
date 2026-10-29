@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { ArrowItem, Item, Shape } from '@shared/types'
 import { sideFacing } from '@/lib/geometry'
-import { arrowPoints, arrowsAttached, boxOf, crossesBox, detach, halfway, lookupIn, nearestPin, pinSide, pinsOf } from './arrows'
-import { copiesOf, moved, newArrow, newItem } from './items'
+import { arrowPoints, arrowsAttached, bendHandles, boxOf, crossesBox, detach, fractionAlong, lookupIn, nearestPin, pinSide, pinsOf, pointAlong } from './arrows'
+import { copiesOf, moved, moveItems, newArrow, newItem } from './items'
 
 const box = (id: string, x: number, y: number, w = 100, h = 100): Shape => newItem('box', id, { x, y, w, h })
 const joined = (from: string, to: string, route: ArrowItem['route'] = 'straight'): ArrowItem => ({
@@ -88,16 +88,16 @@ describe('right-angled arrows', () => {
 })
 
 describe('labels and bounds', () => {
-  it('puts the label halfway along the line', () => {
+  it('puts the label pointAlong along the line', () => {
     expect(
-      halfway([
+      pointAlong([
         { x: 0, y: 0 },
         { x: 100, y: 0 },
         { x: 100, y: 100 }
       ])
     ).toEqual({ x: 100, y: 0 })
     expect(
-      halfway([
+      pointAlong([
         { x: 0, y: 0 },
         { x: 0, y: 50 }
       ])
@@ -203,5 +203,66 @@ describe('dots for joining arrows', () => {
     const [, copy] = copiesOf([a, pinned], 0, 0, () => `c${++n}`) as [Shape, ArrowItem]
     expect(copy.from.pin).toEqual({ x: 0.5, y: 0 })
     expect(detach(pinned, new Set(['a']), lookupIn([a, b])).from).toEqual({ item: null, x: 50, y: 0 })
+  })
+})
+
+describe('bending arrows', () => {
+  const a = box('a', 0, 0)
+  const b = box('b', 400, 0)
+
+  it('go through their bends, leaving each item on the side facing its nearest bend', () => {
+    const arrow = { ...joined('a', 'b'), bends: [{ x: 50, y: -200 }, { x: 450, y: -200 }] }
+    expect(arrowPoints(arrow, lookupIn([a, b]))).toEqual([
+      { x: 50, y: 0 },
+      { x: 50, y: -200 },
+      { x: 450, y: -200 },
+      { x: 450, y: 0 }
+    ])
+  })
+
+  it('curve smoothly from side to side, through any bends', () => {
+    const curve = joined('a', 'b', 'curve')
+    const points = arrowPoints(curve, lookupIn([a, b]))
+    expect(points[0]).toEqual({ x: 100, y: 50 })
+    expect(points.at(-1)).toEqual({ x: 400, y: 50 })
+    expect(points.length).toBeGreaterThan(10)
+    const bent = arrowPoints({ ...curve, bends: [{ x: 250, y: -100 }] }, lookupIn([a, b]))
+    expect(bent.some((p) => Math.abs(p.x - 250) < 0.01 && Math.abs(p.y + 100) < 0.01)).toBe(true)
+  })
+
+  it('move a right-angled arrow’s middle run to where it’s dragged', () => {
+    const elbow = { ...joined('a', 'b', 'elbow'), from: { item: 'a', x: 0, y: 0 }, to: { item: 'b', x: 0, y: 0 } }
+    const low = box('b', 400, 300)
+    expect(arrowPoints({ ...elbow, bends: [{ x: 160, y: 0 }] }, lookupIn([a, low])).map((p) => p.x)).toEqual([100, 160, 160, 400])
+    const [handle] = bendHandles({ ...elbow, bends: [{ x: 160, y: 0 }] }, lookupIn([a, low]))
+    expect(handle).toMatchObject({ kind: 'elbow', p: { x: 160 } })
+  })
+
+  it('offer a handle on each bend and between each pair of points', () => {
+    const arrow = { ...joined('a', 'b'), bends: [{ x: 250, y: -100 }] }
+    const handles = bendHandles(arrow, lookupIn([a, b]))
+    expect(handles.map((h) => h.kind)).toEqual(['bend', 'add', 'add'])
+    expect(handles[1].p).toEqual({ x: (100 + 250) / 2, y: (50 - 100) / 2 })
+  })
+
+  it('know how far along a point is, for sliding labels', () => {
+    const line = [
+      { x: 0, y: 0 },
+      { x: 100, y: 0 },
+      { x: 100, y: 100 }
+    ]
+    expect(fractionAlong(line, { x: 50, y: 10 })).toBeCloseTo(0.25)
+    expect(fractionAlong(line, { x: 130, y: 100 })).toBeCloseTo(1)
+    expect(pointAlong(line, 0.75)).toEqual({ x: 100, y: 50 })
+  })
+
+  it('keep their bends when one end moves, and take them along when both do', () => {
+    const arrow = { ...joined('a', 'b'), bends: [{ x: 250, y: -100 }] }
+    const doc = { statuses: [], tabs: [{ id: 't', name: 'T', items: [a, b, arrow] as Item[] }] }
+    const one = moveItems(doc, 't', ['a'], 10, 10).tabs[0].items[2] as ArrowItem
+    expect(one.bends).toEqual([{ x: 250, y: -100 }])
+    const both = moveItems(doc, 't', ['a', 'b'], 10, 10).tabs[0].items[2] as ArrowItem
+    expect(both.bends).toEqual([{ x: 260, y: -90 }])
+    expect((copiesOf([arrow], 5, 5, () => 'c')[0] as ArrowItem).bends).toEqual([{ x: 255, y: -95 }])
   })
 })

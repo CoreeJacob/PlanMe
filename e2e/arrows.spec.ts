@@ -50,7 +50,8 @@ test('select, restyle, label and re-attach arrows', async ({ app }) => {
   await check('clicking the line selects the arrow', (await app.selectedIds()).join() === arrow, await app.selectedIds())
   await check('it shows a handle at each end', (await app.js<number>(`document.querySelectorAll('.end-handle').length`)) === 2)
 
-  await app.click(toolbarButton('Right-angled'))
+  await app.click(toolbarButton('Line'))
+  await app.click(pickerChoice('Right-angled'))
   let info = await app.arrow(arrow)
   await check('right-angled: every step is straight across or up and down', info.points.length > 2 && info.points.every((p, k) => k === 0 || p[0] === info.points[k - 1][0] || p[1] === info.points[k - 1][1]), info)
   await app.click(toolbarButton('Arrowheads'))
@@ -299,7 +300,8 @@ test('an arrow left loose can be joined to an item later, by its end or its line
   await app.key('Escape', 'Escape')
   const before = (await app.arrow(free)).points
   await app.clickArrow(free)
-  const mid = await app.screenOf(-200, 300)
+  // (Not its very middle: that's where a selected arrow's bend handle is.)
+  const mid = await app.screenOf(-250, 300)
   await app.drag([mid, [mid[0], mid[1] + 20], [mid[0], mid[1] + 50]])
   const after = (await app.arrow(free)).points
   await check('a fully loose arrow moves as a whole', near(after[0], before[0][0], before[0][1] + 50) && near(after.at(-1), before.at(-1)![0], before.at(-1)![1] + 50), { before, after })
@@ -357,4 +359,68 @@ test('dropping an arrow from a dot on empty space builds a new item there', asyn
   await app.until(() => app.js(`document.activeElement?.classList.contains('item-editor')`))
   await app.key('Escape', 'Escape')
   await check('a new text item left empty goes, with its arrow', (await app.items()).length === 2 && (await app.arrows()).length === 0, { items: await app.items(), arrows: await app.arrows() })
+})
+
+test('arrows bend where they’re dragged, curve, and their labels slide along them', async ({ app }) => {
+  await app.newBoard('Game')
+  const a = await app.noteAt(-300, 0, 'A')
+  const b = await app.noteAt(300, 0, 'B')
+  const arrow = await app.drawArrow([-300, 0], [300, 0])
+  await app.key('Escape', 'Escape')
+  await app.clickArrow(arrow)
+  const handles = () => app.js<Array<[string, number, number]>>(`[...document.querySelectorAll('.bend-handle')].map(h => { const r = h.getBoundingClientRect(); return [h.classList[1], r.x + r.width / 2, r.y + r.height / 2] })`)
+  await check('a selected arrow has a handle in the middle to bend it by', (await handles()).map((h) => h[0]).join() === 'add', await handles())
+
+  // Drag the middle up: it bends there.
+  const [[, x, y]] = await handles()
+  await app.drag([[x, y], [x, y - 60], [x, y - 150]])
+  let points = (await app.arrow(arrow)).points
+  await check('dragging it bends the arrow through that point', points.length === 3 && near(points[1], 0, -150), points)
+  await check('…leaving each note from the side facing the bend', near(points[0], -200, 0) && near(points[2], 200, 0), points)
+  await check('now there’s the bend plus a place to add another either side', (await handles()).map((h) => h[0]).join() === 'bend,add,add', await handles())
+  const saved = await app.until(async () => (await app.savedItems('Game', 0, 3)).find((i: any) => i.type === 'arrow')?.bends)
+  await check('the bend is saved', JSON.stringify(saved) === '[{"x":0,"y":-150}]', saved)
+  await app.undo()
+  await check('one undo takes it out', (await app.arrow(arrow)).points.length === 2)
+  await app.redo()
+
+  // Moving one note leaves the bend; moving both takes it along.
+  await app.clickAt(...(await app.itemCentre(a)))
+  await app.clickAt(...(await app.itemCentre(b)), 'left', SHIFT)
+  const [ax, ay] = await app.itemCentre(a)
+  await app.drag([[ax, ay], [ax + 20, ay + 20], [ax + 50, ay + 40]])
+  points = (await app.arrow(arrow)).points
+  await check('moving both notes takes the bend along', near(points[1], 50, -110), points)
+
+  // Curved, and straighten.
+  await app.clickArrow(arrow)
+  await app.click(toolbarButton('Line'))
+  await app.click(pickerChoice('Curved'))
+  points = (await app.arrow(arrow)).points
+  await check('curved: a smooth line through the bend', points.length > 10 && points.some((p) => near(p, 50, -110)), points.length)
+  await app.click(toolbarButton('Straighten'))
+  const straight = await app.until(async () => (await app.savedItems('Game', 0, 3)).find((i: any) => i.type === 'arrow')?.bends === undefined)
+  await check('Straighten takes the bends out', straight)
+
+  // Double-clicking a bend takes it out.
+  await app.click(toolbarButton('Line'))
+  await app.click(pickerChoice('Straight'))
+  const [[, mx, my]] = await handles()
+  await app.drag([[mx, my], [mx, my + 60], [mx, my + 120]])
+  const bend = (await handles()).find((h) => h[0] === 'bend')!
+  await app.doubleClickAt([bend[1], bend[2]])
+  await check('double-clicking a bend takes it out', (await app.arrow(arrow)).points.length === 2, (await app.arrow(arrow)).points)
+
+  // Double-clicking the middle of the selected arrow (where the bend handle is) still labels it.
+  const [[, lx, ly]] = await handles()
+  await app.doubleClickAt([lx, ly])
+  await check('double-clicking the middle labels it, as before', await app.untilEditing())
+  await app.type('first time')
+  await app.key('Escape', 'Escape')
+  const label = await app.centre(`document.querySelector('.arrow-label')`)
+  await app.drag([label, [label[0] + 40, label[1]], [label[0] + 150, label[1] + 30]])
+  const labelAt = (await app.until(async () => (await app.savedItems('Game', 0, 3)).find((i: any) => i.type === 'arrow')?.labelAt)) as number
+  await check('dragging a label slides it along the arrow', labelAt > 0.6 && labelAt < 0.9, labelAt)
+  const after = await app.centre(`document.querySelector('.arrow-label')`)
+  await check('…staying on the line', Math.abs(after[1] - label[1]) < 2, { label, after })
 })

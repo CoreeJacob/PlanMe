@@ -1,6 +1,8 @@
 // Where arrows go. An attached end sits at the middle of whichever side of its item faces the
-// other end, so arrows never cut across the things they join. Right-angled ("elbow") arrows
-// leave and arrive straight out from those sides.
+// other end (or its nearest bend), so arrows never cut across the things they join. Straight
+// arrows go through their bends; curved ones go smoothly through them, leaving and arriving
+// straight out from the sides; right-angled ("elbow") arrows also leave and arrive straight out,
+// with their middle run where it's been dragged to.
 
 import type { ArrowEnd, ArrowItem, Item, Rect, Shape } from '@shared/types'
 import { centre, sideFacing, type Point, type Side } from '@/lib/geometry'
@@ -9,6 +11,8 @@ import { SLANT, sideMiddle, type Outlined } from './outlines'
 const OUT: Record<Side, Point> = { top: { x: 0, y: -1 }, right: { x: 1, y: 0 }, bottom: { x: 0, y: 1 }, left: { x: -1, y: 0 } }
 /** How far an elbow arrow goes straight out from a side before turning. */
 const ELBOW_GAP = 24
+/** How many points each stretch of a curve is drawn with. */
+const CURVE_STEPS = 24
 
 export const isArrow = (item: Item): item is ArrowItem => item.type === 'arrow'
 export const isShape = (item: Item): item is Shape => item.type !== 'arrow'
@@ -167,21 +171,107 @@ function aimAt(end: ArrowEnd, shape: Shape | undefined): Point {
   return shape ? centre(shape) : loosePoint(end)
 }
 
-/** The points an arrow passes through, from its start to its end (at least two). */
-export function arrowPoints(arrow: Pick<ArrowItem, 'from' | 'to' | 'route'>, lookup: Lookup): Point[] {
+type Routed = Pick<ArrowItem, 'from' | 'to' | 'route' | 'bends'>
+
+/** An arrow's ends (where, and which way is out), and the bends it goes through between them. */
+function routeOf(arrow: Routed, lookup: Lookup): { start: { p: Point; side: Side }; end: { p: Point; side: Side }; via: Point[] } {
   const a = shapeOf(arrow.from, lookup)
   const b = shapeOf(arrow.to, lookup)
-  const start = endOf(arrow.from, a, aimAt(arrow.to, b))
-  const end = endOf(arrow.to, b, aimAt(arrow.from, a))
-  if (arrow.route === 'straight') return [start.p, end.p]
-  return tidy([start.p, ...elbow(start.p, OUT[start.side], end.p, OUT[end.side]), end.p])
+  // A right-angled arrow's bend only moves its middle run; the others' ends face their nearest bend.
+  const via = arrow.route === 'elbow' ? [] : (arrow.bends ?? [])
+  const start = endOf(arrow.from, a, via[0] ?? aimAt(arrow.to, b))
+  const end = endOf(arrow.to, b, via.at(-1) ?? aimAt(arrow.from, a))
+  return { start, end, via }
+}
+
+/** The points an arrow passes through, from its start to its end (at least two; many along a curve). */
+export function arrowPoints(arrow: Routed, lookup: Lookup): Point[] {
+  const { start, end, via } = routeOf(arrow, lookup)
+  if (arrow.route === 'elbow') return tidy([start.p, ...elbow(start.p, OUT[start.side], end.p, OUT[end.side], arrow.bends?.[0]).corners, end.p])
+  if (arrow.route === 'curve') return curve(start, end, via, !!arrow.from.item, !!arrow.to.item)
+  return [start.p, ...via, end.p]
+}
+
+/**
+ * A smooth curve through `via`, leaving `start` and arriving at `end` straight out from their
+ * sides (for ends joined to items), drawn as many short straight pieces.
+ */
+function curve(start: { p: Point; side: Side }, end: { p: Point; side: Side }, via: Point[], outOfStart: boolean, intoEnd: boolean): Point[] {
+  const points = [start.p, ...via, end.p]
+  const n = points.length
+  const gap = (k: number): number => Math.hypot(points[k + 1].x - points[k].x, points[k + 1].y - points[k].y)
+  // Which way, and how fast, the curve runs through each point.
+  const tangents = points.map((p, k) => {
+    if (k === 0 && outOfStart) return { x: OUT[start.side].x * gap(0) * 1.5, y: OUT[start.side].y * gap(0) * 1.5 }
+    if (k === n - 1 && intoEnd) return { x: -OUT[end.side].x * gap(n - 2) * 1.5, y: -OUT[end.side].y * gap(n - 2) * 1.5 }
+    const before = points[Math.max(0, k - 1)]
+    const after = points[Math.min(n - 1, k + 1)]
+    const scale = k === 0 || k === n - 1 ? 1 : 0.5
+    return { x: (after.x - before.x) * scale, y: (after.y - before.y) * scale }
+  })
+  const out: Point[] = [points[0]]
+  for (let k = 0; k < n - 1; k++) {
+    const [p0, p1, t0, t1] = [points[k], points[k + 1], tangents[k], tangents[k + 1]]
+    for (let step = 1; step <= CURVE_STEPS; step++) {
+      // A cubic through p0 and p1 with those tangents (Hermite).
+      const t = step / CURVE_STEPS
+      const h00 = 2 * t ** 3 - 3 * t ** 2 + 1
+      const h10 = t ** 3 - 2 * t ** 2 + t
+      const h01 = -2 * t ** 3 + 3 * t ** 2
+      const h11 = t ** 3 - t ** 2
+      out.push({ x: h00 * p0.x + h10 * t0.x + h01 * p1.x + h11 * t1.x, y: h00 * p0.y + h10 * t0.y + h01 * p1.y + h11 * t1.y })
+    }
+  }
+  return out
+}
+
+/** The points a straight or curved arrow is drawn through: its ends and its bends. */
+export function controlPoints(arrow: Routed, lookup: Lookup): Point[] {
+  const { start, end, via } = routeOf(arrow, lookup)
+  return [start.p, ...via, end.p]
+}
+
+/** A handle on a selected arrow: a bend to drag (double-click removes it), a place to add one, or a right-angled arrow's middle run. */
+export type BendHandle = { kind: 'bend'; index: number; p: Point } | { kind: 'add'; index: number; p: Point } | { kind: 'elbow'; p: Point }
+
+/**
+ * Where a selected arrow's handles go. `avoid` is its label (where, and roughly how far it
+ * reaches): a place to add a bend that would be under it moves along the line, clear of it, so
+ * the label can still be grabbed.
+ */
+export function bendHandles(arrow: Routed, lookup: Lookup, avoid?: { p: Point; reach: number }): BendHandle[] {
+  const { start, end, via } = routeOf(arrow, lookup)
+  if (arrow.route === 'elbow') {
+    const { corners, run } = elbow(start.p, OUT[start.side], end.p, OUT[end.side], arrow.bends?.[0])
+    if (run === null) return []
+    const [a, b] = [corners[run], corners[run + 1]]
+    return [{ kind: 'elbow', p: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 } }]
+  }
+  const bends: BendHandle[] = via.map((p, index) => ({ kind: 'bend', index, p }))
+  // Between each pair of points (along the curve, for a curve), a place to add another bend.
+  const line = arrow.route === 'curve' ? arrowPoints(arrow, lookup) : [start.p, ...via, end.p]
+  const clear = (p: Point): boolean => !avoid || Math.hypot(p.x - avoid.p.x, p.y - avoid.p.y) > avoid.reach
+  const adds: BendHandle[] = []
+  for (let index = 0; index <= via.length; index++) {
+    // The points along this stretch, the middle first and then outwards, and the first clear of the label.
+    const stretch =
+      arrow.route === 'curve'
+        ? line.slice(index * CURVE_STEPS, (index + 1) * CURVE_STEPS + 1)
+        : Array.from({ length: 21 }, (_, k) => ({ x: line[index].x + ((line[index + 1].x - line[index].x) * k) / 20, y: line[index].y + ((line[index + 1].y - line[index].y) * k) / 20 }))
+    const middle = (stretch.length - 1) / 2
+    const outwards = stretch.map((p, k) => ({ p, away: Math.abs(k - middle) })).sort((a, b) => a.away - b.away)
+    const spot = outwards.find((o) => o.away < middle - 1 && clear(o.p)) ?? outwards[0]
+    adds.push({ kind: 'add', index, p: spot.p })
+  }
+  return [...bends, ...adds]
 }
 
 /**
  * The corners of a right-angled route from `s` (leaving in direction `ds`) to `e` (arriving
- * from direction `de`, which points out of its side).
+ * from direction `de`, which points out of its side). `at`, if given, is where the middle run
+ * goes; `run` says which corners it's between (none when there's only one corner).
  */
-function elbow(s: Point, ds: Point, e: Point, de: Point): Point[] {
+function elbow(s: Point, ds: Point, e: Point, de: Point, at?: Point): { corners: Point[]; run: number | null } {
   const s1 = { x: s.x + ds.x * ELBOW_GAP, y: s.y + ds.y * ELBOW_GAP }
   const e1 = { x: e.x + de.x * ELBOW_GAP, y: e.y + de.y * ELBOW_GAP }
   const sideways = (d: Point): boolean => d.x !== 0
@@ -191,34 +281,37 @@ function elbow(s: Point, ds: Point, e: Point, de: Point): Point[] {
     const flip = !sideways(ds)
     const f = (p: Point): Point => (flip ? { x: p.y, y: p.x } : p)
     const [S, E, S1, E1, DS, DE] = [s, e, s1, e1, ds, de].map(f)
+    const AT = at && f(at)
     let corners: Point[]
+    let run = 0
     if (DS.x === DE.x) {
       // Same way (e.g. both out of the right side): go out past both, then across.
-      const X = DS.x > 0 ? Math.max(S1.x, E1.x) : Math.min(S1.x, E1.x)
+      const X = AT?.x ?? (DS.x > 0 ? Math.max(S1.x, E1.x) : Math.min(S1.x, E1.x))
       corners = [
         { x: X, y: S.y },
         { x: X, y: E.y }
       ]
     } else if ((E.x - S.x) * DS.x > 0) {
-      // Facing each other with room between: across, up or down halfway, across.
-      const mid = (S.x + E.x) / 2
+      // Facing each other with room between: across, up or down halfway (or where it's been dragged), across.
+      const mid = AT?.x ?? (S.x + E.x) / 2
       corners = [
         { x: mid, y: S.y },
         { x: mid, y: E.y }
       ]
     } else {
-      // Facing away from each other: out, round the middle, and back in.
-      const mid = (S1.y + E1.y) / 2
+      // Facing away from each other: out, round the middle (or where it's been dragged), and back in.
+      const mid = AT?.y ?? (S1.y + E1.y) / 2
       corners = [S1, { x: S1.x, y: mid }, { x: E1.x, y: mid }, E1]
+      run = 1
     }
-    return corners.map(f)
+    return { corners: corners.map(f), run }
   }
 
   // One leaves sideways and the other up/down: one corner, if it's in front of both sides.
   const corner = sideways(ds) ? { x: e.x, y: s.y } : { x: s.x, y: e.y }
   const ahead = (from: Point, d: Point, p: Point): boolean => (p.x - from.x) * d.x + (p.y - from.y) * d.y > 0
-  if (ahead(s, ds, corner) && ahead(e, de, corner)) return [corner]
-  return sideways(ds) ? [s1, { x: s1.x, y: e1.y }, e1] : [s1, { x: e1.x, y: s1.y }, e1]
+  if (ahead(s, ds, corner) && ahead(e, de, corner)) return { corners: [corner], run: null }
+  return { corners: sideways(ds) ? [s1, { x: s1.x, y: e1.y }, e1] : [s1, { x: e1.x, y: s1.y }, e1], run: null }
 }
 
 /** Drops repeated points and corners that are really straight on. */
@@ -234,10 +327,10 @@ function tidy(points: Point[]): Point[] {
   return out.length >= 2 ? out : [points[0], points.at(-1)!]
 }
 
-/** The point halfway along a line through `points` (where a label goes). */
-export function halfway(points: readonly Point[]): Point {
+/** The point a fraction of the way along a line through `points` (0 the start, 1 the end): where a label goes. */
+export function pointAlong(points: readonly Point[], fraction = 0.5): Point {
   const lengths = points.slice(1).map((p, k) => Math.hypot(p.x - points[k].x, p.y - points[k].y))
-  let left = lengths.reduce((a, b) => a + b, 0) / 2
+  let left = lengths.reduce((a, b) => a + b, 0) * Math.min(1, Math.max(0, fraction))
   for (let k = 0; k < lengths.length; k++) {
     if (left <= lengths[k] || k === lengths.length - 1) {
       const t = lengths[k] ? left / lengths[k] : 0
@@ -246,6 +339,21 @@ export function halfway(points: readonly Point[]): Point {
     left -= lengths[k]
   }
   return points[0]
+}
+
+/** How far along a line through `points` (0 the start, 1 the end) is the point on it nearest `p`. */
+export function fractionAlong(points: readonly Point[], p: Point): number {
+  let best = { distance: Infinity, at: 0 }
+  let walked = 0
+  for (let k = 0; k < points.length - 1; k++) {
+    const [a, b] = [points[k], points[k + 1]]
+    const length = Math.hypot(b.x - a.x, b.y - a.y)
+    const t = length ? Math.max(0, Math.min(1, ((p.x - a.x) * (b.x - a.x) + (p.y - a.y) * (b.y - a.y)) / length ** 2)) : 0
+    const distance = Math.hypot(a.x + (b.x - a.x) * t - p.x, a.y + (b.y - a.y) * t - p.y)
+    if (distance < best.distance) best = { distance, at: walked + t * length }
+    walked += length
+  }
+  return walked ? best.at / walked : 0.5
 }
 
 /** The box around an arrow's line. */
