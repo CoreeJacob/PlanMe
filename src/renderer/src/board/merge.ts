@@ -5,8 +5,7 @@
 // same item), and whatever changed only in the app stays.
 
 import type { BoardDoc, Item, Tab } from '@shared/types'
-
-const same = (a: unknown, b: unknown): boolean => a === b || JSON.stringify(a) === JSON.stringify(b)
+import { same } from '@/lib/objects'
 
 export interface OutsideChange {
   doc: BoardDoc

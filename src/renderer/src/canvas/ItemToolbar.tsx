@@ -9,7 +9,6 @@ import { useApp } from '@/app/store'
 import { boxOf, isArrow, isShape, type Lookup } from '@/board/arrows'
 import { isLocked } from '@/board/items'
 import { tagState } from '@/board/tags'
-import type { TextStyle } from '@/board/richtext'
 import { boundsOf } from '@/lib/geometry'
 import {
   allStyled,
@@ -29,7 +28,7 @@ import {
 } from './actions'
 import { ALIGN_CHOICES, currentStatusChoice, palettesFor, SPREAD_CHOICES, statusChoicesFor, statusValue } from './looks'
 import { sectionTitleHeight } from './targets'
-import { useCaretStyles } from './caretStyles'
+import { TEXT_STYLES, useCaretStyles } from './caretStyles'
 import { toScreen, type Size } from './view'
 
 /** A toolbar button that opens a grid of choices (colours, or outlines) below it. */
@@ -81,12 +80,6 @@ function Picker({
     </div>
   )
 }
-
-const STYLES: Array<{ style: TextStyle; label: string; command: string; key: string }> = [
-  { style: 'b', label: 'Bold — for all the words, or just the ones picked while typing', command: 'bold', key: '⌘B' },
-  { style: 'i', label: 'Italic — for all the words, or just the ones picked while typing', command: 'italic', key: '⌘I' },
-  { style: 'u', label: 'Underline — for all the words, or just the ones picked while typing', command: 'underline', key: '⌘U' }
-]
 
 const HEADS: Array<ArrowItem['heads']> = ['end', 'both', 'none']
 const HEADS_SAID = { end: 'at the end', both: 'at both ends', none: 'none' }
@@ -304,11 +297,11 @@ export function ItemToolbar({ view, size, items, lookup, editing, statuses, tags
         </button>
       )}
       {palettes.length > 0 && <span className="toolbar-sep" />}
-      {STYLES.map((s) => (
+      {TEXT_STYLES.map((s) => (
         <button
           key={s.style}
           className={`toolbar-btn style-${s.style} ${(editing ? caretStyles[s.style] : allStyled(s.style)) ? 'active' : ''}`}
-          title={`${s.label} (${s.key})`}
+          title={`${s.name} — for all the words, or just the ones picked while typing (${s.key})`}
           onClick={() => {
             if (!editing) return toggleStyleOnSelected(s.style)
             document.execCommand(s.command)

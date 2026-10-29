@@ -4,6 +4,7 @@
 import { useEffect, useState } from 'react'
 import type { BoardBackups } from '@shared/types'
 import { count } from '@/lib/format'
+import { useEscapeKey } from '@/lib/useEscapeKey'
 import { refreshBoards } from './actions'
 import { attempt, useApp } from './store'
 
@@ -18,12 +19,8 @@ function BackupsForm({ first }: { first: string }) {
   const [chosen, setChosen] = useState(first)
   useEffect(() => {
     void attempt(() => window.api.listBackups()).then((found) => setList(found ?? []))
-    const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') close()
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
   }, [])
+  useEscapeKey(close)
   const shown = list?.find((b) => b.board === chosen) ?? list?.[0]
 
   const restore = async (id: string): Promise<void> => {

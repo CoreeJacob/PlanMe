@@ -6,7 +6,20 @@ import { upgradeItem } from '@shared/upgrade'
 import { attempt, useApp } from '@/app/store'
 import { arrowsAttached, boxOf, detach, isArrow, isShape, lookupIn } from '@/board/arrows'
 import { arrange, type Alignment, type Spread } from '@/board/arrange'
-import { addToCopy, copyBounds, groupsOf, makeGroup, placeCopy, relinkCopies, renameGroup, ungrouped, unlinkCopies, withGroupMates } from '@/board/groups'
+import {
+  addToCopy,
+  copyBounds,
+  groupsOf,
+  makeGroup,
+  placeCopy,
+  relinkCopies,
+  renameGroup,
+  ungrouped,
+  unlinkCopies,
+  wholeCopiesIn,
+  withGroupMates,
+  type WholeCopy
+} from '@/board/groups'
 import {
   addItems,
   copiesOf,
@@ -31,6 +44,7 @@ import { nextTagColor, tagState, tagsOf, withTag, withTags } from '@/board/tags'
 import { useBoard } from '@/board/store'
 import { count, plural } from '@/lib/format'
 import { boundsOf, overlaps } from '@/lib/geometry'
+import { shortId, without } from '@/lib/objects'
 import { currentItems, currentView, viewport } from './current'
 import { addImageFiles, hasPictures } from './images'
 
@@ -89,12 +103,28 @@ export function addConnected(source: Shape, from: ArrowEnd, rect: Rect): void {
   addAndType([item, newArrow(newId(), from, { item: item.id, x: rect.x, y: rect.y })], item.id)
 }
 
+/**
+ * Selects things, and with them the rest of any linked group they're part of (unless that group
+ * is being worked inside), so a group is never only part-selected by accident.
+ */
+function selectWhole(ids: string[]): void {
+  state().select(withGroupMates(ids, currentItems(), state().openGroup))
+}
+
+/** For an item that's part of a linked group: work inside that group, so it can be picked on its own. */
+function openGroupOf(id: string): void {
+  const copy = currentItems().find((i) => i.id === id)?.group?.copy
+  if (copy) state().setOpenGroup(copy)
+}
+
 /** Starts typing in an item (or an arrow's label), or in one part of a to-do list. */
 export function startEditing(id: string, part: string | null = null): void {
   if (state().editingId === id) return state().setEditing(id, part)
   // A picture has no words to type: just select it.
-  if (currentItems().find((i) => i.id === id)?.type === 'image') return state().select([id])
+  if (currentItems().find((i) => i.id === id)?.type === 'image') return selectWhole([id])
   finishEditing()
+  // Typing in part of a linked group is working inside it.
+  openGroupOf(id)
   state().select([id])
   state().beginGesture()
   state().setEditing(id, part)
@@ -167,18 +197,13 @@ export function setStatusOnSelected(value: string | null | 'auto'): void {
     updateItems(doc, tabId, state().selected, (i) => {
       if (i.type === 'arrow') return i
       const statusAt = Date.now()
-      if (value === 'auto') return i.type === 'todo' ? { ...withoutStatus(i), auto: true, statusAt } : i
-      const picked = value === null ? withoutStatus(i) : { ...i, status: value, statusAt }
+      if (value === 'auto') return i.type === 'todo' ? { ...without(i, 'status'), auto: true, statusAt } : i
+      const picked = value === null ? without(i, 'status') : { ...i, status: value, statusAt }
       return picked.type === 'todo' ? { ...picked, auto: false } : picked
     })
   )
 }
 
-/** The item with no status of its own. */
-function withoutStatus<T extends Shape>(item: T): T {
-  const { status: _none, ...rest } = item
-  return rest as T
-}
 
 /** The board's list of statuses changed (from the status editor): one undo step. */
 export function saveStatuses(statuses: Status[]): void {
@@ -192,9 +217,8 @@ export function setRouteOnSelected(route: ArrowItem['route']): void {
   change((doc, tabId) =>
     updateItems(doc, tabId, state().selected, (i) => {
       if (i.type !== 'arrow' || i.route === route) return i
-      if (i.route !== 'elbow' && route !== 'elbow') return { ...i, route }
-      const { bends: _dropped, ...rest } = i
-      return { ...rest, route }
+      // (Bends carry over between straight and curved; a right-angled arrow's are its own.)
+      return i.route !== 'elbow' && route !== 'elbow' ? { ...i, route } : { ...without(i, 'bends'), route }
     })
   )
 }
@@ -203,9 +227,7 @@ export function setRouteOnSelected(route: ArrowItem['route']): void {
 export function straightenSelected(): void {
   change((doc, tabId) =>
     updateItems(doc, tabId, state().selected, (i) => {
-      if (i.type !== 'arrow' || !i.bends) return i
-      const { bends: _dropped, ...rest } = i
-      return rest
+      return i.type === 'arrow' ? without(i, 'bends') : i
     })
   )
 }
@@ -216,9 +238,7 @@ export function removeBend(id: string, index: number): void {
     updateItems(doc, tabId, [id], (i) => {
       if (i.type !== 'arrow' || !i.bends?.[index]) return i
       const bends = i.bends.filter((_, k) => k !== index)
-      if (bends.length) return { ...i, bends }
-      const { bends: _dropped, ...rest } = i
-      return rest
+      return bends.length ? { ...i, bends } : without(i, 'bends')
     })
   )
 }
@@ -239,7 +259,7 @@ export async function newTagForSelected(): Promise<void> {
   const tags = tagsOf(state().doc)
   // A tag by that name already: use it.
   const existing = tags.find((t) => t.name.toLowerCase() === name.toLowerCase())
-  const tag: Tag = existing ?? { id: newId().slice(0, 8), name, color: nextTagColor(tags) }
+  const tag: Tag = existing ?? { id: shortId(), name, color: nextTagColor(tags) }
   change((doc, tabId) => updateItems(existing ? doc : { ...doc, tags: [...tags, tag] }, tabId, ids, (i) => withTag(i, tag.id, true)))
 }
 
@@ -256,10 +276,7 @@ export function editDetails(id: string, html: string): void {
   preview(
     updateItems(doc, tabId, [id], (i) => {
       if (i.type === 'arrow') return i
-      if (empty) {
-        const { details: _gone, ...rest } = i
-        return i.details === undefined ? i : (rest as Shape)
-      }
+      if (empty) return without(i, 'details')
       return i.details === details ? i : { ...i, details }
     })
   )
@@ -268,6 +285,8 @@ export function editDetails(id: string, html: string): void {
 /** Opens the Details pane for an item. */
 export function showDetails(id: string): void {
   finishEditing()
+  // Details are a part's own: for part of a linked group, that's working inside it.
+  openGroupOf(id)
   state().select([id])
   useApp.getState().setDetailsOpen(true)
 }
@@ -289,7 +308,7 @@ export function goToItem(tabId: string, id: string): void {
   const box = boxOf(item, lookupIn(items))
   const zoom = (state().views[tabId] ?? DEFAULT_VIEW).zoom
   state().setView(tabId, { x: box.x + box.w / 2, y: box.y + box.h / 2, zoom })
-  state().select([id])
+  selectWhole([id])
   useApp.getState().flash([id])
 }
 
@@ -307,10 +326,7 @@ export function setLink(ids: string[], link: Link | null): void {
   change((doc, tabId) =>
     updateItems(doc, tabId, ids, (i) => {
       if (i.type === 'arrow') return i
-      if (!link) {
-        const { link: had, ...rest } = i
-        return had ? (rest as Shape) : i
-      }
+      if (!link) return without(i, 'link')
       return i.link && linkKey(i.link) === linkKey(link) ? i : { ...i, link }
     })
   )
@@ -326,7 +342,7 @@ export function followLink(id: string): void {
   const target = linkTarget(state().doc, item.link)
   if (!target) {
     finishEditing()
-    state().select([id])
+    selectWhole([id])
     useApp.getState().setLinking([id])
     return
   }
@@ -346,7 +362,7 @@ export function goBack(): void {
   goToTab(spot.tabId)
   state().setView(spot.tabId, spot.view)
   const itemId = spot.itemId
-  if (itemsOf(doc, spot.tabId).some((i) => i.id === itemId)) state().select([itemId])
+  if (itemsOf(doc, spot.tabId).some((i) => i.id === itemId)) selectWhole([itemId])
 }
 
 // ---------- selection ----------
@@ -369,7 +385,7 @@ export async function groupSelected(): Promise<void> {
   if (!ids.length) return
   const name = (await useApp.getState().ask({ title: 'Make Group', label: 'A name for it, like “Hero” or “Shop”. Copies of it on other tabs stay linked.', value: '', confirmLabel: 'Make Group' }))?.trim()
   if (!name) return
-  change((doc, tabId) => makeGroup(doc, tabId, ids, name, () => newId().slice(0, 8)), ids)
+  change((doc, tabId) => makeGroup(doc, tabId, ids, name, shortId), ids)
 }
 
 /** Unlinks the copies the selection is part of: their parts become ordinary items (other copies stay linked). */
@@ -401,7 +417,7 @@ export function placeGroupCopy(groupId: string, at?: { x: number; y: number }): 
   if (!size) return
   const area = visibleArea()
   const middle = at ?? { x: area.x + area.w / 2, y: area.y + area.h / 2 }
-  const placed = placeCopy(doc, tabId, groupId, { x: middle.x - size.w / 2, y: middle.y - size.h / 2 }, () => newId().slice(0, 8))
+  const placed = placeCopy(doc, tabId, groupId, { x: middle.x - size.w / 2, y: middle.y - size.h / 2 }, shortId)
   finishEditing()
   state().setOpenGroup(null)
   state().commit(placed.doc)
@@ -504,10 +520,11 @@ const COPY_STEP = 24
 
 export function duplicateSelected(): void {
   // Copies aren't locked, so they can be moved off the original. A whole copy of a group is a new linked copy.
-  const copies = copiesOf(selectionToCopy(), COPY_STEP, COPY_STEP, newId).map(unlocked)
+  const chosen = selectionToCopy()
+  const copies = copiesOf(chosen, COPY_STEP, COPY_STEP, newId).map(unlocked)
   if (!copies.length) return
   const { doc, tabId } = state()
-  const relinked = relinkCopies(doc, tabId, copies, () => newId().slice(0, 8))
+  const relinked = relinkCopies(doc, tabId, copies, wholeCopiesIn(doc, chosen), shortId)
   change(() => addItems(relinked.doc, tabId, relinked.items), relinked.items.map((c) => c.id))
 }
 
@@ -562,6 +579,8 @@ interface Copied {
   board?: string
   tabId: string
   items: Item[]
+  /** Whole copies of linked groups among them, so pasting makes linked copies. */
+  wholes?: WholeCopy[]
 }
 
 /** How many times the same copy has been pasted on its own tab, so each paste lands a step further on. */
@@ -571,7 +590,7 @@ let pastes = { key: '', count: 0 }
 export function copySelected(data: DataTransfer): boolean {
   const items = selectionToCopy()
   if (!items.length) return false
-  const copied: Copied = { board: state().board?.path, tabId: state().tabId, items }
+  const copied: Copied = { board: state().board?.path, tabId: state().tabId, items, wholes: wholeCopiesIn(state().doc, items) }
   data.setData(CLIPBOARD_TYPE, JSON.stringify(copied))
   data.setData('text/plain', items.map((i) => plainText(i.text)).filter(Boolean).join('\n\n'))
   return true
@@ -628,6 +647,6 @@ async function pasteItems(copied: Copied, key: string): Promise<void> {
   const copies = copiesOf(copied.items, dx, dy, newId).map(unlocked)
   // From another board, groups don't come along: the parts are ordinary items.
   const { doc, tabId } = state()
-  const relinked = copied.board && copied.board !== here ? { items: copies.map(ungrouped), doc } : relinkCopies(doc, tabId, copies, () => newId().slice(0, 8))
+  const relinked = copied.board && copied.board !== here ? { items: copies.map(ungrouped), doc } : relinkCopies(doc, tabId, copies, copied.wholes ?? [], shortId)
   change(() => addItems(relinked.doc, tabId, relinked.items), relinked.items.map((c) => c.id))
 }

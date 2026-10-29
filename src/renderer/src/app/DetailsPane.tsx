@@ -8,7 +8,7 @@ import { cleanHtml } from '@/board/richtext'
 import { selectTab, useBoard } from '@/board/store'
 import { labelOf } from '@/board/tasks'
 import { editDetails } from '@/canvas/actions'
-import { useCaretStyles } from '@/canvas/caretStyles'
+import { TEXT_STYLES, useCaretStyles } from '@/canvas/caretStyles'
 import { Icon } from './Icon'
 import { KIND_ICONS } from './ResultList'
 import { useApp } from './store'
@@ -37,12 +37,6 @@ export function DetailsPane() {
     </aside>
   )
 }
-
-const STYLES = [
-  { style: 'b', command: 'bold', label: 'Bold (⌘B)' },
-  { style: 'i', command: 'italic', label: 'Italic (⌘I)' },
-  { style: 'u', command: 'underline', label: 'Underline (⌘U)' }
-] as const
 
 function DetailsOf({ item }: { item: Shape }) {
   const editor = useRef<HTMLDivElement>(null)
@@ -82,8 +76,8 @@ function DetailsOf({ item }: { item: Shape }) {
         <span className="details-title">{labelOf(item)}</span>
       </div>
       <div className="details-tools" onMouseDown={(e) => e.preventDefault()}>
-        {STYLES.map((s) => (
-          <button key={s.style} className={`toolbar-btn style-${s.style} ${typing && styles[s.style] ? 'active' : ''}`} title={s.label} disabled={!typing} onClick={() => (document.execCommand(s.command), readStyles())}>
+        {TEXT_STYLES.map((s) => (
+          <button key={s.style} className={`toolbar-btn style-${s.style} ${typing && styles[s.style] ? 'active' : ''}`} title={`${s.name} (${s.key})`} disabled={!typing} onClick={() => (document.execCommand(s.command), readStyles())}>
             {s.style.toUpperCase()}
           </button>
         ))}

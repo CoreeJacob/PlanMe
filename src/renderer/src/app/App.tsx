@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import type { MenuCommand } from '@shared/types'
 import { flushSave, startSaving } from '@/board/saver'
 import { useBoard } from '@/board/store'
-import { bringSelectedToFront, duplicateSelected, groupSelected, linkSelected, selectAll, sendSelectedToBack, toggleLockOnSelected, ungroupSelected } from '@/canvas/actions'
+import { bringSelectedToFront, duplicateSelected, finishEditing, groupSelected, linkSelected, selectAll, sendSelectedToBack, toggleLockOnSelected, ungroupSelected } from '@/canvas/actions'
 import { zoomReset, zoomStep, zoomToFit, zoomToSelection } from '@/canvas/current'
 import { isTyping } from '@/lib/dom'
 import { cycleTab, goToBoards, newBoard, newTab } from './actions'
@@ -87,8 +87,17 @@ export function App() {
     return startSaving((message) => useApp.getState().toast(message, { kind: 'error' }))
   }, [])
 
-  // The window waits for the last save before it closes.
-  useEffect(() => window.api.onFlush(flushSave), [])
+  // The window waits for the last save before it closes. Typing (or a drag) is finished first: a
+  // change from outside PlanMe can only be brought in, and everything saved, once it's done.
+  useEffect(
+    () =>
+      window.api.onFlush(async () => {
+        finishEditing()
+        useBoard.getState().endGesture()
+        await flushSave()
+      }),
+    []
+  )
 
   // The app menu owns ⌘Z, ⌘A and friends, so pass them to a text box when one is being typed in.
   useEffect(

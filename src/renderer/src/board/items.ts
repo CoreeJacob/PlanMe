@@ -20,6 +20,7 @@ import type {
   TodoItem
 } from '@shared/types'
 import { centre, sideFacing, type Point } from '@/lib/geometry'
+import { without } from '@/lib/objects'
 
 /** Replaces one tab's items. Returns `doc` itself if they didn't change. */
 export function withItems(doc: BoardDoc, tabId: string, change: (items: Item[]) => Item[]): BoardDoc {
@@ -63,11 +64,7 @@ export function updateItems(doc: BoardDoc, tabId: string, ids: readonly string[]
 export const isLocked = (item: Item): boolean => !!item.locked
 
 /** The item, unlocked. */
-export function unlocked<T extends Item>(item: T): T {
-  if (!item.locked) return item
-  const { locked: _was, ...rest } = item
-  return rest as T
-}
+export const unlocked = <T extends Item>(item: T): T => without(item, 'locked')
 
 /** An arrow end moved by (dx, dy) if it's loose. Attached ends go wherever their item goes. */
 const moveEnd = (end: ArrowEnd, dx: number, dy: number): ArrowEnd => (end.item ? end : { ...end, x: end.x + dx, y: end.y + dy })

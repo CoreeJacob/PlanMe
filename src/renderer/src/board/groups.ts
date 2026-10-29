@@ -10,6 +10,7 @@
 
 import type { ArrowEnd, BoardDoc, Group, GroupCopy, GroupPart, Item, Rect } from '@shared/types'
 import { boundsOf } from '@/lib/geometry'
+import { same, without } from '@/lib/objects'
 import { boxOf, lookupIn } from './arrows'
 import { itemsOf, moved, withItems } from './items'
 
@@ -18,14 +19,8 @@ export const NO_GROUPS: Group[] = []
 /** The board's groups (none until it has some). */
 export const groupsOf = (doc: BoardDoc): Group[] => doc.groups ?? NO_GROUPS
 
-const same = (a: unknown, b: unknown): boolean => a === b || JSON.stringify(a) === JSON.stringify(b)
-
 /** An item without its group tag. */
-export function ungrouped<T extends Item>(item: T): T {
-  if (!item.group) return item
-  const { group: _was, ...rest } = item
-  return rest as T
-}
+export const ungrouped = <T extends Item>(item: T): T => without(item, 'group')
 
 /** Where things are on a tab: every item, and the parts of each copy (by part) on it. */
 function partsOn(items: readonly Item[]): Map<string, Map<string, Item>> {
@@ -134,40 +129,60 @@ export function addToCopy(doc: BoardDoc, tabId: string, copy: string, ids: reado
 }
 
 /**
- * Copies that have been copied: pasted or duplicated items that make up a whole copy become a new
- * copy of their group (still linked); parts of a copy on their own become ordinary items. Returns
- * the items, and the board with any new copies recorded.
+ * A whole copy of a group among things being copied (for the clipboard, or duplicating): enough to
+ * make the pasted parts a new linked copy, even if the group has gone by then (after a cut).
  */
-export function relinkCopies(doc: BoardDoc, tabId: string, items: Item[], newId: () => string): { items: Item[]; doc: BoardDoc } {
-  const groups = groupsOf(doc)
+export interface WholeCopy {
+  group: string
+  name: string
+  copy: string
+  /** Where the copy was, and the box round its parts then. */
+  x: number
+  y: number
+  bounds: Rect
+}
+
+/** The copies of groups that `items` (about to be copied) include all of. */
+export function wholeCopiesIn(doc: BoardDoc, items: readonly Item[]): WholeCopy[] {
   const parts = allParts(doc)
-  const copies = new Map<string, Item[]>()
-  for (const i of items) if (i.group) copies.set(i.group.copy, [...(copies.get(i.group.copy) ?? []), i])
-  if (!copies.size) return { items, doc }
-  const renamed = new Map<string, GroupCopy>()
-  const added: Array<{ group: string; copy: GroupCopy }> = []
   const lookup = lookupIn(items)
-  for (const [copy, pasted] of copies) {
-    const group = groups.find((g) => g.copies.some((c) => c.id === copy))
-    const whole = group && parts.get(copy) && [...parts.get(copy)!.keys()].every((m) => pasted.some((i) => i.group!.member === m))
-    if (!group || !whole) continue
-    const original = group.copies.find((c) => c.id === copy)!
-    const bounds = boundsOf(pasted.map((i) => boxOf(i, lookup)))!
-    const was = copyBounds([...parts.get(copy)!.values()], copy)!
-    const fresh: GroupCopy = { id: newId(), tab: tabId, x: original.x + bounds.x - was.x, y: original.y + bounds.y - was.y }
-    renamed.set(copy, fresh)
-    added.push({ group: group.id, copy: fresh })
+  return groupsOf(doc).flatMap((g) =>
+    g.copies.flatMap((c) => {
+      const mine = items.filter((i) => i.group?.copy === c.id)
+      const all = parts.get(c.id)
+      if (!mine.length || !all || [...all.keys()].some((m) => !mine.some((i) => i.group!.member === m))) return []
+      return [{ group: g.id, name: g.name, copy: c.id, x: c.x, y: c.y, bounds: boundsOf(mine.map((i) => boxOf(i, lookup)))! }]
+    })
+  )
+}
+
+/**
+ * Copies of copies: pasted or duplicated parts of a whole copy (see wholeCopiesIn) become a new
+ * copy of their group, still linked; if the group has gone (cut, then pasted), it comes back.
+ * Parts of a copy on their own become ordinary items. Returns the items, and the board with the
+ * new copies recorded.
+ */
+export function relinkCopies(doc: BoardDoc, tabId: string, items: Item[], wholes: readonly WholeCopy[], newId: () => string): { items: Item[]; doc: BoardDoc } {
+  if (!items.some((i) => i.group)) return { items, doc }
+  let groups = groupsOf(doc)
+  const renamed = new Map<string, string>()
+  const lookup = lookupIn(items)
+  for (const whole of wholes) {
+    const pasted = items.filter((i) => i.group?.copy === whole.copy)
+    if (!pasted.length) continue
+    const now = boundsOf(pasted.map((i) => boxOf(i, lookup)))!
+    const copy: GroupCopy = { id: newId(), tab: tabId, x: whole.x + now.x - whole.bounds.x, y: whole.y + now.y - whole.bounds.y }
+    renamed.set(whole.copy, copy.id)
+    groups = groups.some((g) => g.id === whole.group)
+      ? groups.map((g) => (g.id === whole.group ? { ...g, copies: [...g.copies, copy] } : g))
+      : [...groups, { id: whole.group, name: whole.name, copies: [copy] }]
   }
   const relinked = items.map((i) => {
     if (!i.group) return i
-    const fresh = renamed.get(i.group.copy)
-    return fresh ? { ...i, group: { ...i.group, copy: fresh.id } } : ungrouped(i)
+    const copy = renamed.get(i.group.copy)
+    return copy ? { ...i, group: { ...i.group, copy } } : ungrouped(i)
   })
-  const nextGroups = groups.map((g) => {
-    const more = added.filter((a) => a.group === g.id).map((a) => a.copy)
-    return more.length ? { ...g, copies: [...g.copies, ...more] } : g
-  })
-  return { items: relinked, doc: added.length ? { ...doc, groups: nextGroups } : doc }
+  return { items: relinked, doc: renamed.size ? { ...doc, groups } : doc }
 }
 
 // ---------- keeping copies in step ----------
@@ -213,9 +228,11 @@ export function syncGroups(before: BoardDoc, after: BoardDoc, newId: () => strin
         continue
       }
       // Moved as a whole: everything in it moved by the same amount (arrows joined at both ends
-      // and not bent stay as they are), and nothing else changed.
-      const first = after.get(differ[0])
-      const old = before.get(differ[0])
+      // and not bent stay as they are), and nothing else changed. How far is read from a part
+      // that has a place of its own (not an arrow).
+      const anchor = differ.find((m) => before.get(m)?.type !== 'arrow' && after.get(m)?.type !== 'arrow' && before.has(m) && after.has(m))
+      const first = anchor ? after.get(anchor) : undefined
+      const old = anchor ? before.get(anchor) : undefined
       if (first && old && first.type !== 'arrow' && old.type !== 'arrow') {
         const dx = first.x - old.x
         const dy = first.y - old.y
@@ -282,6 +299,26 @@ export function syncGroups(before: BoardDoc, after: BoardDoc, newId: () => strin
     return { ...t, items: [...items, ...(add ?? [])] }
   })
   return { ...after, tabs, groups: kept.length ? kept : undefined }
+}
+
+/**
+ * Tidies group data that's come apart (say, files edited by hand or by another app): parts of
+ * copies the board doesn't list become ordinary items, and copies with no parts left go (and
+ * groups with no copies). The board itself if there's nothing to tidy.
+ */
+export function tidyGroups(doc: BoardDoc): BoardDoc {
+  const parts = allParts(doc)
+  const listed = new Set(groupsOf(doc).flatMap((g) => g.copies.map((c) => `${g.id}/${c.id}`)))
+  const strays = doc.tabs.some((t) => t.items.some((i) => i.group && !listed.has(`${i.group.id}/${i.group.copy}`)))
+  const empty = groupsOf(doc).some((g) => g.copies.some((c) => !parts.has(c.id)))
+  if (!strays && !empty) return doc
+  const tabs = strays
+    ? doc.tabs.map((t) => ({ ...t, items: t.items.map((i) => (i.group && !listed.has(`${i.group.id}/${i.group.copy}`) ? ungrouped(i) : i)) }))
+    : doc.tabs
+  const groups = groupsOf(doc)
+    .map((g) => ({ ...g, copies: g.copies.filter((c) => parts.has(c.id)) }))
+    .filter((g) => g.copies.length)
+  return { ...doc, tabs, groups: groups.length ? groups : undefined }
 }
 
 /** A group's name and how many copies it has, for an item that's part of one. */

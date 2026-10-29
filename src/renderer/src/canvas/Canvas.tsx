@@ -10,60 +10,30 @@
 // text, shape or section tool: click to place one, or drag to choose its size.
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { DEFAULT_VIEW, type ArrowEnd, type ArrowItem, type BoardDoc, type ImportedImage, type Item, type Rect, type Shape } from '@shared/types'
-import { useContextMenu, type MenuEntry } from '@/app/ContextMenu'
+import { DEFAULT_VIEW, type ArrowEnd, type ArrowItem, type BoardDoc, type Item, type Rect, type Shape } from '@shared/types'
+import { useContextMenu } from '@/app/ContextMenu'
 import { Icon } from '@/app/Icon'
 import { isPlacingTool, useApp, type PlacingTool } from '@/app/store'
-import { IMAGE_DRAG } from '@/app/ImagesPanel'
-import { GROUP_DRAG } from '@/app/GroupsPanel'
-import { copyBounds, groupOf, groupsOf, withGroupMates } from '@/board/groups'
 import { useDimFilter } from '@/app/TasksPanel'
-import { arrowPoints, boxOf, controlPoints, crossesBox, fractionAlong, isArrow, isShape, lookupIn, nearestPin, pinPoint } from '@/board/arrows'
 import { scaleItems } from '@/board/arrange'
-import { besideRect, isLocked, itemsOf, moveItems, resizeRect, updateItems, type Handle } from '@/board/items'
+import { arrowPoints, boxOf, controlPoints, crossesBox, fractionAlong, isArrow, isShape, lookupIn, nearestPin, pinPoint } from '@/board/arrows'
+import { copyBounds, groupsOf, withGroupMates } from '@/board/groups'
+import { besideRect, itemsOf, moveItems, resizeRect, updateItems, type Handle } from '@/board/items'
 import { linkTarget, linkTip } from '@/board/links'
 import { drawingOrder, isSection, movable } from '@/board/sections'
 import { statusOf } from '@/board/statuses'
-import { hasTag, tagsOf, tagState } from '@/board/tags'
 import { NO_SELECTION, selectTab, useBoard } from '@/board/store'
+import { hasTag, tagsOf } from '@/board/tags'
 import { boundsOf, overlaps, rectFrom, within, type Point } from '@/lib/geometry'
 import { useElementSize } from '@/lib/useElementSize'
-import {
-  addArrow,
-  addConnected,
-  addItem,
-  arrangeSelected,
-  bringSelectedToFront,
-  deleteSelected,
-  duplicateSelected,
-  finishEditing,
-  followLink,
-  groupSelected,
-  placeGroupCopy,
-  takeOutOfGroup,
-  ungroupSelected,
-  addSelectedToGroup,
-  linkSelected,
-  newTagForSelected,
-  removeBend,
-  selectAll,
-  sendSelectedToBack,
-  setLink,
-  setOnSelected,
-  setStatusOnSelected,
-  showDetails,
-  startEditing,
-  tickEntry,
-  toggleLockOnSelected,
-  toggleTagOnSelected
-} from './actions'
+import { addArrow, addConnected, addItem, finishEditing, followLink, removeBend, showDetails, startEditing, tickEntry } from './actions'
 import { ArrowView } from './ArrowView'
-import { addImageFiles, chooseImages, placeImages } from './images'
+import { canJoin, currentView, itemById, onlySelected, setCurrentView, viewport, zoomReset, zoomStep, zoomToFit } from './current'
+import { chooseImages } from './images'
 import { ItemToolbar } from './ItemToolbar'
 import { ItemView } from './ItemView'
-import { ALIGN_CHOICES, currentStatusChoice, palettesFor, paletteName, SPREAD_CHOICES, statusChoicesFor, statusValue } from './looks'
-import { canJoin, currentView, itemById, onlySelected, setCurrentView, viewport, zoomReset, zoomStep, zoomToFit, zoomToSelection } from './current'
 import { useCanvasKeys, useClipboard } from './keys'
+import { canDrop, dropOnBoard, emptySpaceMenu, itemMenu, statusMenu } from './menus'
 import { Overlay, type ActiveDot } from './Overlay'
 import { snapMove, snapResize, type Guide } from './snap'
 import { dotNear, endAt, endOnDot, gripTarget, shapeAround, shapeUnder } from './targets'
@@ -247,9 +217,11 @@ export function Canvas() {
     if (badge && badgeOf) {
       e.preventDefault()
       finishEditing()
+      // A status is one item's own: for part of a linked group, that's working inside the group.
+      if (badgeOf.group) useBoard.getState().setOpenGroup(badgeOf.group.copy)
       useBoard.getState().select([badgeOf.id])
       const r = badge.getBoundingClientRect()
-      menu.show(r.left, r.bottom + 4, statusMenu([badgeOf]) ?? [])
+      menu.show(r.left, r.bottom + 4, statusMenu([badgeOf], statuses) ?? [])
       return
     }
     // An item's details badge: open the Details pane on it.
@@ -318,7 +290,16 @@ export function Canvas() {
     if (bend && only && isArrow(only)) {
       const { bend: at, bendAdd } = bend.dataset
       const index = Number(at ?? bendAdd ?? 0)
-      setDrag({ kind: 'bend', base: board.doc, arrow: only, index, insert: bendAdd !== undefined, elbow: 'elbow' in bend.dataset, startScreen: { x: e.clientX, y: e.clientY }, moving: false })
+      setDrag({
+        kind: 'bend',
+        base: board.doc,
+        arrow: only,
+        index,
+        insert: bendAdd !== undefined,
+        elbow: 'elbow' in bend.dataset,
+        startScreen: { x: e.clientX, y: e.clientY },
+        moving: false
+      })
       return
     }
     const handle = target.closest<HTMLElement>('[data-handle]')?.dataset.handle as Handle | undefined
@@ -570,7 +551,13 @@ export function Canvas() {
     // The places to add a bend sit on the line: double-clicking one labels the arrow, like the line.
     if (target?.closest('[data-bend-add], [data-elbow]') && only && isArrow(only)) return startEditing(only.id)
     // Handles (for resizing, or an arrow's ends) aren't empty space: no new note there.
-    if (!target || target.closest('.item-editor, .zoom-controls, .item-toolbar, [data-handle], [data-end], [data-dot], [data-status-badge], [data-link-badge], [data-details-badge], [data-grip]')) return
+    if (
+      !target ||
+      target.closest(
+        '.item-editor, .zoom-controls, .item-toolbar, [data-handle], [data-end], [data-dot], [data-status-badge], [data-link-badge], [data-details-badge], [data-grip]'
+      )
+    )
+      return
     const hit = target.closest<HTMLElement>('[data-item-id]')?.dataset.itemId
     // Double-click an item to type in it (in a to-do list, the line or title clicked), or empty
     // space for a new sticky note.
@@ -582,107 +569,22 @@ export function Canvas() {
     else addItem('note', boardPoint(e))
   }
 
-  /** The status choices for some items, as menu entries (the current one ticked), or null if they can't have one. */
-  const statusMenu = (chosen: Item[]): MenuEntry[] | null => {
-    const choices = statusChoicesFor(chosen, statuses)
-    if (!choices) return null
-    const current = currentStatusChoice(chosen)
-    return [
-      ...choices.map((c) => ({ label: c.label.split(' — ')[0], hint: c.value === current ? '✓' : undefined, onSelect: () => setStatusOnSelected(statusValue(c.value)) })),
-      'separator' as const,
-      { label: 'Edit Statuses…', onSelect: () => useApp.getState().setStatusEditorOpen(true) }
-    ]
-  }
-
   const onContextMenu = (e: React.MouseEvent): void => {
     e.preventDefault()
     const target = e.target as Element
     if (target.closest('.item-editor')) return
     const board = useBoard.getState()
     const hit = target.closest<HTMLElement>('[data-item-id]')?.dataset.itemId
-    const at = boardPoint(e)
     if (!hit) {
       finishEditing()
-      menu.show(e.clientX, e.clientY, [
-        { label: 'Add Sticky Note Here', icon: 'note', onSelect: () => addItem('note', at) },
-        { label: 'Add Text Here', icon: 'text', onSelect: () => addItem('text', at) },
-        { label: 'Add Shape Here', icon: 'box', onSelect: () => addItem('box', at, useApp.getState().boxShape) },
-        { label: 'Add To-do List Here', icon: 'tasks', onSelect: () => addItem('todo', at) },
-        { label: 'Add Section Here', icon: 'section', onSelect: () => addItem('section', at) },
-        { label: 'Add Image Here…', icon: 'image', onSelect: () => void chooseImages(at) },
-        'separator',
-        { label: 'Select All', hint: '⌘A', disabled: !items.length, onSelect: selectAll },
-        { label: 'Zoom to Fit', icon: 'fit', hint: '⇧1', disabled: !items.length, onSelect: zoomToFit }
-      ])
-      return
+      return menu.show(e.clientX, e.clientY, emptySpaceMenu(boardPoint(e), items.length > 0))
     }
     if (!board.selected.includes(hit)) {
       finishEditing()
       board.select(withGroupMates([hit], itemsOf(board.doc, board.tabId), board.openGroup))
     }
     const chosen = itemsOf(board.doc, board.tabId).filter((i) => useBoard.getState().selected.includes(i.id))
-    const entries: MenuEntry[] = []
-    const editLabel = isArrow(chosen[0]) ? 'Edit Label' : isSection(chosen[0]) ? 'Edit Title' : 'Edit Text'
-    if (chosen.length === 1) entries.push({ label: editLabel, icon: 'rename', hint: '↩', onSelect: () => startEditing(hit) })
-    // The same colour and status choices as the floating toolbar.
-    for (const p of palettesFor(chosen)) {
-      entries.push({ label: paletteName(p), submenu: p.choices.map((c) => ({ label: c.label, onSelect: () => setOnSelected(p.key, c.name) })) })
-    }
-    const statusEntries = statusMenu(chosen)
-    if (statusEntries) entries.push({ label: 'Status', icon: 'flag', submenu: statusEntries })
-    if (chosen.some(isShape)) {
-      const state = (id: string): string | undefined => ({ all: '✓', some: '–', none: undefined })[tagState(chosen, id)]
-      entries.push({
-        label: 'Tags',
-        icon: 'tag',
-        submenu: [
-          ...tagsOf(board.doc).map((t) => ({ label: t.name, hint: state(t.id), onSelect: () => toggleTagOnSelected(t.id) })),
-          ...(tagsOf(board.doc).length ? ['separator' as const] : []),
-          { label: 'New Tag…', onSelect: () => void newTagForSelected() },
-          { label: 'Edit Tags…', onSelect: () => useApp.getState().setTagEditorOpen(true) }
-        ]
-      })
-      if (chosen.length === 1) entries.push({ label: 'Details', icon: 'details', hint: '⌘E', onSelect: () => showDetails(chosen[0].id) })
-    }
-    // Links (arrows can't have them).
-    const linkable = chosen.filter(isShape)
-    if (linkable.length) {
-      const only = linkable.length === 1 ? linkable[0] : undefined
-      const going = only?.link && linkTarget(board.doc, only.link)
-      entries.push('separator')
-      if (only && going) entries.push({ label: going.type === 'web' ? 'Open Link' : 'Follow Link', icon: going.type === 'web' ? 'reveal' : 'link', onSelect: () => followLink(only.id) })
-      entries.push({ label: only?.link ? 'Change Link…' : 'Link to…', icon: 'link', hint: '⌘K', onSelect: linkSelected })
-      if (linkable.some((i) => i.link)) entries.push({ label: 'Remove Link', onSelect: () => setLink(linkable.map((i) => i.id), null) })
-    }
-    const shapes = chosen.filter(isShape)
-    const allLocked = chosen.every(isLocked)
-    entries.push('separator')
-    if (shapes.length > 1) {
-      const arranging = [...ALIGN_CHOICES, ...(shapes.length > 2 ? SPREAD_CHOICES : [])]
-      entries.push({ label: 'Align', icon: 'alignLeft', submenu: arranging.map((c) => ({ label: c.label.split(' — ')[0], icon: c.icon, onSelect: () => arrangeSelected(c.value) })) })
-    }
-    // Linked groups: make one, add to one, take out of one, or unlink a copy.
-    const copies = new Set(chosen.flatMap((i) => (i.group ? [i.group.copy] : [])))
-    const group = copies.size === 1 ? groupOf(board.doc, chosen.find((i) => i.group)) : undefined
-    const loose = chosen.filter((i) => !i.group)
-    if (loose.length) entries.push({ label: 'Make Group…', icon: 'group', hint: '⌘G', onSelect: () => void groupSelected() })
-    if (group && loose.length) entries.push({ label: `Add to “${group.name}”`, icon: 'group', onSelect: addSelectedToGroup })
-    if (group && board.openGroup && chosen.every((i) => i.group?.copy === board.openGroup)) {
-      entries.push({ label: `Take Out of “${group.name}”`, onSelect: takeOutOfGroup })
-    } else if (copies.size) {
-      entries.push({ label: group && group.copies.length > 1 ? `Unlink from “${group.name}”` : 'Ungroup', hint: '⇧⌘G', onSelect: ungroupSelected })
-    }
-    entries.push(
-      { label: allLocked ? 'Unlock' : 'Lock', icon: allLocked ? 'unlock' : 'lock', hint: '⇧⌘L', onSelect: toggleLockOnSelected },
-      { label: 'Zoom to Selection', icon: 'fit', hint: '⇧2', onSelect: zoomToSelection },
-      'separator',
-      { label: 'Bring to Front', icon: 'toFront', hint: '⌘]', onSelect: bringSelectedToFront },
-      { label: 'Send to Back', icon: 'toBack', hint: '⌘[', onSelect: sendSelectedToBack },
-      { label: 'Duplicate', icon: 'copy', hint: '⌘D', onSelect: duplicateSelected },
-      'separator',
-      { label: 'Delete', icon: 'trash', hint: '⌫', danger: true, disabled: allLocked, onSelect: deleteSelected }
-    )
-    menu.show(e.clientX, e.clientY, entries)
+    menu.show(e.clientX, e.clientY, itemMenu(chosen, hit, board.doc, board.openGroup))
   }
 
   /** How an item's link badge looks, and its hover text. */
@@ -697,7 +599,8 @@ export function Canvas() {
   const selectedItems = selectedIds.length ? items.filter((i) => selectedIds.includes(i.id)) : NO_ITEMS
   // A press that hasn't become a drag yet (it may just be a click) doesn't count.
   const pressOnly =
-    ((drag?.kind === 'move' || drag?.kind === 'bend' || drag?.kind === 'label') && !drag.moving) || (drag?.kind === 'arrowEnd' && drag.grab && !drag.grab.moving)
+    ((drag?.kind === 'move' || drag?.kind === 'bend' || drag?.kind === 'label') && !drag.moving) ||
+    (drag?.kind === 'arrowEnd' && drag.grab && !drag.grab.moving)
   const busy = drag !== null && drag.kind !== 'pan' && !pressOnly
   const cursor = drag?.kind === 'pan' ? 'panning' : tool === 'hand' || spaceDown ? 'can-pan' : isPlacingTool(tool) || tool === 'arrow' ? 'placing' : ''
   const lookup = lookupIn(items)
@@ -719,8 +622,7 @@ export function Canvas() {
   const dotted = !dotsShow
     ? NO_SHAPES
     : items.filter(
-        (i): i is Shape =>
-          canJoin(i) && (drawingArrow || (i.id !== editingId && (i.id === hovered || (selectedIds.length === 1 && selectedIds[0] === i.id))))
+        (i): i is Shape => canJoin(i) && (drawingArrow || (i.id !== editingId && (i.id === hovered || (selectedIds.length === 1 && selectedIds[0] === i.id))))
       )
 
   return (
@@ -740,30 +642,14 @@ export function Canvas() {
       }}
       onDoubleClick={onDoubleClick}
       onContextMenu={onContextMenu}
-      // Pictures dropped from Finder (or another app) land where they're dropped.
+      // Pictures (from Finder, or the Images panel) and groups (from the Groups panel) dropped on the board land there.
       onDragOver={(e) => {
-        if (!['Files', IMAGE_DRAG, GROUP_DRAG].some((type) => e.dataTransfer.types.includes(type))) return
+        if (!canDrop(e.dataTransfer)) return
         e.preventDefault()
         e.dataTransfer.dropEffect = 'copy'
       }}
       onDrop={(e) => {
-        // A picture from the Images panel: it's already in the board, so just place it.
-        // A group from the Groups panel: a new linked copy, centred where it's dropped.
-        const group = e.dataTransfer.getData(GROUP_DRAG)
-        if (group) {
-          e.preventDefault()
-          placeGroupCopy(group, boardPoint(e))
-          return
-        }
-        const fromPanel = e.dataTransfer.getData(IMAGE_DRAG)
-        if (fromPanel) {
-          e.preventDefault()
-          void placeImages([JSON.parse(fromPanel) as ImportedImage], boardPoint(e))
-          return
-        }
-        if (!e.dataTransfer.files.length) return
-        e.preventDefault()
-        void addImageFiles([...e.dataTransfer.files], boardPoint(e))
+        if (dropOnBoard(e.dataTransfer, boardPoint(e))) e.preventDefault()
       }}
       onAuxClick={(e) => e.preventDefault()}
     >
@@ -811,13 +697,11 @@ export function Canvas() {
         groups={groupOutlines}
       />
 
-      {selectedItems.length > 0 && !busy && <ItemToolbar view={view} size={size} items={selectedItems} lookup={lookup} editing={editingId !== null} statuses={statuses} tags={tagsOf(doc)} />}
-
-      {items.length === 0 && (
-        <div className="canvas-hint muted">
-          Double-click to add a sticky note · scroll to move around · pinch or ⌘-scroll to zoom
-        </div>
+      {selectedItems.length > 0 && !busy && (
+        <ItemToolbar view={view} size={size} items={selectedItems} lookup={lookup} editing={editingId !== null} statuses={statuses} tags={tagsOf(doc)} />
       )}
+
+      {items.length === 0 && <div className="canvas-hint muted">Double-click to add a sticky note · scroll to move around · pinch or ⌘-scroll to zoom</div>}
 
       <div className="zoom-controls" onPointerDown={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}>
         <button className="icon-btn" title="Zoom out (⌘−)" onClick={() => zoomStep(-1)}>

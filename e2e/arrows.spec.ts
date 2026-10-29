@@ -378,7 +378,8 @@ test('arrows bend where they’re dragged, curve, and their labels slide along t
   await check('dragging it bends the arrow through that point', points.length === 3 && near(points[1], 0, -150), points)
   await check('…leaving each note from the side facing the bend', near(points[0], -200, 0) && near(points[2], 200, 0), points)
   await check('now there’s the bend plus a place to add another either side', (await handles()).map((h) => h[0]).join() === 'bend,add,add', await handles())
-  const saved = await app.until(async () => (await app.savedItems('Game', 0, 3)).find((i: any) => i.type === 'arrow')?.bends)
+  const arrowIn = (items: any[]) => items.find((i) => i.type === 'arrow')
+  const saved = arrowIn(await app.savedItems('Game', 0, 3, (items) => arrowIn(items)?.bends))?.bends
   await check('the bend is saved', JSON.stringify(saved) === '[{"x":0,"y":-150}]', saved)
   await app.undo()
   await check('one undo takes it out', (await app.arrow(arrow)).points.length === 2)
@@ -399,7 +400,7 @@ test('arrows bend where they’re dragged, curve, and their labels slide along t
   points = (await app.arrow(arrow)).points
   await check('curved: a smooth line through the bend', points.length > 10 && points.some((p) => near(p, 50, -110)), points.length)
   await app.click(toolbarButton('Straighten'))
-  const straight = await app.until(async () => (await app.savedItems('Game', 0, 3)).find((i: any) => i.type === 'arrow')?.bends === undefined)
+  const straight = arrowIn(await app.savedItems('Game', 0, 3, (items) => !arrowIn(items)?.bends))?.bends === undefined
   await check('Straighten takes the bends out', straight)
 
   // Double-clicking a bend takes it out.
@@ -419,7 +420,7 @@ test('arrows bend where they’re dragged, curve, and their labels slide along t
   await app.key('Escape', 'Escape')
   const label = await app.centre(`document.querySelector('.arrow-label')`)
   await app.drag([label, [label[0] + 40, label[1]], [label[0] + 150, label[1] + 30]])
-  const labelAt = (await app.until(async () => (await app.savedItems('Game', 0, 3)).find((i: any) => i.type === 'arrow')?.labelAt)) as number
+  const labelAt = arrowIn(await app.savedItems('Game', 0, 3, (items) => arrowIn(items)?.labelAt))?.labelAt as number
   await check('dragging a label slides it along the arrow', labelAt > 0.6 && labelAt < 0.9, labelAt)
   const after = await app.centre(`document.querySelector('.arrow-label')`)
   await check('…staying on the line', Math.abs(after[1] - label[1]) < 2, { label, after })

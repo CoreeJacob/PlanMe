@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_STATUSES } from '@shared/statuses'
 import type { ArrowItem, BoardDoc, Item, Shape } from '@shared/types'
-import { addToCopy, groupsOf, makeGroup, placeCopy, relinkCopies, syncGroups, unlinkCopies, withGroupMates } from './groups'
+import { addToCopy, groupsOf, makeGroup, placeCopy, relinkCopies, syncGroups, tidyGroups, unlinkCopies, wholeCopiesIn, withGroupMates } from './groups'
 import { copiesOf, itemsOf, moveItems, newArrow, newItem, removeItems, updateItems } from './items'
 
 const note = (id: string, x: number, y: number): Shape => ({ ...newItem('note', id, { x, y, w: 100, h: 100 }), text: id }) as Shape
@@ -62,6 +62,16 @@ describe('linked groups', () => {
     expect(groupsOf(movedDoc)[0].id).toBe(group.id)
   })
 
+  it('moving a whole copy that has a bent arrow made before its notes still moves only that copy', () => {
+    const bent = { ...newArrow('bent', { item: null, x: 0, y: 300 }, { item: null, x: 300, y: 300 }), bends: [{ x: 150, y: 400 }] } as Item
+    const start: BoardDoc = { statuses: DEFAULT_STATUSES, tabs: [{ id: 'one', name: 'L1', items: [bent, note('a', 0, 0), note('b', 200, 0)] }, { id: 'two', name: 'L2', items: [] }] }
+    const grouped = makeGroup(start, 'one', ['bent', 'a', 'b'], 'G', newId)
+    const doc = placeCopy(grouped, 'two', groupsOf(grouped)[0].id, { x: 1000, y: 0 }, newId).doc
+    const movedDoc = change(doc, (d) => moveItems(d, 'one', itemsOf(d, 'one').map((i) => i.id), 40, 40))
+    expect(byText(movedDoc, 'two', 'a')).toMatchObject({ x: 1000, y: 0 })
+    expect((itemsOf(movedDoc, 'two').find((i) => i.type === 'arrow') as ArrowItem).bends).toEqual([{ x: 1150, y: 400 }])
+  })
+
   it('moving one part within a copy moves it in every copy', () => {
     const { doc } = setUp()
     const movedDoc = change(doc, (d) => moveItems(d, 'one', ['sword'], 0, 150))
@@ -104,18 +114,29 @@ describe('linked groups', () => {
 
   it('a whole copy pasted is a new linked copy; a part pasted on its own is an ordinary item', () => {
     const { doc } = setUp()
-    const whole = copiesOf(
-      itemsOf(doc, 'one').filter((i) => i.group),
-      0,
-      300,
-      newId
-    )
-    const relinked = relinkCopies(doc, 'one', whole, newId)
+    const originals = itemsOf(doc, 'one').filter((i) => i.group)
+    const wholes = wholeCopiesIn(doc, originals)
+    expect(wholes.map((w) => w.name)).toEqual(['Hero'])
+    const relinked = relinkCopies(doc, 'one', copiesOf(originals, 0, 300, newId), wholes, newId)
     expect(relinked.items.every((i) => i.group && i.group.copy !== groupsOf(doc)[0].copies[0].id)).toBe(true)
     expect(groupsOf(relinked.doc)[0].copies).toHaveLength(3)
     expect(groupsOf(relinked.doc)[0].copies[2]).toMatchObject({ tab: 'one', x: 0, y: 300 })
-    const part = relinkCopies(doc, 'one', copiesOf([itemsOf(doc, 'one')[0]], 0, 300, newId), newId)
+    const lone = [itemsOf(doc, 'one')[0]]
+    const part = relinkCopies(doc, 'one', copiesOf(lone, 0, 300, newId), wholeCopiesIn(doc, lone), newId)
     expect(part.items[0].group).toBeUndefined()
+  })
+
+  it('a group cut (its only copy) and pasted elsewhere comes back, still a group', () => {
+    const { doc } = setUp()
+    const [, second] = groupsOf(doc)[0].copies
+    const one = unlinkCopies(doc, new Set([second.id]))
+    const parts = itemsOf(one, 'one').filter((i) => i.group)
+    const wholes = wholeCopiesIn(one, parts)
+    const cut = change(one, (d) => removeItems(d, 'one', parts.map((i) => i.id)))
+    expect(groupsOf(cut)).toEqual([])
+    const pasted = relinkCopies(cut, 'two', copiesOf(parts, 0, 0, newId), wholes, newId)
+    expect(groupsOf(pasted.doc).map((g) => [g.name, g.copies.map((c) => c.tab)])).toEqual([['Hero', ['two']]])
+    expect(pasted.items.every((i) => i.group?.copy === groupsOf(pasted.doc)[0].copies[0].id)).toBe(true)
   })
 
   it('making a group from parts of another unlinks that copy first', () => {
@@ -126,5 +147,20 @@ describe('linked groups', () => {
       ['Just hero', 1]
     ])
     expect(itemsOf(regrouped, 'one').filter((i) => i.group)).toHaveLength(3)
+  })
+
+  it('tidy up group data that has come apart (files edited by hand)', () => {
+    const { doc } = setUp()
+    expect(tidyGroups(doc)).toBe(doc)
+    // A part whose copy isn't listed, and a listed copy with nothing on the board.
+    const stray = { ...note('stray', 0, 900), group: { id: 'gone', copy: 'nowhere', member: 'p0' } } as Item
+    const broken: BoardDoc = {
+      ...doc,
+      tabs: doc.tabs.map((t) => (t.id === 'one' ? { ...t, items: [...t.items, stray] } : t)),
+      groups: groupsOf(doc).map((g) => ({ ...g, copies: [...g.copies, { id: 'empty', tab: 'two', x: 0, y: 0 }] }))
+    }
+    const tidied = tidyGroups(broken)
+    expect(itemsOf(tidied, 'one').find((i) => i.id === 'stray')?.group).toBeUndefined()
+    expect(groupsOf(tidied)[0].copies.map((c) => c.id)).toEqual(groupsOf(doc)[0].copies.map((c) => c.id))
   })
 })

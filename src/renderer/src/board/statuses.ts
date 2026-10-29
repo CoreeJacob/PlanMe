@@ -1,6 +1,7 @@
 // Statuses: which one an item shows, and changing the board's list of them.
 
 import type { BoardDoc, Item, Status, StatusKind, TodoItem } from '@shared/types'
+import { without } from '@/lib/objects'
 
 /** How many of a to-do list's lines are ticked, out of how many. */
 export function progressOf(todo: TodoItem): { done: number; total: number } {
@@ -38,8 +39,8 @@ export function withStatuses(doc: BoardDoc, statuses: Status[]): BoardDoc {
   const tabs = doc.tabs.map((t) => {
     const items = t.items.map((i): Item => {
       if (i.type === 'arrow' || !i.status || kept.has(i.status)) return i
-      const { status: _gone, ...rest } = i
-      return i.type === 'todo' ? { ...(rest as TodoItem), auto: true } : (rest as Item)
+      const rest = without(i, 'status')
+      return rest.type === 'todo' ? { ...rest, auto: true } : rest
     })
     return items.every((i, k) => i === t.items[k]) ? t : { ...t, items }
   })

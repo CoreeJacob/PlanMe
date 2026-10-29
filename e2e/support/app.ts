@@ -576,14 +576,20 @@ export class App {
   }
 
   /** The items saved in a tab's file, once it has `count` of them. */
-  async savedItems(board: string, tabIndex: number, count: number): Promise<any[]> {
+  /**
+   * The items saved in a tab's file, once there are `count` of them and (if given) `ready` says
+   * the change being checked has been saved. Saving happens a moment after each change, so a
+   * check of a change that doesn't alter the number of items needs `ready`, or it may see the
+   * file from before.
+   */
+  async savedItems(board: string, tabIndex: number, count: number, ready: (items: any[]) => unknown = () => true): Promise<any[]> {
     const dir = this.boardDir(board)
     const saved = await this.until(async () => {
       const b = await readJson(path.join(dir, 'board.json')).catch(() => null)
       // (The tab may not be saved yet.)
       const id = b?.tabs[tabIndex]?.id
       const tab = id && (await readJson(path.join(dir, 'tabs', `${id}.json`)).catch(() => null))
-      return tab?.items?.length === count ? tab.items : null
+      return tab?.items?.length === count && ready(tab.items) ? tab.items : null
     })
     return saved ?? []
   }

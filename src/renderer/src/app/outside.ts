@@ -4,6 +4,7 @@
 // dragged or typed, the change waits until that's finished.
 
 import { useEffect } from 'react'
+import { tidyGroups } from '@/board/groups'
 import { mergeOutside, type OutsideChange } from '@/board/merge'
 import { flushSave, lastSaved, onChangedOutside } from '@/board/saver'
 import { useBoard } from '@/board/store'
@@ -61,7 +62,7 @@ async function bringIn(): Promise<void> {
     waiting = true
     return
   }
-  const change = mergeOutside(lastSaved() ?? board.doc, board.doc, fresh.doc)
+  const change = mergeOutside(lastSaved() ?? board.doc, board.doc, tidyGroups(fresh.doc))
   // Changes made in the app may have been held back from saving until now. (Not waited for:
   // this can run inside a save.)
   void flushSave()

@@ -4,6 +4,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { TextStyle } from '@/board/richtext'
 
+/** Bold, italic and underline: their buttons, the browser's command for each, and their keys. */
+export const TEXT_STYLES: ReadonlyArray<{ style: TextStyle; name: string; command: string; key: string }> = [
+  { style: 'b', name: 'Bold', command: 'bold', key: '⌘B' },
+  { style: 'i', name: 'Italic', command: 'italic', key: '⌘I' },
+  { style: 'u', name: 'Underline', command: 'underline', key: '⌘U' }
+]
+
 const NO_STYLES: Record<TextStyle, boolean> = { b: false, i: false, u: false }
 
 /** While typing: which of bold, italic and underline are on where the caret is (and a way to look again). */

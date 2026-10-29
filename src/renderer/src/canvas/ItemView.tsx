@@ -145,7 +145,7 @@ export const ItemView = memo(function ItemView({ item, editing, part = null, sta
   const mine = tags ? itemTags(item, tags) : []
   const shown = chipsThatFit(mine, item.w - 20 - (status ? 80 : 0))
   const chips = mine.length > 0 && (
-    <div className={`tag-chips ${status ? 'beside-status' : ''}`} title={mine.map((t) => t.name).join(', ')}>
+    <div className={`tag-chips ${status ? 'beside-status' : ''}`}>
       {mine.slice(0, shown).map((t) => (
         <span key={t.id} className={`tag-chip status-${t.color}`}>
           {t.name}

@@ -2,7 +2,7 @@
 // can keep earlier versions cheaply (unchanged tabs are shared, not copied).
 
 import type { BoardDoc, Tab } from '@shared/types'
-import { relinkCopies } from './groups'
+import { relinkCopies, wholeCopiesIn } from './groups'
 import { copiesOf } from './items'
 
 export const tabIndex = (doc: BoardDoc, id: string): number => doc.tabs.findIndex((t) => t.id === id)
@@ -49,7 +49,7 @@ export function duplicateTab(doc: BoardDoc, id: string, copy: Pick<Tab, 'id' | '
     i.type !== 'arrow' && i.link?.type === 'item' && ids.has(i.link.item) ? { ...i, link: { type: 'item' as const, item: ids.get(i.link.item)! } } : i
   )
   // Copies of linked groups on it are new copies on the new tab, still linked.
-  const { items, doc: linked } = relinkCopies(doc, copy.id, copied, newId)
+  const { items, doc: linked } = relinkCopies(doc, copy.id, copied, wholeCopiesIn(doc, tab.items), newId)
   const tabs = linked.tabs.slice()
   tabs.splice(tabIndex(linked, id) + 1, 0, { ...copy, items })
   return { ...linked, tabs }

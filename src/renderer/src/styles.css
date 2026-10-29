@@ -930,10 +930,18 @@ button {
   background: var(--accent-soft);
   color: var(--accent);
 }
-.shape-popover {
+.swatch-popover.shape-popover {
   grid-template-columns: repeat(3, 34px);
 }
-.shape-popover .swatch-btn {
+.swatch-popover.shape-popover .swatch-btn {
+  width: 34px;
+  height: 34px;
+  color: var(--text);
+}
+.swatch-popover.align-popover {
+  grid-template-columns: repeat(3, 34px);
+}
+.swatch-popover.align-popover .swatch-btn {
   width: 34px;
   height: 34px;
   color: var(--text);
@@ -1061,6 +1069,10 @@ button {
 }
 .toolbar-btn.danger:hover {
   color: var(--danger);
+}
+.toolbar-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
 }
 .toolbar-btn.style-b { font-weight: 700; }
 .toolbar-btn.style-i { font-style: italic; font-family: Georgia, serif; }
@@ -1307,6 +1319,39 @@ button {
   transform: scale(1.35);
 }
 
+/* ---------- bending arrows ---------- */
+
+/* On a selected arrow: its bends (solid), and places to add one (hollow, smaller). */
+.bend-handle {
+  position: absolute;
+  width: 11px;
+  height: 11px;
+  margin: -5.5px 0 0 -5.5px;
+  border: 1.5px solid var(--select);
+  border-radius: 50%;
+  background: var(--select);
+  cursor: move;
+  pointer-events: auto;
+}
+.bend-handle.add {
+  width: 9px;
+  height: 9px;
+  margin: -4.5px 0 0 -4.5px;
+  background: var(--panel);
+  opacity: 0.85;
+  cursor: grab;
+}
+.bend-handle.elbow {
+  width: 10px;
+  height: 10px;
+  margin: -5px 0 0 -5px;
+  border-radius: 2px;
+  background: var(--panel);
+}
+.bend-handle:hover {
+  transform: scale(1.3);
+}
+
 /* ---------- to-do lists ---------- */
 
 .item-todo {
@@ -1460,6 +1505,101 @@ button {
   filter: brightness(1.1);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--status) 35%, transparent);
 }
+/* The other badges on items: details and link (bottom right), lock (bottom left), tags (top left). */
+/* On the bottom edge at the right, opposite the status badge: details, then the link. */
+.corner-badges {
+  position: absolute;
+  bottom: -11px;
+  right: 10px;
+  z-index: 1;
+  display: flex;
+  gap: 4px;
+  pointer-events: none;
+}
+/* Click to follow the link. */
+.link-badge,
+.details-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
+  background: var(--panel);
+  color: var(--accent);
+  box-shadow: 0 1px 3px rgba(20, 22, 30, 0.15);
+  cursor: pointer;
+  pointer-events: auto;
+}
+.link-badge:hover,
+.details-badge:hover {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+/* Linked to something deleted since: still there, so it can be fixed. */
+.link-badge.broken {
+  border: 1.5px dashed var(--danger);
+  color: var(--danger);
+}
+/* On the bottom edge, at the left: this one can't be moved, resized or deleted. */
+.lock-badge {
+  position: absolute;
+  bottom: -9px;
+  left: 10px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
+  background: var(--panel);
+  color: var(--muted);
+  pointer-events: auto;
+}
+/* Along the top edge, at the left (the status badge is at the right). */
+.tag-chips {
+  position: absolute;
+  top: -9px;
+  left: 10px;
+  right: 10px;
+  z-index: 1;
+  display: flex;
+  gap: 3px;
+  overflow: hidden;
+  pointer-events: none;
+}
+/* Clear of the status badge at the right. */
+.tag-chips.beside-status {
+  right: 90px;
+}
+/* A section's title sits above its edge, so its tags go just inside. */
+.item-section .tag-chips {
+  top: 8px;
+}
+.tag-chip {
+  /* Short of room, names shorten ("Chara…"); the "+2" always shows. */
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0 6px;
+  border: 1px solid color-mix(in srgb, var(--status, var(--muted)) 55%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--status, var(--muted)) 16%, var(--panel));
+  color: color-mix(in srgb, var(--status, var(--muted)) 70%, var(--text));
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 16px;
+  white-space: nowrap;
+}
+.tag-chip.more {
+  --status: var(--muted);
+  flex-shrink: 0;
+}
 /* Finished things fade back so the work still to do stands out. */
 .item.is-finished {
   opacity: 0.55;
@@ -1502,10 +1642,13 @@ button {
   cursor: pointer;
 }
 
-/* ---------- the status editor ---------- */
+/* ---------- the status and tag editors ---------- */
 
 .modal.status-editor {
   width: 520px;
+}
+.modal.tag-editor {
+  width: 420px;
 }
 .status-rows {
   display: flex;
@@ -1916,44 +2059,6 @@ button {
 
 /* ---------- links ---------- */
 
-/* On the bottom edge at the right, opposite the status badge: details, then the link. */
-.corner-badges {
-  position: absolute;
-  bottom: -11px;
-  right: 10px;
-  z-index: 1;
-  display: flex;
-  gap: 4px;
-  pointer-events: none;
-}
-/* Click to follow the link. */
-.link-badge,
-.details-badge {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  padding: 0;
-  border: 1px solid var(--border-strong);
-  border-radius: 50%;
-  background: var(--panel);
-  color: var(--accent);
-  box-shadow: 0 1px 3px rgba(20, 22, 30, 0.15);
-  cursor: pointer;
-  pointer-events: auto;
-}
-.link-badge:hover,
-.details-badge:hover {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px var(--accent-soft);
-}
-/* Linked to something deleted since: still there, so it can be fixed. */
-.link-badge.broken {
-  border: 1.5px dashed var(--danger);
-  color: var(--danger);
-}
-
 .modal.link-picker {
   width: 460px;
 }
@@ -2158,38 +2263,6 @@ button {
   font-size: 12px;
 }
 
-/* ---------- lock, align, resizing several ---------- */
-
-/* On the bottom edge, at the left: this one can't be moved, resized or deleted. */
-.lock-badge {
-  position: absolute;
-  bottom: -9px;
-  left: 10px;
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  border: 1px solid var(--border-strong);
-  border-radius: 50%;
-  background: var(--panel);
-  color: var(--muted);
-  pointer-events: auto;
-}
-.align-popover {
-  grid-template-columns: repeat(3, 34px);
-}
-.align-popover .swatch-btn {
-  width: 34px;
-  height: 34px;
-  color: var(--text);
-}
-.toolbar-btn:disabled {
-  opacity: 0.35;
-  cursor: default;
-}
-
 /* ---------- keyboard shortcuts sheet ---------- */
 
 .modal.shortcuts-sheet {
@@ -2320,46 +2393,6 @@ button {
 
 /* ---------- tags ---------- */
 
-/* Along the top edge, at the left (the status badge is at the right). */
-.tag-chips {
-  position: absolute;
-  top: -9px;
-  left: 10px;
-  right: 10px;
-  z-index: 1;
-  display: flex;
-  gap: 3px;
-  overflow: hidden;
-  pointer-events: none;
-}
-/* Clear of the status badge at the right. */
-.tag-chips.beside-status {
-  right: 90px;
-}
-/* A section's title sits above its edge, so its tags go just inside. */
-.item-section .tag-chips {
-  top: 8px;
-}
-.tag-chip {
-  /* Short of room, names shorten ("Chara…"); the "+2" always shows. */
-  flex: 0 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  padding: 0 6px;
-  border: 1px solid color-mix(in srgb, var(--status, var(--muted)) 55%, transparent);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--status, var(--muted)) 16%, var(--panel));
-  color: color-mix(in srgb, var(--status, var(--muted)) 70%, var(--text));
-  font-size: 10.5px;
-  font-weight: 600;
-  line-height: 16px;
-  white-space: nowrap;
-}
-.tag-chip.more {
-  --status: var(--muted);
-  flex-shrink: 0;
-}
 .tags-popover {
   display: flex;
   flex-direction: column;
@@ -2397,9 +2430,6 @@ button {
   font-size: 11px;
   color: var(--muted);
   cursor: pointer;
-}
-.modal.tag-editor {
-  width: 420px;
 }
 
 /* ---------- details ---------- */
@@ -2479,39 +2509,6 @@ button {
 .details-editor:empty::before {
   content: attr(data-placeholder);
   color: var(--muted);
-}
-
-/* ---------- bending arrows ---------- */
-
-/* On a selected arrow: its bends (solid), and places to add one (hollow, smaller). */
-.bend-handle {
-  position: absolute;
-  width: 11px;
-  height: 11px;
-  margin: -5.5px 0 0 -5.5px;
-  border: 1.5px solid var(--select);
-  border-radius: 50%;
-  background: var(--select);
-  cursor: move;
-  pointer-events: auto;
-}
-.bend-handle.add {
-  width: 9px;
-  height: 9px;
-  margin: -4.5px 0 0 -4.5px;
-  background: var(--panel);
-  opacity: 0.85;
-  cursor: grab;
-}
-.bend-handle.elbow {
-  width: 10px;
-  height: 10px;
-  margin: -5px 0 0 -5px;
-  border-radius: 2px;
-  background: var(--panel);
-}
-.bend-handle:hover {
-  transform: scale(1.3);
 }
 
 /* ---------- linked groups ---------- */

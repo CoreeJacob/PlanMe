@@ -76,10 +76,7 @@ test('details: longer notes behind an item, in a pane on the right', async ({ ap
   await app.click(`document.querySelector('.details-tools [title="Bullet list"], .details-tools [data-tip="Bullet list"]')`)
   await app.type('Fire breath')
   await app.key('Escape', 'Escape')
-  const [saved] = await app.until(async () => {
-    const items = await app.savedItems('Game', 0, 1)
-    return items[0]?.details?.includes('Fire breath') ? items : null
-  }) ?? [{}]
+  const [saved = {}] = await app.savedItems('Game', 0, 1, ([note]) => note.details?.includes('Fire breath'))
   await check('what’s typed is saved with the item, with its bullet list', saved.details?.includes('Three phases') && saved.details?.includes('<li>Fire breath</li>'), saved.details)
   await check('the item shows a details badge', await app.js(`!!document.querySelector('[data-item-id="${boss}"] .details-badge')`))
 

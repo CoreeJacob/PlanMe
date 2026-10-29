@@ -40,10 +40,7 @@ test('links go to tabs and items, and Back comes back', async ({ app }) => {
   await check('Return picks it and closes the picker', !(await app.js(`!!${picker}`)))
   await check('the item shows a link badge', await app.js(`!!${badge(start)}`))
   await check('…saying where it goes', (await app.js(tipOf(badge(start)))) === 'Go to “Boss fight” on Levels', await app.js(tipOf(badge(start))))
-  const [saved] = (await app.until(async () => {
-    const items = await app.savedItems('Game', 0, 1)
-    return items[0]?.link ? items : null
-  })) ?? [{}]
+  const [saved = {}] = await app.savedItems('Game', 0, 1, ([first]) => first.link)
   await check('the link is saved with the item', saved.link?.type === 'item' && saved.link?.item === boss, saved.link)
   await app.undo()
   await check('linking is one undo step', !(await app.js(`!!${badge(start)}`)))

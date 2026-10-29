@@ -3,7 +3,7 @@
 import { create } from 'zustand'
 import type { BoardDoc, ImageMoves, OpenedBoard, View } from '@shared/types'
 import { readPref, writePref } from '@/lib/prefs'
-import { syncGroups } from './groups'
+import { syncGroups, tidyGroups } from './groups'
 import { EMPTY_HISTORY, record, redo, undo, type History, type Step } from './history'
 import { remapDoc } from './images'
 
@@ -101,7 +101,7 @@ export const useBoard = create<BoardState>((set, get) => {
     load: (opened) =>
       set({
         board: { name: opened.name, path: opened.path },
-        doc: opened.doc,
+        doc: tidyGroups(opened.doc),
         views: opened.views,
         tabId: lastTab(opened),
         history: EMPTY_HISTORY,

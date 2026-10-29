@@ -2,6 +2,7 @@
 // An item can have several. Statuses say how far along something is; tags say what it's part of.
 
 import type { BoardDoc, Item, Tag } from '@shared/types'
+import { without } from '@/lib/objects'
 
 export const NO_TAGS: Tag[] = []
 
@@ -37,9 +38,7 @@ export function withTag<T extends Item>(item: T, id: string, on: boolean): T {
   const has = !!item.tags?.includes(id)
   if (has === on) return item
   const tags = on ? [...(item.tags ?? []), id] : item.tags!.filter((t) => t !== id)
-  if (tags.length) return { ...item, tags }
-  const { tags: _none, ...rest } = item
-  return rest as T
+  return tags.length ? { ...item, tags } : without(item, 'tags')
 }
 
 /** How many items (on every tab) have a tag. */

@@ -1,6 +1,6 @@
 // Every key PlanMe has, on one sheet (⌘/, or Help ▸ Keyboard Shortcuts).
 
-import { useEffect } from 'react'
+import { useEscapeKey } from '@/lib/useEscapeKey'
 import { useApp } from './store'
 
 const GROUPS: Array<{ title: string; keys: Array<[string, string]> }> = [
@@ -76,14 +76,7 @@ const GROUPS: Array<{ title: string; keys: Array<[string, string]> }> = [
 export function ShortcutsSheet() {
   const open = useApp((s) => s.shortcutsOpen)
   const close = (): void => useApp.getState().setShortcutsOpen(false)
-  useEffect(() => {
-    if (!open) return
-    const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') close()
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [open])
+  useEscapeKey(close, open)
   if (!open) return null
   return (
     <div className="modal-backdrop" onMouseDown={close}>
