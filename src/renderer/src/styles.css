@@ -2659,3 +2659,189 @@ canvas.item-picture {
   color: #e8a400;
   font-size: 11px;
 }
+
+/* ---------- sections inside sections: the trail, the outline and the map ---------- */
+
+/* Bottom left of the board: the sections the middle of the screen is in. */
+.section-trail {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  max-width: calc(100% - 260px);
+  padding: 3px 6px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.trail-step {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.trail-sep {
+  padding: 0 2px;
+  color: var(--muted);
+}
+.trail-section {
+  min-width: 0;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 3px 6px;
+  border: none;
+  border-radius: 5px;
+  background: none;
+  color: color-mix(in srgb, var(--section-tint) 60%, var(--text));
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.trail-section:hover {
+  background: color-mix(in srgb, var(--section-tint) 14%, transparent);
+}
+
+.outline-section {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.outline-map {
+  justify-content: center;
+  margin-bottom: 8px;
+}
+.outline-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 26px;
+  padding-right: 6px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.outline-row:hover {
+  background: var(--panel-2);
+}
+.outline-row.tab {
+  margin-top: 4px;
+  color: var(--muted);
+  font-weight: 600;
+}
+.outline-row.drop {
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.library-chevron.none {
+  visibility: hidden;
+}
+.outline-swatch {
+  flex-shrink: 0;
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid var(--section-tint);
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--section-tint) 25%, transparent);
+}
+
+/* The Map: over the board, the whole board as a family tree. */
+.map-view {
+  position: absolute;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+}
+.map-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+}
+.map-header h2 {
+  margin: 0;
+  font-size: 15px;
+}
+.map-header .muted {
+  flex: 1;
+  font-size: 12px;
+}
+.map-scroll {
+  flex: 1;
+  overflow: auto;
+}
+.map-canvas {
+  position: relative;
+  margin: 0 auto;
+}
+.map-lines {
+  position: absolute;
+  inset: 0;
+  fill: none;
+  stroke: var(--border-strong);
+  stroke-width: 1.5;
+}
+.map-node {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  padding: 6px 10px;
+  border: 1.5px solid var(--border-strong);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+.map-node:disabled {
+  cursor: default;
+}
+.map-node.board {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  text-align: center;
+  align-items: center;
+}
+.map-node.tab {
+  border-style: dashed;
+}
+.map-node.section {
+  border-color: var(--section-edge, var(--section-tint));
+  background: color-mix(in srgb, var(--section-tint) 12%, var(--panel));
+}
+.map-node:not(:disabled):hover {
+  box-shadow: 0 0 0 3px var(--accent-soft);
+  border-color: var(--accent);
+}
+.map-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 650;
+}
+.map-summary {
+  font-size: 11px;
+  color: var(--muted);
+}
+.map-progress {
+  height: 4px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--muted) 25%, transparent);
+  overflow: hidden;
+}
+.map-progress span {
+  display: block;
+  height: 100%;
+  background: #2f9e44;
+}

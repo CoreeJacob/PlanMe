@@ -6,7 +6,7 @@ import type { BoardSummary, BoxShape, Theme, View } from '@shared/types'
 import { readPref, writePref } from '@/lib/prefs'
 
 export type Screen = 'loading' | 'boards' | 'board'
-export type LowerPanel = 'tasks' | 'images' | 'groups'
+export type LowerPanel = 'tasks' | 'images' | 'groups' | 'map'
 export type Tool = 'select' | 'hand' | 'note' | 'text' | 'box' | 'arrow' | 'section' | 'todo' | 'image'
 export type PlacingTool = Extract<Tool, 'note' | 'text' | 'box' | 'section' | 'todo' | 'image'>
 
@@ -60,6 +60,8 @@ interface AppState {
   tagEditorOpen: boolean
   /** The Details pane is showing, on the right. */
   detailsOpen: boolean
+  /** The Map (the board as a diagram of its tabs and sections) is showing. */
+  mapOpen: boolean
   /** While filtering, fade everything on the board that doesn't match. */
   dimRest: boolean
   /** The Done list at the bottom of the Tasks panel is open. */
@@ -100,6 +102,7 @@ interface AppState {
   setShowTags(show: boolean): void
   setTagEditorOpen(open: boolean): void
   setDetailsOpen(open: boolean): void
+  setMapOpen(open: boolean): void
   setDimRest(dim: boolean): void
   setDoneOpen(open: boolean): void
   flash(ids: readonly string[]): void
@@ -152,10 +155,11 @@ export const useApp = create<AppState>((set, get) => ({
   showTags: readPref(TAGS_KEY) !== 'false',
   tagEditorOpen: false,
   detailsOpen: readPref(DETAILS_KEY) === 'true',
+  mapOpen: false,
   dimRest: false,
   doneOpen: readPref(DONE_KEY) === 'true',
   flashIds: [],
-  lowerPanel: (['images', 'groups'] as const).find((p) => p === readPref(LOWER_KEY)) ?? 'tasks',
+  lowerPanel: (['images', 'groups', 'map'] as const).find((p) => p === readPref(LOWER_KEY)) ?? 'tasks',
   picturesFrom: readPref(PICTURES_KEY) === 'sprites' ? 'sprites' : 'board',
   search: '',
   findOpen: false,
@@ -194,6 +198,8 @@ export const useApp = create<AppState>((set, get) => ({
   },
 
   setTagEditorOpen: (tagEditorOpen) => set({ tagEditorOpen }),
+
+  setMapOpen: (mapOpen) => set({ mapOpen }),
 
   setDetailsOpen: (detailsOpen) => {
     set({ detailsOpen })
@@ -271,8 +277,8 @@ export const useApp = create<AppState>((set, get) => ({
 
 /** True while a dialog (a name prompt, the status editor, the Link picker…) is up, so the board's shortcuts wait. */
 export const dialogOpen = (): boolean => {
-  const { prompt, statusEditorOpen, tagEditorOpen, linking, shortcutsOpen, backupsFor } = useApp.getState()
-  return !!prompt || statusEditorOpen || tagEditorOpen || !!linking || shortcutsOpen || backupsFor !== null
+  const { prompt, statusEditorOpen, tagEditorOpen, linking, shortcutsOpen, backupsFor, mapOpen } = useApp.getState()
+  return !!prompt || statusEditorOpen || tagEditorOpen || !!linking || shortcutsOpen || backupsFor !== null || mapOpen
 }
 
 /** Runs an action, showing its error as a message instead of failing silently. Returns undefined on error. */

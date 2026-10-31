@@ -38,6 +38,7 @@ const PATHS = {
   toBack: 'M4 4h10v10H4zM10 14v6h10V10h-6',
   rounded: 'M8 5h8a3 3 0 0 1 3 3v8a3 3 0 0 1-3 3H8a3 3 0 0 1-3-3V8a3 3 0 0 1 3-3z',
   copy: 'M8 8h12v12H8zM4 16V4h12',
+  map: 'M9 4L3 6v14l6-2 6 2 6-2V4l-6 2zM9 4v14M15 6v14',
   play: 'M7 5v14l11-7z',
   pause: 'M8 5v14M16 5v14',
   sprite: 'M4 4h16v16H4zM8 9h2v2H8zM14 9h2v2h-2zM8 15h8',

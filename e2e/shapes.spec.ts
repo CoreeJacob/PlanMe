@@ -4,16 +4,7 @@ const SHAPES = ['rect', 'rounded', 'oval', 'diamond', 'parallelogram', 'cylinder
 const shapeOf = (classes: string) => classes.match(/shape-(\w+)/)?.[1]
 
 /** Draws a section with the Section tool between two board points, titles it, and returns its id. */
-async function sectionFrom(app: App, a: [number, number], b: [number, number], title: string): Promise<string> {
-  await app.tool('s')
-  const p = await app.screenOf(...a)
-  const q = await app.screenOf(...b)
-  await app.dragBetween(p, q)
-  await app.untilEditing()
-  await app.type(title)
-  await app.key('Escape', 'Escape')
-  return (await app.items()).find((i) => i.type === 'section' && i.text === title)!.id
-}
+const sectionFrom = (app: App, a: [number, number], b: [number, number], title: string): Promise<string> => app.section(a, b, title)
 
 test('six shapes: place any of them, and switch an outline keeping its words and colours', async ({ app }) => {
   await app.newBoard('Game')

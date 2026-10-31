@@ -536,6 +536,16 @@ export class App {
     return this.until(() => this.isEditing())
   }
 
+  /** Drags out a section with the Section tool, from one board point to another, titles it, and returns its id. */
+  async section(a: [number, number], b: [number, number], title: string): Promise<string> {
+    await this.tool('s')
+    await this.dragBetween(await this.screenOf(...a), await this.screenOf(...b))
+    await this.untilEditing()
+    await this.type(title)
+    await this.key('Escape', 'Escape')
+    return (await this.items()).find((i) => i.type === 'section' && i.text === title)!.id
+  }
+
   /** Adds a note centred on a board point (by double-clicking there), types `text`, and returns its id. */
   async noteAt(x: number, y: number, text: string): Promise<string> {
     await this.doubleClickAt(await this.screenOf(x, y))

@@ -6,6 +6,7 @@ import { SHAPE_CHOICES, shapeChoice } from './shapes'
 import { useApp, type LowerPanel, type Tool } from './store'
 import { GroupsPanel } from './GroupsPanel'
 import { ImagesPanel } from './ImagesPanel'
+import { OutlinePanel } from './OutlinePanel'
 import { SearchField, SearchResults, useSearch } from './Search'
 import { SpritesPanel } from './SpritesPanel'
 import { TasksPanel } from './TasksPanel'
@@ -22,10 +23,11 @@ const TOOLS: Array<{ tool: Tool; label: string; tip?: string; key: string; icon:
   { tool: 'section', label: 'Section', tip: 'Section — drag out a labelled area; whatever’s inside moves with it', key: 'S', icon: 'section' }
 ]
 
-const LOWER_PANELS: Array<{ which: LowerPanel; label: string; icon: IconName }> = [
-  { which: 'tasks', label: 'Tasks', icon: 'tasks' },
-  { which: 'images', label: 'Images', icon: 'image' },
-  { which: 'groups', label: 'Groups', icon: 'group' }
+const LOWER_PANELS: Array<{ which: LowerPanel; label: string; tip: string }> = [
+  { which: 'tasks', label: 'Tasks', tip: 'Tasks — everything with a status, from every tab' },
+  { which: 'images', label: 'Images', tip: 'Images — the board’s pictures, and sprites from SpriteBuilder' },
+  { which: 'groups', label: 'Groups', tip: 'Groups — linked groups, and which tabs have a copy' },
+  { which: 'map', label: 'Map', tip: 'Map — every tab’s sections as a tree, or as a map' }
 ]
 
 export function SidePanel() {
@@ -79,14 +81,13 @@ export function SidePanel() {
         <>
           {/* Below the tools: the board's tasks, or its pictures. */}
           <div className="panel-switch" role="tablist">
-            {LOWER_PANELS.map(({ which, label, icon }) => (
-              <button key={which} role="tab" aria-selected={lower === which} className={`panel-tab ${lower === which ? 'active' : ''}`} onClick={() => setLower(which)}>
-                <Icon name={icon} size={14} />
+            {LOWER_PANELS.map(({ which, label, tip }) => (
+              <button key={which} role="tab" aria-selected={lower === which} title={tip} className={`panel-tab ${lower === which ? 'active' : ''}`} onClick={() => setLower(which)}>
                 {label}
               </button>
             ))}
           </div>
-          {lower === 'tasks' ? <TasksPanel /> : lower === 'images' ? <PicturesPanel /> : <GroupsPanel />}
+          {lower === 'tasks' ? <TasksPanel /> : lower === 'images' ? <PicturesPanel /> : lower === 'groups' ? <GroupsPanel /> : <OutlinePanel />}
         </>
       )}
     </aside>

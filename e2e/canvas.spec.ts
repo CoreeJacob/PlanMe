@@ -114,7 +114,7 @@ test('closing the window saves straight away', async ({ app }) => {
 
 test('the side panel can be hidden, and stays hidden', async ({ app }) => {
   await app.newBoard('Game')
-  await check('shows tools, with tasks and images below', (await app.js(`[...document.querySelectorAll('.panel-heading, .panel-tab')].map(h => h.textContent.trim()).join()`)) === 'Tools,Tasks,Images,Groups')
+  await check('shows tools, with tasks and images below', (await app.js(`[...document.querySelectorAll('.panel-heading, .panel-tab')].map(h => h.textContent.trim()).join()`)) === 'Tools,Tasks,Images,Groups,Map')
   await app.menuCommand('togglePanel')
   await check('⌘\\ hides it', await app.js(`!document.querySelector('.side-panel')`))
   await app.relaunch()

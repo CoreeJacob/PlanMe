@@ -8,6 +8,7 @@ import { goToBoards } from './actions'
 import { Icon } from './Icon'
 import { DetailsPane } from './DetailsPane'
 import { FindBox } from './Search'
+import { MapView } from './MapView'
 import { SidePanel } from './SidePanel'
 import { useImageLibrary } from './imageLibrary'
 import { useOutsideChanges } from './outside'
@@ -47,6 +48,9 @@ export function BoardScreen() {
         </div>
         <TabBar />
         <div className="topbar-end">
+          <button className="icon-btn" title="Map — every tab and its sections, as a diagram" onClick={() => useApp.getState().setMapOpen(true)}>
+            <Icon name="map" />
+          </button>
           <ThemeButton />
           <button className="icon-btn" title="Keyboard shortcuts — every key, on one sheet (⌘/)" onClick={() => useApp.getState().setShortcutsOpen(true)}>
             <Icon name="keyboard" />
@@ -66,6 +70,7 @@ export function BoardScreen() {
           <Canvas key={tabId} />
           <BackChip />
           {findOpen && !panelOpen && <FindBox />}
+          <MapView />
         </div>
         <DetailsPane />
       </div>

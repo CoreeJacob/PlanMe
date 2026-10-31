@@ -28,6 +28,7 @@ import { boundsOf, overlaps, rectFrom, within, type Point } from '@/lib/geometry
 import { useElementSize } from '@/lib/useElementSize'
 import { addArrow, addConnected, addItem, finishEditing, followLink, removeBend, showDetails, startEditing, tickEntry } from './actions'
 import { ArrowView } from './ArrowView'
+import { SectionTrail } from './SectionTrail'
 import { canJoin, currentView, itemById, onlySelected, setCurrentView, viewport, zoomReset, zoomStep, zoomToFit } from './current'
 import { chooseImages } from './images'
 import { ItemToolbar } from './ItemToolbar'
@@ -703,6 +704,7 @@ export function Canvas() {
 
       {items.length === 0 && <div className="canvas-hint muted">Double-click to add a sticky note · scroll to move around · pinch or ⌘-scroll to zoom</div>}
 
+      <SectionTrail items={items} view={view} />
       <div className="zoom-controls" onPointerDown={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}>
         <button className="icon-btn" title="Zoom out (⌘−)" onClick={() => zoomStep(-1)}>
           <Icon name="minus" size={16} />
