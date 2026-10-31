@@ -33,7 +33,7 @@ const GRIP_REACH = 40
 
 /**
  * The item whose move grip shows: the top-most thing the pointer is over (or just around, to reach
- * the grip), and failing that, a section the pointer is anywhere inside.
+ * the grip), and failing that, the innermost section the pointer is anywhere inside.
  */
 export function gripTarget(p: Point, zoom: number): string | null {
   const reach = GRIP_REACH / zoom
@@ -44,11 +44,8 @@ export function gripTarget(p: Point, zoom: number): string | null {
     // Locked things can't be moved, so they have no grip.
     if (s.type !== 'arrow' && s.type !== 'section' && !s.locked && near(s, reach)) return s.id
   }
-  for (let k = items.length - 1; k >= 0; k--) {
-    const s = items[k]
-    if (s.type === 'section' && !s.locked && near(s, reach)) return s.id
-  }
-  return null
+  const sections = items.filter((s): s is Shape => s.type === 'section' && !s.locked && near(s, reach))
+  return sections.sort((a, b) => a.w * a.h - b.w * b.h)[0]?.id ?? null
 }
 
 /** Where an item's move grip sits on screen: just left of its top-left corner (beside a section's title). */

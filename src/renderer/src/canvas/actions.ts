@@ -38,14 +38,14 @@ import {
 } from '@/board/items'
 import { linkKey, linkTarget } from '@/board/links'
 import { cleanHtml, fromPlainText, isAllStyled, plainText, setWholeStyle, type TextStyle } from '@/board/richtext'
-import { movable, withContents } from '@/board/sections'
+import { contentsOf, movable, sectionTrail, withContents } from '@/board/sections'
 import { autoKind, withStatuses } from '@/board/statuses'
 import { nextTagColor, tagState, tagsOf, withTag, withTags } from '@/board/tags'
 import { useBoard } from '@/board/store'
 import { count, plural } from '@/lib/format'
 import { boundsOf, overlaps } from '@/lib/geometry'
 import { shortId, without } from '@/lib/objects'
-import { currentItems, currentView, viewport } from './current'
+import { currentItems, currentView, viewport, zoomToShow } from './current'
 import { addImageFiles, hasPictures } from './images'
 
 const newId = (): string => crypto.randomUUID()
@@ -311,6 +311,55 @@ export function goToItem(tabId: string, id: string): void {
   selectWhole([id])
   useApp.getState().flash([id])
 }
+
+/** Shows a section (from the Outline or the Map): its tab, zoomed so all of it fits, selected and flashing. */
+export function goToSection(tabId: string, id: string): void {
+  goToTab(tabId)
+  const section = itemsOf(state().doc, tabId).find((i) => i.id === id)
+  if (!section || section.type !== 'section') return
+  zoomToShow(section)
+  selectWhole([id])
+  useApp.getState().flash([id])
+}
+
+/**
+ * Moves a section (with everything in it) into another on the same tab, below what's there, making
+ * that one bigger if it needs to be; or with `into` null, out on its own beside the section it was
+ * in. One undo step.
+ */
+export function moveSectionInto(id: string, into: string | null): void {
+  const { doc, tabId } = state()
+  const items = itemsOf(doc, tabId)
+  const lookup = lookupIn(items)
+  const section = items.find((i) => i.id === id)
+  if (!section || section.type !== 'section' || section.locked || id === into) return
+  const going = withContents([id], items, lookup)
+  if (into && going.includes(into)) return // (not into a section inside itself)
+  const target = into ? items.find((i) => i.id === into) : undefined
+  let at: { x: number; y: number }
+  let grown: Rect | null = null
+  if (target && target.type === 'section') {
+    // Below whatever's already in it.
+    const already = new Set(contentsOf(target, items, lookup).filter((i) => !going.includes(i)))
+    const bottom = Math.max(target.y, ...items.filter((i) => already.has(i.id)).map((i) => boxOf(i, lookup)).map((r) => r.y + r.h))
+    at = { x: target.x + SECTION_PAD, y: bottom + SECTION_PAD }
+    const right = Math.max(target.x + target.w, at.x + section.w + SECTION_PAD)
+    const lowest = Math.max(target.y + target.h, at.y + section.h + SECTION_PAD)
+    if (right !== target.x + target.w || lowest !== target.y + target.h) grown = { x: target.x, y: target.y, w: right - target.x, h: lowest - target.y }
+  } else {
+    // Out on its own, to the right of the outermost section it was in.
+    const [outer] = sectionTrail(items, { x: section.x + 1, y: section.y + 1 }).filter((s) => s.id !== id)
+    if (!outer) return
+    at = { x: outer.x + outer.w + SECTION_PAD * 3, y: outer.y }
+  }
+  change((d, tab) => {
+    const moved = moveItems(d, tab, going, at.x - section.x, at.y - section.y)
+    return grown && into ? updateItems(moved, tab, [into], (i) => ({ ...i, ...grown })) : moved
+  })
+}
+
+/** Space left round a section moved into another. */
+const SECTION_PAD = 40
 
 // ---------- links ----------
 

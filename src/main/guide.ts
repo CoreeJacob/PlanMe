@@ -109,6 +109,9 @@ The point 0,0 is in the middle of a new tab's screen, and a laptop screen shows 
   \`false\` keeps the \`status\` you give it. \`h\` follows the lines (PlanMe sets it).
 - **image** (a picture): \`src\`: its path inside the board's folder, always starting \`images/\`
   (copy the picture file in there first); \`name\`: its file name. Keep \`w\`/\`h\` in the picture's proportions.
+  A **sprite** from the person's SpriteBuilder library is an image with \`"sprite": { "path": "Characters/hero.png" }\`
+  (its path inside that library); PlanMe shows it live from there, and \`src\` is \`sprites/<the same path>\`, the
+  board's own copy (PlanMe makes it). Never change the SpriteBuilder library itself.
 
 ### Arrows
 

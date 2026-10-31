@@ -68,6 +68,8 @@ interface AppState {
   flashIds: readonly string[]
   /** What the side panel shows below the tools. */
   lowerPanel: LowerPanel
+  /** In the Images part of the side panel: the board's own pictures, or the SpriteBuilder library. */
+  picturesFrom: 'board' | 'sprites'
   /** The words being searched for (in the side panel, or the ⌘F box when the panel is hidden). */
   search: string
   /** The ⌘F box at the top of the board is open (only while the side panel is hidden). */
@@ -102,6 +104,7 @@ interface AppState {
   setDoneOpen(open: boolean): void
   flash(ids: readonly string[]): void
   setLowerPanel(which: LowerPanel): void
+  setPicturesFrom(from: 'board' | 'sprites'): void
   setSearch(search: string): void
   setFindOpen(open: boolean): void
   /** ⌘F: the side panel's search field if the panel is showing, otherwise the box at the top of the board. */
@@ -124,6 +127,7 @@ interface AppState {
 const PANEL_KEY = 'planme.panelOpen'
 const DONE_KEY = 'planme.doneOpen'
 const LOWER_KEY = 'planme.lowerPanel'
+const PICTURES_KEY = 'planme.picturesFrom'
 const TAGS_KEY = 'planme.showTags'
 const DETAILS_KEY = 'planme.detailsOpen'
 /** How long an item jumped to from the Tasks panel flashes. */
@@ -152,6 +156,7 @@ export const useApp = create<AppState>((set, get) => ({
   doneOpen: readPref(DONE_KEY) === 'true',
   flashIds: [],
   lowerPanel: (['images', 'groups'] as const).find((p) => p === readPref(LOWER_KEY)) ?? 'tasks',
+  picturesFrom: readPref(PICTURES_KEY) === 'sprites' ? 'sprites' : 'board',
   search: '',
   findOpen: false,
   findRequest: 0,
@@ -200,6 +205,11 @@ export const useApp = create<AppState>((set, get) => ({
   setDoneOpen: (doneOpen) => {
     set({ doneOpen })
     writePref(DONE_KEY, String(doneOpen))
+  },
+
+  setPicturesFrom: (picturesFrom) => {
+    set({ picturesFrom })
+    writePref(PICTURES_KEY, picturesFrom)
   },
 
   setLowerPanel: (lowerPanel) => {

@@ -53,9 +53,10 @@ export async function importImage(board: string, source: string, shrink: Shrink)
  * a hand-edited board can't point the app at other files).
  */
 export function imagePath(board: string, src: string): string {
-  const folder = path.resolve(board, IMAGES_DIR)
   const file = path.resolve(board, src)
-  if (!file.startsWith(folder + path.sep)) throw new Error('Not an image in this board')
+  // Its pictures, or its copies of sprites (see sprites.ts).
+  const folders = [IMAGES_DIR, 'sprites'].map((f) => path.resolve(board, f) + path.sep)
+  if (!folders.some((f) => file.startsWith(f))) throw new Error('Not an image in this board')
   return file
 }
 

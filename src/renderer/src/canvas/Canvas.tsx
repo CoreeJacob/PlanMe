@@ -554,7 +554,7 @@ export function Canvas() {
     if (
       !target ||
       target.closest(
-        '.item-editor, .zoom-controls, .item-toolbar, [data-handle], [data-end], [data-dot], [data-status-badge], [data-link-badge], [data-details-badge], [data-grip]'
+        '.item-editor, .zoom-controls, .item-toolbar, [data-handle], [data-end], [data-dot], [data-status-badge], [data-link-badge], [data-details-badge], [data-grip], [data-sprite-play]'
       )
     )
       return

@@ -133,6 +133,49 @@ export interface ImageItem extends ItemBase {
   src: string
   /** The file's name, for lists (like the Tasks panel) when it has no words. */
   name: string
+  /**
+   * A sprite from the SpriteBuilder library, shown live from there (so a redraw shows up). `src`
+   * is then a copy kept inside the board (in its sprites folder), shown if the library file can't be.
+   */
+  sprite?: SpriteLink
+}
+
+/** Where a placed sprite is in the SpriteBuilder library. */
+export interface SpriteLink {
+  /** Its path inside the library, like "Characters/hero.png". */
+  path: string
+  /** Its file number, from the library's index, to find it again if it's moved. */
+  ino?: string
+  /** How many frames it has (more than 1: it can be played). */
+  frames?: number
+}
+
+/** A picture in the SpriteBuilder library. */
+export interface SpriteFile {
+  /** Its path inside the library ("Characters/hero.png"). */
+  path: string
+  name: string
+  /** The folder it's in, inside the library ('' for the top). */
+  folder: string
+  /** When it last changed (ms since 1970), so the board can show the latest. */
+  modified: number
+  /** From the library's index, when it has them. */
+  width?: number
+  height?: number
+  frames: number
+  tags: string[]
+  favorite: boolean
+  ino?: string
+  /** A Pixel Studio project (with every frame) sits beside it. */
+  project: boolean
+}
+
+/** The SpriteBuilder library: where it is, whether it's there, and what's in it. */
+export interface SpriteLibrary {
+  root: string
+  found: boolean
+  folders: string[]
+  files: SpriteFile[]
 }
 
 /** The kinds of picture file that can be added. */
@@ -385,6 +428,22 @@ export interface PlanMeApi {
   revealImage(board: string, entry: string): Promise<void>
   /** The file on disk a dropped file came from ('' if it isn't one). */
   pathForFile(file: File): string
+  /** What's in the SpriteBuilder library (read only: PlanMe never changes it). */
+  listSprites(): Promise<SpriteLibrary>
+  /** Asks where the SpriteBuilder library is; returns it, or null if cancelled. */
+  chooseSpriteRoot(): Promise<string | null>
+  /** Watches the library (false: stop), so redrawn and moved sprites show up. */
+  watchSprites(on: boolean): Promise<void>
+  onSpritesChanged(callback: () => void): () => void
+  /**
+   * A sprite's project (every frame), as text: from the library, or else from the board's copy
+   * (`src`, a path inside the board). Null if there's none.
+   */
+  spriteProject(path: string, board: string, src: string): Promise<string | null>
+  /** Keeps the board's copies of these library sprites up to date (copying any that are newer). */
+  copySprites(board: string, paths: string[]): Promise<void>
+  /** Shows a sprite (a path inside the library) in Finder. */
+  revealSprite(path: string): Promise<void>
   /** Watches the open board's files (null: stop), to hear about changes made outside PlanMe. */
   watchBoard(board: string | null): Promise<void>
   onBoardChangedOutside(callback: () => void): () => void

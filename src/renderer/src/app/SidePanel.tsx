@@ -7,6 +7,7 @@ import { useApp, type LowerPanel, type Tool } from './store'
 import { GroupsPanel } from './GroupsPanel'
 import { ImagesPanel } from './ImagesPanel'
 import { SearchField, SearchResults, useSearch } from './Search'
+import { SpritesPanel } from './SpritesPanel'
 import { TasksPanel } from './TasksPanel'
 
 const TOOLS: Array<{ tool: Tool; label: string; tip?: string; key: string; icon: IconName }> = [
@@ -85,10 +86,28 @@ export function SidePanel() {
               </button>
             ))}
           </div>
-          {lower === 'tasks' ? <TasksPanel /> : lower === 'images' ? <ImagesPanel /> : <GroupsPanel />}
+          {lower === 'tasks' ? <TasksPanel /> : lower === 'images' ? <PicturesPanel /> : <GroupsPanel />}
         </>
       )}
     </aside>
+  )
+}
+
+/** The board's own pictures, or sprites from the SpriteBuilder library. */
+function PicturesPanel() {
+  const from = useApp((s) => s.picturesFrom)
+  const setFrom = useApp((s) => s.setPicturesFrom)
+  return (
+    <>
+      <div className="pictures-switch" role="tablist">
+        {(['board', 'sprites'] as const).map((which) => (
+          <button key={which} role="tab" aria-selected={from === which} className={`pictures-tab ${from === which ? 'active' : ''}`} onClick={() => setFrom(which)}>
+            {which === 'board' ? 'This board' : 'Sprites'}
+          </button>
+        ))}
+      </div>
+      {from === 'board' ? <ImagesPanel /> : <SpritesPanel />}
+    </>
   )
 }
 

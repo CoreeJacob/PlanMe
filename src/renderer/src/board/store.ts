@@ -6,6 +6,7 @@ import { readPref, writePref } from '@/lib/prefs'
 import { syncGroups, tidyGroups } from './groups'
 import { EMPTY_HISTORY, record, redo, undo, type History, type Step } from './history'
 import { remapDoc } from './images'
+import { remapSprites } from './sprites'
 
 const NO_DOC: BoardDoc = { tabs: [], statuses: [] }
 const NO_VIEWS: Record<string, View> = {}
@@ -75,6 +76,8 @@ interface BoardState {
    * never brings back a picture's old place). Not an undo step itself: the files have moved.
    */
   remapImages(moves: ImageMoves): void
+  /** Sprites moved in the SpriteBuilder library (old path → new): the same, for them. */
+  remapSprites(moves: Record<string, string>): void
 }
 
 export const NO_SELECTION: string[] = []
@@ -88,6 +91,13 @@ export const useBoard = create<BoardState>((set, get) => {
     set({ doc: step.doc, tabId, history, editingId: null, selected: tabId === get().tabId && selected.length ? selected : NO_SELECTION })
   }
   const current = (): Step => ({ doc: get().doc, tabId: get().tabId })
+  /** Changes the board and every undo step the same way (for files that have moved: undo mustn't bring back their old places). */
+  const rewriteEverywhere = (needed: boolean, rewrite: (doc: BoardDoc) => BoardDoc): void => {
+    if (!needed) return
+    const step = (s: Step): Step => ({ ...s, doc: rewrite(s.doc) })
+    const { history, gesture } = get()
+    set({ doc: rewrite(get().doc), history: { past: history.past.map(step), future: history.future.map(step) }, gesture: gesture && step(gesture) })
+  }
   const cleared = { selected: NO_SELECTION, editingId: null, editingPart: null, gesture: null, openGroup: null }
 
   return {
@@ -189,16 +199,9 @@ export const useBoard = create<BoardState>((set, get) => {
       }
     },
 
-    remapImages: (moves) => {
-      if (!Object.keys(moves).length) return
-      const step = (s: Step): Step => ({ ...s, doc: remapDoc(s.doc, moves) })
-      const { history, gesture } = get()
-      set({
-        doc: remapDoc(get().doc, moves),
-        history: { past: history.past.map(step), future: history.future.map(step) },
-        gesture: gesture && step(gesture)
-      })
-    }
+    remapImages: (moves) => rewriteEverywhere(Object.keys(moves).length > 0, (doc) => remapDoc(doc, moves)),
+
+    remapSprites: (moves) => rewriteEverywhere(Object.keys(moves).length > 0, (doc) => remapSprites(doc, moves))
   }
 })
 

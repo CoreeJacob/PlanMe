@@ -11,6 +11,7 @@ import { FindBox } from './Search'
 import { SidePanel } from './SidePanel'
 import { useImageLibrary } from './imageLibrary'
 import { useOutsideChanges } from './outside'
+import { useSpriteLibrary } from './spriteLibrary'
 import { TabBar } from './TabBar'
 import { useApp } from './store'
 
@@ -26,6 +27,8 @@ export function BoardScreen() {
   useEffect(() => useApp.setState({ backStack: [], search: '', findOpen: false }), [path])
   // The board's images folder, kept up to date (and pictures moved in Finder found again).
   useImageLibrary()
+  // The SpriteBuilder library too, so sprites on the board show their latest drawing.
+  useSpriteLibrary()
   // Changes made to the board's files outside PlanMe (say, by an assistant) show up as they happen.
   useOutsideChanges()
   const setPanelOpen = useApp((s) => s.setPanelOpen)

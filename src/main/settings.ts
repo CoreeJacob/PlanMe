@@ -11,6 +11,8 @@ export interface Settings {
   boardsRoot?: string
   lastBoard?: string | null
   theme?: Theme
+  /** Where the SpriteBuilder library is. */
+  spriteRoot?: string
 }
 
 export class SettingsStore {

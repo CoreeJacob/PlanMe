@@ -5,6 +5,8 @@ import type { BoardDoc, ImportedImage, Item, Status } from '@shared/types'
 import type { MenuEntry } from '@/app/ContextMenu'
 import { GROUP_DRAG } from '@/app/GroupsPanel'
 import { IMAGE_DRAG } from '@/app/ImagesPanel'
+import { useSprites } from '@/app/spriteLibrary'
+import { SPRITE_DRAG } from '@/app/SpritesPanel'
 import { useApp } from '@/app/store'
 import { isArrow, isShape } from '@/board/arrows'
 import { groupOf } from '@/board/groups'
@@ -39,6 +41,7 @@ import {
 } from './actions'
 import { zoomToFit, zoomToSelection } from './current'
 import { addImageFiles, chooseImages, placeImages } from './images'
+import { placeSprites } from './sprites'
 import { ALIGN_CHOICES, currentStatusChoice, palettesFor, paletteName, SPREAD_CHOICES, statusChoicesFor, statusValue } from './looks'
 
 /** Right-clicking empty board at `at`: add things there. */
@@ -100,6 +103,8 @@ export function itemMenu(chosen: Item[], hit: string, doc: BoardDoc, openGroup: 
       ]
     })
     if (chosen.length === 1) entries.push({ label: 'Details', icon: 'details', hint: '⌘E', onSelect: () => showDetails(chosen[0].id) })
+    const sprite = chosen.length === 1 && chosen[0].type === 'image' ? chosen[0].sprite : undefined
+    if (sprite) entries.push({ label: 'Show Sprite in Finder', icon: 'reveal', onSelect: () => void window.api.revealSprite(sprite.path) })
     const only = shapes.length === 1 ? shapes[0] : undefined
     const going = only?.link && linkTarget(doc, only.link)
     entries.push('separator')
@@ -162,7 +167,7 @@ export function itemMenu(chosen: Item[], hit: string, doc: BoardDoc, openGroup: 
 }
 
 /** True if what's being dragged over the board can be dropped on it. */
-export const canDrop = (data: DataTransfer): boolean => ['Files', IMAGE_DRAG, GROUP_DRAG].some((type) => data.types.includes(type))
+export const canDrop = (data: DataTransfer): boolean => ['Files', IMAGE_DRAG, GROUP_DRAG, SPRITE_DRAG].some((type) => data.types.includes(type))
 
 /** Something dropped on the board at `at`. Returns false if it isn't something the board takes. */
 export function dropOnBoard(data: DataTransfer, at: Point): boolean {
@@ -170,6 +175,12 @@ export function dropOnBoard(data: DataTransfer, at: Point): boolean {
   const group = data.getData(GROUP_DRAG)
   if (group) {
     placeGroupCopy(group, at)
+    return true
+  }
+  // A sprite from the SpriteBuilder library: linked to it.
+  const sprite = useSprites.getState().byPath.get(data.getData(SPRITE_DRAG))
+  if (sprite) {
+    void placeSprites([sprite], at)
     return true
   }
   // A picture from the Images panel: it's already in the board, so just place it.

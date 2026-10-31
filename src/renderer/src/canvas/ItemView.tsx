@@ -10,6 +10,7 @@ import { useBoard } from '@/board/store'
 import { editText, finishEditing } from './actions'
 import { imageUrl } from './images'
 import { Outline } from './Outline'
+import { SpritePicture } from './SpritePicture'
 import { TodoView } from './TodoView'
 
 /** The largest text size for a note or box: bigger items get bigger words. */
@@ -202,8 +203,13 @@ export const ItemView = memo(function ItemView({ item, editing, part = null, sta
   )
 })
 
-/** A picture, or a placeholder saying so if its file has gone. */
+/** A picture, or a placeholder saying so if its file has gone. A sprite from the SpriteBuilder library has its own. */
 function Picture({ item }: { item: ImageItem }) {
+  if (item.sprite) return <SpritePicture item={item} />
+  return <BoardPicture item={item} />
+}
+
+function BoardPicture({ item }: { item: ImageItem }) {
   const [missing, setMissing] = useState(false)
   useEffect(() => setMissing(false), [item.src])
   if (missing) return <div className="image-missing">Picture missing: {item.name}</div>

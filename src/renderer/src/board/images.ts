@@ -3,10 +3,10 @@
 
 import type { BoardDoc, ImageFile, ImageMoves, Item, Tab } from '@shared/types'
 
-/** Every picture file the board shows, on any tab. */
+/** Every picture file in the images folder the board shows, on any tab (not its copies of sprites). */
 export function usedSources(doc: BoardDoc): Set<string> {
   const used = new Set<string>()
-  for (const tab of doc.tabs) for (const i of tab.items) if (i.type === 'image') used.add(i.src)
+  for (const tab of doc.tabs) for (const i of tab.items) if (i.type === 'image' && !i.sprite) used.add(i.src)
   return used
 }
 

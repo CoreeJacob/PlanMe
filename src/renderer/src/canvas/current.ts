@@ -52,7 +52,7 @@ export function zoomReset(): void {
 const FIT_MARGIN = 64
 
 /** Shows `area` as big as fits on screen, but no closer than 100%. Nothing (an empty tab): the middle, at 100%. */
-function zoomToShow(area: Rect | null): void {
+export function zoomToShow(area: Rect | null): void {
   if (!area) return setCurrentView(DEFAULT_VIEW)
   const fit = Math.min((viewport.width - 2 * FIT_MARGIN) / Math.max(1, area.w), (viewport.height - 2 * FIT_MARGIN) / Math.max(1, area.h))
   setCurrentView({ x: area.x + area.w / 2, y: area.y + area.h / 2, zoom: clampZoom(Math.min(1, fit)) })
@@ -73,4 +73,10 @@ export function zoomToSelection(): void {
   const ids = new Set(useBoard.getState().selected)
   const chosen = currentItems().filter((i) => ids.has(i.id))
   zoomToShow(boundsOfItems(chosen.length ? chosen : currentItems()))
+}
+
+/** The board point in the middle of the screen. */
+export function visibleMiddle(): { x: number; y: number } {
+  const { x, y } = currentView()
+  return { x, y }
 }

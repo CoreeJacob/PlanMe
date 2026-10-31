@@ -6,6 +6,7 @@ import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, nativeTheme, ne
 import { IMAGE_EXTENSIONS, type MenuCommand, type SaveRequest, type Startup, type Theme } from '@shared/types'
 import { backupsRoot, backUpIfDue, listBackups, renameBackups, restoreBackup } from './backups'
 import { createBoard, isBoard, listBoards, openBoard, renameBoard, saveBoard } from './boards'
+import { copySprites, listSprites, readSpriteProject, spritePath } from './sprites'
 import { writeGuide } from './guide'
 import {
   createImageFolder,
@@ -22,8 +23,12 @@ import {
 import { SettingsStore, type Settings } from './settings'
 import { BoardWatcher } from './watch'
 
-// A board's images are shown as board://image/<path in the board>?board=<the board's folder>.
-protocol.registerSchemesAsPrivileged([{ scheme: 'board', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } }])
+// A board's images are shown as board://image/<path in the board>?board=<the board's folder>, and
+// sprites from the SpriteBuilder library as sprite://file/<path in the library>.
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'board', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } },
+  { scheme: 'sprite', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } }
+])
 
 /** Saves very large PNG and JPEG pictures shrunk to MAX_SIDE on their longest side; anything else as it was. */
 const shrink: Shrink = (bytes, ext) => {
@@ -48,6 +53,25 @@ const updateSettings = (patch: Settings): Promise<void> => settings.update(patch
  */
 const defaultRoot = (): string => (testData ? path.join(testData, 'Boards') : path.join(app.getPath('documents'), 'PlanMe'))
 const boardsRoot = async (): Promise<string> => (await settings.get()).boardsRoot ?? defaultRoot()
+
+/** Where the SpriteBuilder library is: as chosen, or SpriteBuilder's own default (a test run's own folder in tests). */
+const spriteRoot = async (): Promise<string> =>
+  (await settings.get()).spriteRoot ?? (testData ? path.join(testData, 'Sprites') : path.join(app.getPath('pictures'), 'SpriteBuilder Library'))
+
+/** Watches the SpriteBuilder library, so redrawn and moved sprites show up on the board. */
+let spriteWatcher: FSWatcher | null = null
+let spriteWatchTimer: ReturnType<typeof setTimeout> | undefined
+
+async function watchSprites(on: boolean): Promise<void> {
+  spriteWatcher?.close()
+  spriteWatcher = null
+  const root = await spriteRoot()
+  if (!on || !(await fs.stat(root).catch(() => null))) return
+  spriteWatcher = watch(root, { recursive: true }, () => {
+    clearTimeout(spriteWatchTimer)
+    spriteWatchTimer = setTimeout(() => mainWindow?.webContents.send('sprites:changed'), 250)
+  })
+}
 
 let mainWindow: BrowserWindow | null = null
 
@@ -299,6 +323,18 @@ function registerIpc(): void {
     else await shell.openPath(top)
   })
   handle('app:setTheme', (theme: Theme) => setTheme(theme))
+  handle('sprites:list', async () => listSprites(await spriteRoot()))
+  handle('sprites:chooseRoot', async () => {
+    const result = await dialog.showOpenDialog(mainWindow!, { title: 'Where Is the SpriteBuilder Library?', properties: ['openDirectory'] })
+    if (result.canceled || !result.filePaths[0]) return null
+    await updateSettings({ spriteRoot: result.filePaths[0] })
+    if (spriteWatcher) await watchSprites(true)
+    return result.filePaths[0]
+  })
+  handle('sprites:watch', (on: boolean) => watchSprites(on))
+  handle('sprites:project', async (rel: string, board: string, src: string) => readSpriteProject(await spriteRoot(), rel, board, src))
+  handle('sprites:copy', async (board: string, rels: string[]) => copySprites(await spriteRoot(), board, rels))
+  handle('sprites:reveal', async (rel: string) => shell.showItemInFolder(spritePath(await spriteRoot(), rel)))
   handle('boards:setLast', (dir: string | null) => updateSettings({ lastBoard: dir }))
   handle('images:import', async (board: string, paths: string[]) => {
     const imported = []
@@ -332,6 +368,15 @@ function registerIpc(): void {
 }
 
 function registerProtocol(): void {
+  // Sprites, read from the library (and nowhere else).
+  protocol.handle('sprite', async (request) => {
+    try {
+      const file = spritePath(await spriteRoot(), decodeURIComponent(new URL(request.url).pathname.replace(/^\/+/, '')))
+      return await net.fetch(pathToFileURL(file).toString())
+    } catch {
+      return new Response('Not found', { status: 404 })
+    }
+  })
   protocol.handle('board', async (request) => {
     const url = new URL(request.url)
     try {
