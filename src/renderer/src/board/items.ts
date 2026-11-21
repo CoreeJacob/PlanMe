@@ -221,19 +221,20 @@ export function resizeRect(r: Rect, handle: Handle, dx: number, dy: number, keep
 const LINE_UP = 40
 
 /**
- * Where a new item the size of `source` goes when an arrow from it is dropped at `at`: just past
- * that point, facing back towards `source`, and lined up with it when it's nearly in line.
+ * Where a new item (the size of `source`, or `size`) goes when an arrow from `source` is dropped
+ * at `at`: just past that point, facing back towards `source`, and lined up with its middle when
+ * it's nearly in line.
  */
-export function besideRect(source: Rect, at: Point): Rect {
-  const { w, h } = source
+export function besideRect(source: Rect, at: Point, size: { w: number; h: number } = source): Rect {
+  const { w, h } = size
   const c = centre(source)
   const side = sideFacing(source, at)
   if (side === 'left' || side === 'right') {
     // Off to one side: the new item's near side meets the drop point.
-    const y = Math.abs(at.y - c.y) <= LINE_UP ? source.y : at.y - h / 2
+    const y = Math.abs(at.y - c.y) <= LINE_UP ? Math.round(c.y - h / 2) : at.y - h / 2
     return { x: side === 'right' ? at.x : at.x - w, y, w, h }
   }
-  const x = Math.abs(at.x - c.x) <= LINE_UP ? source.x : at.x - w / 2
+  const x = Math.abs(at.x - c.x) <= LINE_UP ? Math.round(c.x - w / 2) : at.x - w / 2
   return { x, y: side === 'bottom' ? at.y : at.y - h, w, h }
 }
 

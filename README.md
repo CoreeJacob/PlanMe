@@ -44,7 +44,8 @@ Changes are saved a moment after you make them, and straight away when the windo
 | L | To-do list: Return adds a line, Backspace on an empty line removes it, ↑ ↓ move between lines; click a box to tick it |
 | I | Image tool: click where it goes and pick pictures. Or drop pictures from Finder, or paste one. Corners keep the shape; Shift stretches |
 | A | Arrow tool: drag from one item to another (or to empty space) |
-| Drag a dot | The dots round an item (shown when the pointer is near): draw an arrow from there. Drop on a dot to pin the arrow to it, or on an item's middle to let it pick the facing side |
+| Drag a dot | The dots round an item (shown when the pointer is near): draw an arrow from there. Drop on a dot to pin the arrow to it, or on an item's middle to let it pick the facing side. Let go on empty space and a menu asks what to build there, joined by the arrow: another like it (↩), a sticky note (N), text (T), a shape (B, then pick an outline), a to-do list (L) or a picture (I). Escape leaves just the arrow; so does ⌥ |
+| Right-click menus | ↑ ↓ to move, → and ← in and out of sub-menus, ↩ to pick |
 | Double-click an arrow | Label it. Drag a label to slide it along its arrow |
 | A selected arrow's dots | Drag the hollow dot on a line to bend it there (it lines up with the points either side; ⌘ stops that); drag a bend to move it, double-click it to take it out. The Line button picks straight, right-angled (drag its middle to move the turn) or curved; Straighten takes the bends out |
 | Status (toolbar or right-click) | To do, Doing, Done, Blocked… per board; “Edit statuses…” to change the list. Finished ones fade |

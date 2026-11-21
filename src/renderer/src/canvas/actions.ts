@@ -22,7 +22,9 @@ import {
 } from '@/board/groups'
 import {
   addItems,
+  besideRect,
   copiesOf,
+  DEFAULT_SIZE,
   type BlankType,
   isLocked,
   itemsOf,
@@ -43,7 +45,7 @@ import { autoKind, withStatuses } from '@/board/statuses'
 import { nextTagColor, tagState, tagsOf, withTag, withTags } from '@/board/tags'
 import { useBoard } from '@/board/store'
 import { count, plural } from '@/lib/format'
-import { boundsOf, overlaps } from '@/lib/geometry'
+import { boundsOf, overlaps, type Point } from '@/lib/geometry'
 import { shortId, without } from '@/lib/objects'
 import { currentItems, currentView, viewport, zoomToShow } from './current'
 import { addImageFiles, hasPictures } from './images'
@@ -94,13 +96,23 @@ export function addArrow(from: ArrowEnd, to: ArrowEnd): void {
   change((doc, tabId) => addItems(doc, tabId, [arrow]), [arrow.id])
 }
 
+/** What building outwards from a dot makes: another like the one it's from, or a new kind of item. */
+export type BuildKind = 'same' | { type: Exclude<BlankType, 'section'>; shape?: BoxShape }
+
 /**
- * Builds outwards: a new item like `source` in `rect`, joined to it by an arrow from `from`, ready
- * to type in. All one undo step (and if it's a text item left empty, it all goes again).
+ * Builds outwards: a new item beside `source` where an arrow from it (`from`) was dropped (`at`),
+ * joined to it by the arrow, ready to type in. All one undo step (and if it's a text item left
+ * empty, it all goes again).
  */
-export function addConnected(source: Shape, from: ArrowEnd, rect: Rect): void {
-  const item = newLike(source, newId(), rect)
-  addAndType([item, newArrow(newId(), from, { item: item.id, x: rect.x, y: rect.y })], item.id)
+export function addConnected(source: Shape, from: ArrowEnd, at: Point, kind: BuildKind = 'same'): void {
+  const id = newId()
+  let item: Shape
+  if (kind === 'same') item = newLike(source, id, besideRect(source, at))
+  else {
+    const size = kind.type === 'text' ? { w: DEFAULT_SIZE.text.w, h: 30 } : DEFAULT_SIZE[kind.type]
+    item = newItem(kind.type, id, besideRect(source, at, size), kind.shape)
+  }
+  addAndType([item, newArrow(newId(), from, { item: item.id, x: item.x, y: item.y })], item.id)
 }
 
 /**

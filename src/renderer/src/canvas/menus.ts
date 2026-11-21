@@ -1,10 +1,11 @@
 // What the board's right-click menus offer, and what dropping things on the board does. The
 // canvas decides where (which item was clicked, which board point); these decide what.
 
-import type { BoardDoc, ImportedImage, Item, Status } from '@shared/types'
+import type { ArrowEnd, BoardDoc, ImportedImage, Item, Shape, Status } from '@shared/types'
 import type { MenuEntry } from '@/app/ContextMenu'
 import { GROUP_DRAG } from '@/app/GroupsPanel'
 import { IMAGE_DRAG } from '@/app/ImagesPanel'
+import { SHAPE_CHOICES, shapeChoice } from '@/app/shapes'
 import { useSprites } from '@/app/spriteLibrary'
 import { SPRITE_DRAG } from '@/app/SpritesPanel'
 import { useApp } from '@/app/store'
@@ -16,6 +17,8 @@ import { isSection } from '@/board/sections'
 import { tagsOf, tagState } from '@/board/tags'
 import type { Point } from '@/lib/geometry'
 import {
+  addArrow,
+  addConnected,
   addItem,
   addSelectedToGroup,
   arrangeSelected,
@@ -56,6 +59,50 @@ export function emptySpaceMenu(at: Point, hasItems: boolean): MenuEntry[] {
     'separator',
     { label: 'Select All', hint: '⌘A', disabled: !hasItems, onSelect: selectAll },
     { label: 'Zoom to Fit', icon: 'fit', hint: '⇧1', disabled: !hasItems, onSelect: zoomToFit }
+  ]
+}
+
+const KIND_NAMES: Record<Exclude<Shape['type'], 'image'>, string> = { note: 'Sticky Note', text: 'Text', box: 'Shape', section: 'Section', todo: 'To-do List' }
+
+/**
+ * Letting go of an arrow from a dot (`from`, on `home`) over empty space (`at`): what to build there,
+ * joined by the arrow. The first entry is another like `home`, so Return keeps things quick.
+ * Closing the menu leaves just the arrow (see Canvas).
+ */
+export function buildMenu(home: Shape, from: ArrowEnd, at: Point): MenuEntry[] {
+  const looseArrow = (): void => addArrow(from, { item: null, x: at.x, y: at.y })
+  const same: MenuEntry[] =
+    home.type === 'image' || home.type === 'section'
+      ? []
+      : [
+          {
+            label: `Same as This (${home.type === 'box' ? shapeChoice(home.shape).label : KIND_NAMES[home.type]})`,
+            icon: home.type === 'box' ? shapeChoice(home.shape).icon : home.type === 'todo' ? 'tasks' : home.type,
+            hint: '↩',
+            onSelect: () => addConnected(home, from, at)
+          },
+          'separator'
+        ]
+  return [
+    ...same,
+    { label: 'Sticky Note', icon: 'note', hint: 'N', key: 'n', onSelect: () => addConnected(home, from, at, { type: 'note' }) },
+    { label: 'Text', icon: 'text', hint: 'T', key: 't', onSelect: () => addConnected(home, from, at, { type: 'text' }) },
+    {
+      label: 'Shape',
+      icon: 'box',
+      hint: 'B',
+      key: 'b',
+      submenu: SHAPE_CHOICES.map((c) => ({ label: c.label, icon: c.icon, onSelect: () => addConnected(home, from, at, { type: 'box', shape: c.shape }) }))
+    },
+    { label: 'To-do List', icon: 'tasks', hint: 'L', key: 'l', onSelect: () => addConnected(home, from, at, { type: 'todo' }) },
+    {
+      label: 'Picture…',
+      icon: 'image',
+      hint: 'I',
+      key: 'i',
+      // Cancelling the file picker leaves just the arrow.
+      onSelect: () => void chooseImages(at, { source: home, from }).then((placed) => placed || looseArrow())
+    }
   ]
 }
 

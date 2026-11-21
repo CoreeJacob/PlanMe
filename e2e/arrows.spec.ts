@@ -1,4 +1,7 @@
+import { writeFile } from 'node:fs/promises'
+import path from 'node:path'
 import { ALT, check, META, near, pickerChoice, SHIFT, test, toolbarButton } from './support/app'
+import { solidPng } from './support/png'
 
 test('draw arrows between items, and they follow when the items move', async ({ app }) => {
   await app.newBoard('Game')
@@ -326,6 +329,8 @@ test('dropping an arrow from a dot on empty space builds a new item there', asyn
   await check('an outline shows where the new item will go', await app.js(`!!document.querySelector('.ghost')`))
   await app.mouse('mouseReleased', drop)
   await app.settle()
+  await check('letting go asks what to build, starting on another like it', (await app.js(`document.querySelector('.menu-item.open .menu-label')?.textContent`)) === 'Same as This (Sticky Note)')
+  await app.key('Enter', 'Enter')
   await check('the new item is ready to type in', await app.until(() => app.js(`document.activeElement?.classList.contains('item-editor')`)))
   await app.type('Next')
   await app.key('Escape', 'Escape')
@@ -356,6 +361,8 @@ test('dropping an arrow from a dot on empty space builds a new item there', asyn
   const below = await app.dot(words, '0.5,1')
   const further = await app.screenOf(0, 500)
   await app.drag([below, [below[0], below[1] + 40], further])
+  await app.untilJs(`!!document.querySelector('.context-menu')`)
+  await app.key('Enter', 'Enter')
   await app.until(() => app.js(`document.activeElement?.classList.contains('item-editor')`))
   await app.key('Escape', 'Escape')
   await check('a new text item left empty goes, with its arrow', (await app.items()).length === 2 && (await app.arrows()).length === 0, { items: await app.items(), arrows: await app.arrows() })
@@ -424,4 +431,62 @@ test('arrows bend where they’re dragged, curve, and their labels slide along t
   await check('dragging a label slides it along the arrow', labelAt > 0.6 && labelAt < 0.9, labelAt)
   const after = await app.centre(`document.querySelector('.arrow-label')`)
   await check('…staying on the line', Math.abs(after[1] - label[1]) < 2, { label, after })
+})
+
+test('letting go of an arrow from a dot asks what to build: any kind, a picture, or just the arrow', async ({ app }) => {
+  await app.newBoard('Game')
+  await app.tool('b')
+  await app.clickAt(...(await app.screenOf(-300, 0)))
+  await app.type('Start')
+  await app.key('Escape', 'Escape')
+  const start = (await app.items()).find((i) => i.text === 'Start')!.id
+  await app.key('Escape', 'Escape')
+  const fromDot = async (to: [number, number]): Promise<string[]> => {
+    await app.hoverAt(await app.itemCentre(start))
+    const right = await app.dot(start, '1,0.5')
+    await app.drag([right, [right[0] + 60, right[1]], await app.screenOf(...to)])
+    await app.untilJs(`!!document.querySelector('.context-menu')`)
+    return app.menuLabels()
+  }
+
+  const labels = await fromDot([0, 0])
+  await check('the choices: another like it, then each kind of thing', labels.join() === 'Same as This (Rectangle),Sticky Note,Text,Shape,To-do List,Picture…', labels)
+  await app.key('n', 'KeyN')
+  await app.untilEditing()
+  await app.type('A note')
+  await app.key('Escape', 'Escape')
+  const note = (await app.items()).find((i) => i.text === 'A note')
+  await check('its key makes that kind of thing, joined by the arrow', note?.type === 'note' && (await app.arrows()).length === 1, note)
+
+  // The Shape choices are in a sub-menu, reached with the keyboard.
+  await fromDot([0, 280])
+  await app.key('b', 'KeyB')
+  await check('Shape opens its outlines', (await app.js(`document.querySelectorAll('.context-menu.submenu .menu-item').length`)) === 6)
+  await app.key('ArrowDown', 'ArrowDown')
+  await app.key('ArrowDown', 'ArrowDown')
+  await app.key('Enter', 'Enter')
+  await app.untilEditing()
+  await app.key('Escape', 'Escape')
+  const shaped = (await app.items()).at(-1)!
+  await check('…and ↓ and Return pick one', shaped.type === 'box' && shaped.classes.includes('shape-oval'), shaped)
+
+  // Closing the menu leaves just the arrow.
+  const arrows = (await app.arrows()).length
+  const items = (await app.items()).length
+  await fromDot([0, -280])
+  await app.key('Escape', 'Escape')
+  await check('Escape leaves a loose arrow, and nothing else', (await app.arrows()).length === arrows + 1 && (await app.items()).length === items)
+
+  // A picture, from the file picker.
+  const file = path.join(app.dirs.userData, 'castle.png')
+  await writeFile(file, solidPng(60, 40))
+  await app.answerOpenDialogs([file], [])
+  await fromDot([300, -280])
+  await app.pickMenu('Picture…')
+  const picture = await app.until(async () => (await app.items()).find((i) => i.type === 'image'))
+  await check('Picture… places the chosen picture, joined by the arrow', !!picture && (await app.arrows()).length === arrows + 2, picture)
+  await fromDot([300, 280])
+  await app.pickMenu('Picture…')
+  await app.until(async () => (await app.arrows()).length === arrows + 3)
+  await check('…and cancelling the file picker leaves just the arrow', (await app.arrows()).length === arrows + 3 && (await app.items()).filter((i) => i.type === 'image').length === 1)
 })

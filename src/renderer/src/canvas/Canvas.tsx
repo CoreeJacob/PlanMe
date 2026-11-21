@@ -26,7 +26,7 @@ import { NO_SELECTION, selectTab, useBoard } from '@/board/store'
 import { hasTag, tagsOf } from '@/board/tags'
 import { boundsOf, overlaps, rectFrom, within, type Point } from '@/lib/geometry'
 import { useElementSize } from '@/lib/useElementSize'
-import { addArrow, addConnected, addItem, finishEditing, followLink, removeBend, showDetails, startEditing, tickEntry } from './actions'
+import { addArrow, addItem, finishEditing, followLink, removeBend, showDetails, startEditing, tickEntry } from './actions'
 import { ArrowView } from './ArrowView'
 import { SectionTrail } from './SectionTrail'
 import { canJoin, currentView, itemById, onlySelected, setCurrentView, viewport, zoomReset, zoomStep, zoomToFit } from './current'
@@ -34,7 +34,7 @@ import { chooseImages } from './images'
 import { ItemToolbar } from './ItemToolbar'
 import { ItemView } from './ItemView'
 import { useCanvasKeys, useClipboard } from './keys'
-import { canDrop, dropOnBoard, emptySpaceMenu, itemMenu, statusMenu } from './menus'
+import { buildMenu, canDrop, dropOnBoard, emptySpaceMenu, itemMenu, statusMenu } from './menus'
 import { Overlay, type ActiveDot } from './Overlay'
 import { snapMove, snapResize, type Guide } from './snap'
 import { dotNear, endAt, endOnDot, gripTarget, shapeAround, shapeUnder } from './targets'
@@ -527,8 +527,10 @@ export function Canvas() {
       const dragged = Math.hypot(d.now.x - d.start.x, d.now.y - d.start.y) * zoom > DRAG_START * 4
       const home = itemById(d.from.item)
       if (d.fromDot && canJoin(home) && !d.to.item && dragged && !e.altKey) {
-        // Dropped on empty space from a dot: build a new item there, joined to this one.
-        addConnected(home, d.from, besideRect(home, d.now))
+        // Dropped on empty space from a dot: ask what to build there, joined to this one. Closing
+        // the menu leaves just the arrow.
+        const { from, now } = d
+        menu.show(e.clientX, e.clientY, buildMenu(home, from, now), { highlight: 0, onDismiss: () => addArrow(from, endAt(now, null)) })
       } else if (d.to.item || dragged) {
         // An arrow needs somewhere to go: another item, or a proper drag.
         addArrow(d.from, d.to)
