@@ -260,14 +260,15 @@ export function Canvas() {
       setDrag({ kind: 'place', type: tool, start, now: start })
       return
     }
-    // A dot around an item: drag from it to draw an arrow, with any tool that shows dots.
+    // A dot around an item: drag from it to draw an arrow, with any tool that shows dots. With the
+    // Arrow tool the dot only fixes where the arrow starts: letting go on empty space never builds.
     const dotItem = target.closest<HTMLElement>('[data-dot]')
     if (dotItem) {
       const shape = itemById(dotItem.dataset.dotItem)
       const [x, y] = dotItem.dataset.dot!.split(',').map(Number)
       if (canJoin(shape)) {
         const from = endOnDot(shape, { x, y })
-        setDrag({ kind: 'arrow', from, start, now: start, to: endAt(start, null), fromDot: true })
+        setDrag({ kind: 'arrow', from, start, now: start, to: endAt(start, null), fromDot: tool !== 'arrow' })
         return
       }
     }

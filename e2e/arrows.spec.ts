@@ -350,6 +350,17 @@ test('dropping an arrow from a dot on empty space builds a new item there', asyn
   await check('with ⌥ it’s a loose arrow, no new item', (await app.items()).length === 1 && (await app.arrows()).length === 1)
   await app.undo()
 
+  // With the Arrow tool, a dot only says where the arrow starts: no menu, no new item.
+  await app.tool('a')
+  await app.hoverAt(await app.itemCentre(a))
+  const right3 = await app.dot(a, '1,0.5')
+  await app.drag([right3, [right3[0] + 60, right3[1]], drop])
+  await app.settle()
+  await check('with the Arrow tool there’s no build menu', !(await app.js(`!!document.querySelector('.context-menu')`)))
+  const drawn = await app.arrows()
+  await check('…just an arrow from that dot with a loose end', (await app.items()).length === 1 && drawn.length === 1 && near(drawn[0].points[0], 100, 0), drawn)
+  await app.undo()
+
   // A text item left empty goes again, arrow and all.
   await app.tool('t')
   await app.clickAt(...(await app.screenOf(0, 300)))
